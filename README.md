@@ -5,12 +5,32 @@
 I am Haipeng, an independent builder learning in public. I make small AI tools
 that people can read, test, and verify before trusting them.
 
-My current focus is local-first AI preflight: scientific-compute planning,
-declared experiment readiness, Skill portability, and evaluation.
+My current focus is evidence-aware AI tooling: visual knowledge navigation,
+scientific-compute preflight, declared experiment readiness, Skill portability,
+and evaluation.
 
 > Evidence over unsupported claims. Useful releases over large promises.
 
 ## Start here
+
+### [BioFormulation Constellation](https://github.com/ProfesseurHaipeng/bioformulation-constellation)
+
+An interactive, non-generative knowledge navigator for learning how declared
+bio/formulation relationships fit together.
+
+- selecting a synthetic functional role reorganizes a particle constellation;
+- explorable candidates move inward, while soft conflicts, missing conditions,
+  and unknown evidence require explicit review;
+- demo hard conflicts move to a non-selectable perimeter with the rule,
+  condition, evidence, version, and review date exposed;
+- effect hypotheses stay hidden while any selected relationship is unresolved;
+- the bilingual, keyboard-accessible site runs without uploads, telemetry,
+  persistence, user formulas, or a backend.
+
+**[Open the live constellation](https://professeurhaipeng.github.io/bioformulation-constellation/)**
+
+[![Latest release](https://img.shields.io/github/v/release/ProfesseurHaipeng/bioformulation-constellation)](https://github.com/ProfesseurHaipeng/bioformulation-constellation/releases/latest)
+[![CI](https://github.com/ProfesseurHaipeng/bioformulation-constellation/actions/workflows/ci.yml/badge.svg)](https://github.com/ProfesseurHaipeng/bioformulation-constellation/actions/workflows/ci.yml)
 
 ### [AI Research Preflight](https://github.com/ProfesseurHaipeng/ai-research-preflight)
 
@@ -49,6 +69,8 @@ risks before installation or publication.
 ## What I am building
 
 - inspectable Agent Skills with explicit inputs, outputs, and limits;
+- visual knowledge tools that keep unknown and conditional relationships
+  explicit instead of inventing a confident answer;
 - local research preflights that keep private data and real formulas out of
   public repositories;
 - deterministic checks for failures that prompts alone cannot catch;
@@ -65,17 +87,21 @@ risks before installation or publication.
 
 ## Current roadmap
 
-1. Improve both released projects with community-submitted synthetic failures.
-2. Build an `agent-run-budget-guard` Skill for preflight limits on calls,
+1. Improve the released projects with community-submitted synthetic failures
+   and reviewed knowledge-model edge cases.
+2. Expand BioFormulation Constellation's curation tooling before accepting any
+   real-world assertion.
+3. Build an `agent-run-budget-guard` Skill for preflight limits on calls,
    tokens, concurrency, and elapsed time.
-3. Explore focused pet-AI and research-operations Skills without publishing
+4. Explore focused pet-AI and research-operations Skills without publishing
    private product or formulation work.
 
 If this direction is useful, star or watch
-[AI Research Preflight](https://github.com/ProfesseurHaipeng/ai-research-preflight)
+[BioFormulation Constellation](https://github.com/ProfesseurHaipeng/bioformulation-constellation),
+[AI Research Preflight](https://github.com/ProfesseurHaipeng/ai-research-preflight),
 or [Professeur AI Skills](https://github.com/ProfesseurHaipeng/professeur-ai-skills),
 then open an issue with the smallest synthetic failure you can share.
 
 ## 中文
 
-我是海鹏，也使用 **Professeur Haipeng** 这个名字。我正在公开学习和构建可检查、可测试、可复用的 AI Skills。当前公开项目包括科研计算预检、配方实验就绪检查和 Skill 静态审计；真实配方、私人研发资料和原始科研数据不会进入公共仓库。
+我是海鹏，也使用 **Professeur Haipeng** 这个名字。我正在公开学习和构建可检查、可测试、可复用的 AI 工具。当前公开项目包括生物配方知识星图、科研计算预检、配方实验就绪检查和 Skill 静态审计；真实配方、私人研发资料和原始科研数据不会进入公共仓库。
