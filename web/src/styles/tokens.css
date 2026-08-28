@@ -1,11 +1,13 @@
 :root {
+  --night: #14110e;
   --obsidian: #1b1713;
-  --paper: #f6f1e8;
-  --card: #fffdf8;
-  --ash: #5d564c;
-  --ink: #1b1713;
-  --ember: #b54a22;
+  --paper: #f3eee4;
+  --card: #fffaf2;
+  --ink: #1c1814;
+  --ash: #5f574e;
+  --ember: #b5441c;
   --ember-soft: #c45c2a;
+  --moss: #3d4a38;
   --line: rgba(27, 23, 19, 0.12);
   --line-strong: rgba(27, 23, 19, 0.22);
   --muted: #5d564c;
@@ -13,7 +15,8 @@
   --font-serif: "Noto Serif SC", "Newsreader", "Songti SC", serif;
   --font-sans: "Noto Sans SC", "IBM Plex Sans", "PingFang SC", sans-serif;
   --font-latin: "Newsreader", "Noto Serif SC", serif;
-  --space: clamp(1.25rem, 3vw, 2.5rem);
+  --space: clamp(1.25rem, 3vw, 2.75rem);
   --wide: 1120px;
   --measure: 40rem;
+  --radius: 1.1rem;
 }

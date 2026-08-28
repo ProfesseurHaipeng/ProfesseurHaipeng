@@ -27,28 +27,22 @@ export const defaultContent: SiteContent = {
   nav: [
     { id: "home", label: "首页", href: "/" },
     { id: "project", label: "项目", href: "/project" },
-    { id: "resource", label: "资源", href: "/resource" },
-    { id: "supply", label: "供应", href: "/supply" },
     { id: "products", label: "产品", href: "/products" },
-    { id: "testing", label: "检测", href: "/testing" },
-    { id: "market", label: "市场", href: "/market" },
-    { id: "solutions", label: "方案", href: "/solutions" },
+    { id: "use", label: "应用", href: "/use" },
     { id: "cases", label: "案例", href: "/cases" },
-    { id: "videos", label: "视频", href: "/videos" },
-    { id: "next", label: "待补", href: "/next" },
     { id: "contact", label: "联络", href: "/contact" },
   ],
   hero: {
-    kicker: "招商手册内容先行",
+    kicker: "农业矿物资源",
     title: "皮纳图博火山灰",
-    subtitle: "菲律宾皮纳图博火山灰农业综合产业",
+    subtitle: "把菲律宾皮纳图博的天然矿物，做成可核对的土壤改良与生态农业投入。",
     points: [
       "天然矿物资源 × 土壤改良 × 生态农业解决方案",
       "面向农业集团 · 肥料企业 · 规模化种植企业 · 生态农业项目合作方",
     ],
     image: { src: "/media/hero-cover.jpg", alt: "皮纳图博火山与山前农田" },
-    primaryCta: { label: "看项目概览", href: "/project" },
-    secondaryCta: { label: "进入内容后台", href: "/admin" },
+    primaryCta: { label: "看产品", href: "/products" },
+    secondaryCta: { label: "看应用", href: "/use" },
   },
   overview: {
     kicker: "第一部分",
@@ -562,7 +556,7 @@ export const defaultContent: SiteContent = {
   contact: {
     kicker: "邀请",
     title: "携手共建绿色农业未来",
-    lead: "菲律宾皮纳图博火山灰农业综合产业项目诚邀您的加入。品牌与对外联络方式尚未落定，可先留一条线索。",
+    lead: "品牌与对外邮箱还没定。你可以先留机构、作物和 tonnage，我们按这条线索回复。",
     image: { src: "/media/invite.jpg", alt: "火山与农田" },
     cards: [
       { id: "c1", title: "联系我们", body: "如需了解更多项目详情、索取完整检测报告，欢迎留下联系方式。" },

@@ -1,24 +1,48 @@
 import { Link } from "react-router-dom"
 import { useSiteContent } from "../cms/ContentContext"
+import { publicNav } from "../nav"
 
 export function SiteFooter() {
   const { content } = useSiteContent()
+  const name = content.settings.brandName || content.settings.productName
+  const { channels } = content.settings
+
   return (
     <footer className="site-footer">
-      <p>{content.settings.footerNote}</p>
-      <p className="site-footer__meta">
-        <span>{content.settings.brandStatus}</span>
-        {content.settings.channels.email ? (
-          <a href={`mailto:${content.settings.channels.email}`}>{content.settings.channels.email}</a>
-        ) : null}
-        {content.settings.brochureUrl ? (
-          <a href={content.settings.brochureUrl} target="_blank" rel="noreferrer">
-            下载手册
-          </a>
-        ) : null}
-        <Link to="/next">待补清单</Link>
-        <Link to="/admin">内容后台</Link>
-      </p>
+      <div className="site-footer__grid">
+        <div>
+          <p className="wordmark__zh">{name}</p>
+          <p className="faint">{content.settings.tagline}</p>
+          <p className="faint">{content.settings.audience}</p>
+        </div>
+        <nav aria-label="页脚目录">
+          {publicNav.map((item) => (
+            <Link key={item.id} to={item.href}>
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+        <div>
+          {channels.email ? (
+            <p>
+              <a href={`mailto:${channels.email}`}>{channels.email}</a>
+            </p>
+          ) : (
+            <p className="faint">对外邮箱待补</p>
+          )}
+          {channels.phone ? (
+            <p>
+              <a href={`tel:${channels.phone}`}>{channels.phone}</a>
+            </p>
+          ) : null}
+          <p>
+            <Link to="/contact">谈合作</Link>
+            {" · "}
+            <Link to="/admin">内容后台</Link>
+          </p>
+        </div>
+      </div>
+      <p className="site-footer__fine">{content.settings.footerNote}</p>
     </footer>
   )
 }

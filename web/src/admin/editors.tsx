@@ -156,6 +156,10 @@ export function ModuleEditor({
       )
     case "nav":
       return (
+        <section className="admin-module">
+          <p className="admin-hint">
+            前台页眉已固定为「首页 / 项目 / 产品 / 应用 / 案例 / 联络」，不再按手册目录铺栏。这里改的项目只作内部备忘，不会出现在公网站导航。
+          </p>
         <BlockList
           label="导航"
           items={content.nav}
@@ -169,6 +173,7 @@ export function ModuleEditor({
             </>
           )}
         </BlockList>
+        </section>
       )
     case "hero":
       return (
@@ -1343,7 +1348,9 @@ export function ModuleEditor({
     case "media":
       return (
         <section className="admin-module">
-          <p className="admin-hint">图库只登记路径。把文件放进 `web/public/media/`，各页用同一路径引用。</p>
+          <p className="admin-hint">
+            图库只登记路径。手册截图不要铺到前台；有自己的现场照片再放进 `web/public/media/` 并改路径。
+          </p>
           <BlockList
             label="媒体"
             items={content.media}

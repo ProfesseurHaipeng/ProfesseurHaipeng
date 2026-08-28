@@ -14,7 +14,7 @@ export function NextPage() {
   const live = deriveGaps(content)
 
   return (
-    <article className="page">
+    <article className="page wrap">
       <PageIntro
         kicker="Supply later"
         title="还缺什么"

@@ -1,13 +1,13 @@
 import type { ReactNode } from "react"
 
-type PageIntroProps = {
+type PageHeroProps = {
   kicker: string
   title: string
   lead?: string
   children?: ReactNode
 }
 
-export function PageIntro({ kicker, title, lead, children }: PageIntroProps) {
+export function PageHero({ kicker, title, lead, children }: PageHeroProps) {
   return (
     <header className="page-hero">
       <p className="eyebrow">{kicker}</p>

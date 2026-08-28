@@ -1,118 +1,126 @@
 import { useState, type FormEvent } from "react"
-import { MediaFrame } from "../components/MediaFrame"
-import { PageIntro } from "../components/PageIntro"
+import { Link } from "react-router-dom"
+import { emptyGapCount } from "../cms/gaps"
+import { PageHero } from "../components/PageHero"
 import { useSiteContent } from "../cms/ContentContext"
 
 export function ContactPage() {
   const { content } = useSiteContent()
-  const page = content.contact
+  const { contact, settings } = content
+  const { channels } = settings
+  const missing = emptyGapCount(content)
   const [sent, setSent] = useState(false)
-  const [error, setError] = useState("")
 
-  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setError("")
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     const form = event.currentTarget
-    const data = new FormData(form)
-
     if (import.meta.env.DEV) {
-      setError("本地预览时便条不会发出。你可以直接在对话里把信息发给我。")
-      return
-    }
-
-    try {
-      const body = new URLSearchParams()
-      data.forEach((value, key) => {
-        body.append(key, String(value))
-      })
-      const response = await fetch("/", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body.toString(),
-      })
-      if (!response.ok) throw new Error("submit failed")
+      event.preventDefault()
       setSent(true)
       form.reset()
-    } catch {
-      setError("这次没有送出。请稍后再试，或直接在对话里把信息发给我。")
     }
   }
 
   return (
-    <article className="page">
-      <PageIntro kicker={page.kicker} title={page.title} lead={page.lead} />
-      <div className="split">
-        <MediaFrame image={page.image} />
-        <div className="card-grid">
-          {page.cards.map((card) => (
-            <article className="card" key={card.id}>
-              <h3>{card.title}</h3>
-              <p>{card.body}</p>
-            </article>
-          ))}
-        </div>
-      </div>
-      <p className="measure faint">{content.settings.contactHint}</p>
-      {content.settings.channels.email ||
-      content.settings.channels.phone ||
-      content.settings.channels.wechat ||
-      content.settings.channels.address ? (
-        <section className="card">
-          <h3>对外联络</h3>
-          {content.settings.channels.email ? (
-            <p>
-              邮箱{" "}
-              <a href={`mailto:${content.settings.channels.email}`}>{content.settings.channels.email}</a>
-            </p>
-          ) : null}
-          {content.settings.channels.phone ? <p>电话 {content.settings.channels.phone}</p> : null}
-          {content.settings.channels.wechat ? <p>微信 {content.settings.channels.wechat}</p> : null}
-          {content.settings.channels.address ? <p>地址 {content.settings.channels.address}</p> : null}
-        </section>
-      ) : null}
-      {content.settings.brochureUrl ? (
-        <p>
-          <a className="btn btn--ghost" href={content.settings.brochureUrl} target="_blank" rel="noreferrer">
-            下载招商手册
-          </a>
-        </p>
-      ) : null}
-      {sent ? (
-        <p className="notice" role="status">
-          便条已记下。品牌未定期间，它只作为内容线索。
-        </p>
-      ) : (
-        <form className="note-form" name={page.formName} method="POST" onSubmit={onSubmit}>
-          <input type="hidden" name="form-name" value={page.formName} />
-          <p className="sr-only">
-            <label>
-              请勿填写
-              <input name="bot-field" />
-            </label>
+    <article className="page wrap contact-page">
+      <PageHero kicker={contact.kicker} title={contact.title} lead={contact.lead} />
+
+      <div className="contact-grid">
+        <section className="contact-card">
+          <h2>怎么联系</h2>
+          <dl className="meta-dl">
+            <div>
+              <dt>邮箱</dt>
+              <dd>
+                {channels.email ? <a href={`mailto:${channels.email}`}>{channels.email}</a> : "还没填"}
+              </dd>
+            </div>
+            <div>
+              <dt>电话</dt>
+              <dd>
+                {channels.phone ? <a href={`tel:${channels.phone}`}>{channels.phone}</a> : "还没填"}
+              </dd>
+            </div>
+            <div>
+              <dt>微信</dt>
+              <dd>{channels.wechat || "还没填"}</dd>
+            </div>
+            <div>
+              <dt>地址</dt>
+              <dd>{channels.address || "还没填"}</dd>
+            </div>
+          </dl>
+          <ul className="plain-list">
+            {contact.cards.map((card) => (
+              <li key={card.id}>
+                <strong>{card.title}</strong>
+                <span>{card.body}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="fine">
+            {missing > 0
+              ? `还有 ${missing} 项对外信息没齐，不影响先留线索。`
+              : "对外缺口已齐，可以直接发。"}
           </p>
-          <label>
-            怎么称呼
-            <input name="name" type="text" autoComplete="name" />
-          </label>
-          <label>
-            回信邮箱
-            <input name="email" type="email" autoComplete="email" />
-          </label>
-          <label>
-            要补进官网或希望了解的内容
-            <textarea name="note" rows={7} required />
-          </label>
-          <button className="btn" type="submit">
-            留下这条
-          </button>
-          {error ? (
-            <p className="notice notice--warn" role="alert">
-              {error}
+        </section>
+
+        <section className="contact-card">
+          <h2>留一条线索</h2>
+          {sent ? (
+            <p className="notice">已记下。正式站点发布后，这条会进 Netlify Forms。</p>
+          ) : (
+            <form
+              className="note-form"
+              name={contact.formName}
+              method="POST"
+              data-netlify="true"
+              netlify-honeypot="bot-field"
+              onSubmit={onSubmit}
+            >
+              <input type="hidden" name="form-name" value={contact.formName} />
+              <p className="sr-only">
+                <label>
+                  不要填
+                  <input name="bot-field" />
+                </label>
+              </p>
+              <label>
+                称呼
+                <input name="name" required autoComplete="name" />
+              </label>
+              <label>
+                机构
+                <input name="org" autoComplete="organization" />
+              </label>
+              <label>
+                邮箱
+                <input name="email" type="email" required autoComplete="email" />
+              </label>
+              <label>
+                想谈什么
+                <textarea name="note" rows={5} required />
+              </label>
+              <button className="btn" type="submit">
+                发送
+              </button>
+            </form>
+          )}
+          {settings.brochureUrl ? (
+            <p>
+              <a className="text-link" href={settings.brochureUrl}>
+                下载手册
+              </a>
             </p>
           ) : null}
-        </form>
-      )}
-      <p className="footnote">{page.slogan}</p>
+        </section>
+      </div>
+
+      <p className="slogan">{contact.slogan}</p>
+      <p>
+        <Link className="text-link" to="/next">
+          内部：还缺什么 →
+        </Link>
+      </p>
     </article>
   )
 }

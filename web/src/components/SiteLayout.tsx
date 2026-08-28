@@ -1,6 +1,5 @@
 import { Outlet } from "react-router-dom"
 import { DocumentMeta } from "./DocumentMeta"
-import { DraftMark } from "./DraftMark"
 import { PreviewBanner } from "./PreviewBanner"
 import { SiteFooter } from "./SiteFooter"
 import { SiteHeader } from "./SiteHeader"
@@ -14,7 +13,6 @@ export function SiteLayout() {
       <DocumentMeta />
       <PreviewBanner />
       <SiteHeader />
-      <DraftMark />
       <main className="site-main" id="site-main">
         <Outlet />
       </main>
