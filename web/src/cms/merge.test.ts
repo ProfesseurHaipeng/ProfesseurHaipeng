@@ -12,8 +12,8 @@ describe("mergeContent", () => {
     expect(merged.settings.brandName).toBe("灰原")
     expect(merged.settings.channels.email).toBe("")
     expect(merged.settings.brochureUrl).toBe("")
-    expect(merged.resource.eruptionImage.src).toContain("/media/")
-    expect(merged.solutions.schemes[0]?.image.src).toBeTruthy()
+    expect(merged.resource.eruptionImage).toHaveProperty("src")
+    expect(merged.solutions.schemes[0]?.image).toHaveProperty("alt")
     expect(merged.nav.length).toBeGreaterThan(0)
   })
 

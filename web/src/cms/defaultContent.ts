@@ -40,7 +40,7 @@ export const defaultContent: SiteContent = {
       "天然矿物资源 × 土壤改良 × 生态农业解决方案",
       "面向农业集团 · 肥料企业 · 规模化种植企业 · 生态农业项目合作方",
     ],
-    image: { src: "/media/hero-cover.jpg", alt: "皮纳图博火山与山前农田" },
+    image: { src: "", alt: "皮纳图博火山与山前农田" },
     primaryCta: { label: "看产品", href: "/products" },
     secondaryCta: { label: "看应用", href: "/use" },
   },
@@ -73,8 +73,8 @@ export const defaultContent: SiteContent = {
       { id: "l4", title: "第四层 产业生态", body: "多元合作共赢" },
     ],
     valuesTitle: "项目核心价值体系",
-    valuesImage: { src: "/media/value-field.jpg", alt: "作物田间与火山灰质土壤" },
-    craterImage: { src: "/media/hero-crater.jpg", alt: "皮纳图博火山口" },
+    valuesImage: { src: "", alt: "作物田间与火山灰质土壤" },
+    craterImage: { src: "", alt: "皮纳图博火山口" },
     values: [
       {
         id: "v-resource",
@@ -107,8 +107,8 @@ export const defaultContent: SiteContent = {
       "1991 年 6 月，皮纳图博火山发生了 20 世纪全球规模最大的火山喷发事件之一，喷出约 10 立方公里的火山物质，火山灰覆盖范围超过数百平方公里，形成了极为丰富的火山灰矿物资源储层。",
       "经过 30 余年的自然沉积与地质演化，皮纳图博火山灰已形成稳定的矿物层，矿物元素组成丰富，品质稳定，手册称其具备大规模工业化开采条件。",
     ],
-    image: { src: "/media/resource-caldera.jpg", alt: "皮纳图博火山口" },
-    eruptionImage: { src: "/media/resource-eruption.jpg", alt: "皮纳图博火山喷发" },
+    image: { src: "", alt: "皮纳图博火山口" },
+    eruptionImage: { src: "", alt: "皮纳图博火山喷发" },
     formationTitle: "火山灰资源形成机制",
     formationLead:
       "皮纳图博火山灰的农业价值源于其独特的地质形成过程。火山喷发将地球深层的矿物质以极细颗粒形式喷射至地表，经过长期自然风化与矿化作用，形成富含多种植物必需矿物元素的天然矿物资源。",
@@ -167,13 +167,13 @@ export const defaultContent: SiteContent = {
     mineTitle: "矿区现场",
     mineBody:
       "皮纳图博火山灰矿区位于菲律宾吕宋岛中西部，手册称矿区面积广阔、储量巨大，已完成基础设施建设，配备专业开采设备与管理团队，可实现安全、高效、环保的规模化开采作业。",
-    mineImage: { src: "/media/mine-site.jpg", alt: "皮纳图博火山灰矿区现场" },
+    mineImage: { src: "", alt: "皮纳图博火山灰矿区现场" },
     minePhotos: [
-      { id: "mine-1", src: "/media/mine-site.jpg", alt: "矿区全景与作业面" },
-      { id: "mine-2", src: "/media/mine-bench.jpg", alt: "台阶开采与运输" },
+      { id: "mine-1", src: "", alt: "矿区全景与作业面" },
+      { id: "mine-2", src: "", alt: "台阶开采与运输" },
     ],
     rawTitle: "原料展示与品质特征",
-    rawImage: { src: "/media/raw-hand.jpg", alt: "皮纳图博火山灰原料外观" },
+    rawImage: { src: "", alt: "皮纳图博火山灰原料外观" },
     rawPoints: [
       { id: "look", title: "原料外观特征", body: "皮纳图博火山灰原料呈灰白色至浅灰色，颗粒细腻均匀，手感细滑，无明显杂质，具有典型的火山矿物质外观特征。" },
       { id: "size", title: "粒径分布", body: "原料粒径分布均匀，主要集中在 0.1-2mm 范围内，经过筛分加工可获得不同粒径规格的产品。" },
@@ -188,7 +188,7 @@ export const defaultContent: SiteContent = {
       { id: "p4", title: "干燥处理", body: "去湿稳定加工工艺" },
     ],
     shippingTitle: "海运供应体系",
-    shippingImage: { src: "/media/port.jpg", alt: "集装箱码头与海运" },
+    shippingImage: { src: "", alt: "集装箱码头与海运" },
     shipping: [
       { id: "port", title: "港口优势", body: "矿区距菲律宾苏比克湾自由港约 80 公里。苏比克湾港口具备集装箱装卸设施与国际航运网络，可直航中国各主要港口。" },
       { id: "route", title: "航线覆盖", body: "定期航班覆盖中国广州、深圳、厦门、上海、天津等主要港口，航行时间约 5-10 天。" },
@@ -204,7 +204,7 @@ export const defaultContent: SiteContent = {
       "菲律宾皮纳图博火山灰产品源自 1991 年皮纳图博火山大喷发后形成的天然火山灰矿物沉积层。经过 30 余年的自然风化与矿化，手册称矿物元素已转化为高生物有效性形态。",
       "本产品经菲律宾及国际权威检测机构检测认证。重金属与农用安全以最新报告为准，可在「检测」页和后台改写承诺语气。",
     ],
-    warehouseImage: { src: "/media/warehouse.jpg", alt: "成品仓储与吨袋堆码" },
+    warehouseImage: { src: "", alt: "成品仓储与吨袋堆码" },
     stats: [
       { id: "y30", value: "30+", label: "年自然矿化", body: "火山灰经 30 余年自然风化矿化。" },
       { id: "m15", value: "15+", label: "矿物元素种类", body: "手册称富含 15 种以上植物必需矿物元素。" },
@@ -221,7 +221,7 @@ export const defaultContent: SiteContent = {
       { id: "d-ind", title: "工业应用", body: "建材填料、水泥辅助胶凝材料等延伸方向。" },
     ],
     soilTitle: "土壤改良优势",
-    soilImage: { src: "/media/soil-compare.jpg", alt: "土壤与作物对照" },
+    soilImage: { src: "", alt: "土壤与作物对照" },
     soil: [
       { id: "s-ph", title: "改善土壤酸碱度", body: "火山灰呈弱碱性，手册写 pH 约 7.5-8.5，施用后可将酸性土壤调节至作物较适范围（pH 6.0-7.0），针对南方红壤、黄壤酸化。" },
       { id: "s-st", title: "改善土壤结构", body: "颗粒细腻，可改善团粒结构，增加孔隙度，提高透气性与保水保肥能力。" },
@@ -237,7 +237,7 @@ export const defaultContent: SiteContent = {
       { id: "fb4", title: "缓释肥载体", body: "多孔结构可作为缓释肥料载体，延长释放周期。" },
     ],
     livestockTitle: "畜牧业应用",
-    livestockImage: { src: "/media/cattle.jpg", alt: "牧场与圈舍场景" },
+    livestockImage: { src: "", alt: "牧场与圈舍场景" },
     livestock: [
       { id: "lv1", title: "饲料矿物添加剂", body: "钙、磷、镁、铁等可作为天然矿物饲料添加剂，补充畜禽日粮矿物元素。" },
       { id: "lv2", title: "圈舍除臭与卫生管理", body: "吸附氨气、硫化氢等有害气体，降低圈舍异味。" },
@@ -280,7 +280,7 @@ export const defaultContent: SiteContent = {
     title: "检测报告体系",
     intro:
       "为确保皮纳图博火山灰产品的品质可靠性与市场合规性，本项目建立了多层次检测认证体系，委托菲律宾本地权威检测机构及国际认可实验室进行检测，内容涵盖矿物元素含量、重金属指标、物理特性等。",
-    image: { src: "/media/lab.jpg", alt: "检测实验室与样品" },
+    image: { src: "", alt: "检测实验室与样品" },
     layers: [
       { id: "ph", title: "菲律宾本地检测", body: "委托菲律宾农业部认可的检测机构进行矿物元素含量检测，出具官方检测报告，作为产品出口的基础证明文件。" },
       { id: "intl", title: "国际第三方检测", body: "委托 SGS、Bureau Veritas 等国际第三方检测机构进行全项检测，以满足中国进口检验检疫要求。" },
@@ -311,7 +311,7 @@ export const defaultContent: SiteContent = {
     kicker: "第六部分",
     title: "中国农业市场布局",
     lead: "中国南方农业主产区土壤普遍存在酸化、板结、矿物元素缺乏等问题。手册认为皮纳图博火山灰的弱碱性与矿物组成，与南方土壤改良需求契合。重点布局以下区域。",
-    image: { src: "/media/map-china.jpg", alt: "中国南方农业区域" },
+    image: { src: "", alt: "中国南方农业区域" },
     groups: [
       {
         id: "jx-hn",
@@ -396,7 +396,7 @@ export const defaultContent: SiteContent = {
     kicker: "第七部分",
     title: "农业应用解决方案",
     crops: "水稻 · 香蕉 · 芒果 · 柑橘 · 茶叶 · 甘蔗 · 蔬菜 · 经济作物",
-    image: { src: "/media/terraces.jpg", alt: "南方梯田与作物" },
+    image: { src: "", alt: "南方梯田与作物" },
     schemes: [
       {
         id: "rice",
@@ -404,7 +404,7 @@ export const defaultContent: SiteContent = {
         value: "水稻是典型的喜硅作物，硅元素可增强茎秆强度，提高抗倒伏与抗病虫害能力，改善稻米品质，提高产量。",
         dosage: "每亩 50-100 公斤，作基肥。",
         method: "耕地前均匀撒施，旋耕混入 15-25 厘米土层，与有机肥配合更佳。",
-        image: { src: "/media/rice.jpg", alt: "水稻田" },
+        image: { src: "", alt: "水稻田" },
       },
       {
         id: "cane",
@@ -412,7 +412,7 @@ export const defaultContent: SiteContent = {
         value: "补充硅、钾、钙等矿物元素，改善种植土壤结构，提高含糖量与产量，降低病害发生率。",
         dosage: "每亩 80-150 公斤，作基肥。",
         method: "耕地前均匀撒施，旋耕混入 15-25 厘米土层，根据土壤酸碱度调整用量。",
-        image: { src: "/media/terraces.jpg", alt: "甘蔗与南方农田" },
+        image: { src: "", alt: "甘蔗与南方农田" },
       },
       {
         id: "banana",
@@ -420,7 +420,7 @@ export const defaultContent: SiteContent = {
         value: "香蕉对钾、钙、镁需求大。手册称可改善酸碱度、提高品质与产量，并减少枯萎病等土传病害。",
         dosage: "每株 0.5-1 公斤，每年 2-3 次。",
         method: "在根系周围均匀撒施，结合灌溉使矿物渗入土壤。",
-        image: { src: "/media/mango.jpg", alt: "香蕉与芒果园" },
+        image: { src: "", alt: "香蕉与芒果园" },
       },
       {
         id: "mango",
@@ -428,7 +428,7 @@ export const defaultContent: SiteContent = {
         value: "芒果对钙、硼需求较高。缺钙会导致品质下降、裂果。",
         dosage: "每株 1-2 公斤，每年 1-2 次。",
         method: "在树冠滴水线范围内均匀撒施，结合中耕混入土壤。",
-        image: { src: "/media/mango.jpg", alt: "芒果园" },
+        image: { src: "", alt: "芒果园" },
       },
       {
         id: "citrus",
@@ -436,7 +436,7 @@ export const defaultContent: SiteContent = {
         value: "柑橘对钙、镁、硼需求较高。土壤酸化会导致黄化、裂果。",
         dosage: "每株 1-3 公斤，每年 1-2 次。",
         method: "耕地前均匀撒施，旋耕混入 15-25 厘米土层。",
-        image: { src: "/media/citrus-tea.jpg", alt: "柑橘园" },
+        image: { src: "", alt: "柑橘园" },
       },
       {
         id: "tea",
@@ -444,7 +444,7 @@ export const defaultContent: SiteContent = {
         value: "茶叶喜酸，但长期化肥会导致过度酸化。适量施用可将茶园 pH 调至 4.5-5.5，并补充矿物。",
         dosage: "每亩 30-60 公斤，每年 1 次。",
         method: "茶行间均匀撒施，结合中耕混入土壤。注意控制用量，避免过度调节 pH。",
-        image: { src: "/media/citrus-tea.jpg", alt: "茶园" },
+        image: { src: "", alt: "茶园" },
       },
       {
         id: "veg",
@@ -452,7 +452,7 @@ export const defaultContent: SiteContent = {
         value: "生长周期短、需肥量大，连作障碍突出。用于改善结构、补充矿物、缓解连作、减少化肥。",
         dosage: "每亩 40-80 公斤，作基肥，每季一次。",
         method: "耕地前均匀撒施，旋耕混入 15-25 厘米土层，与有机肥配合。",
-        image: { src: "/media/value-field.jpg", alt: "蔬菜田间" },
+        image: { src: "", alt: "蔬菜田间" },
       },
     ],
     extrasTitle: "其他经济作物",
@@ -473,7 +473,7 @@ export const defaultContent: SiteContent = {
   cases: {
     kicker: "第八部分",
     title: "案例展示",
-    image: { src: "/media/farmer.jpg", alt: "田间土壤与蚯蚓" },
+    image: { src: "", alt: "田间土壤与蚯蚓" },
     items: [
       {
         id: "taiwan",
@@ -489,7 +489,7 @@ export const defaultContent: SiteContent = {
           "土壤微生物多样性提升",
         ],
         value: "手册把它写成可复制的有机 / 友善农业改土方案。效果数字来自项目资料，后台可按核验结果修订。",
-        image: { src: "/media/farmer.jpg", alt: "台湾友善农业田间" },
+        image: { src: "", alt: "台湾友善农业田间" },
       },
       {
         id: "cycle",
@@ -505,7 +505,7 @@ export const defaultContent: SiteContent = {
           "手册写实现废弃物零排放，并获得绿色农业认证",
         ],
         value: "以火山灰为介质，把养殖废弃物转成种植投入。",
-        image: { src: "/media/cycle.jpg", alt: "畜牧循环农业示意" },
+        image: { src: "", alt: "畜牧循环农业示意" },
       },
     ],
     compareTitle: "植物使用前后对比案例",
@@ -557,7 +557,7 @@ export const defaultContent: SiteContent = {
     kicker: "邀请",
     title: "携手共建绿色农业未来",
     lead: "品牌与对外邮箱还没定。你可以先留机构、作物和 tonnage，我们按这条线索回复。",
-    image: { src: "/media/invite.jpg", alt: "火山与农田" },
+    image: { src: "", alt: "火山与农田" },
     cards: [
       { id: "c1", title: "联系我们", body: "如需了解更多项目详情、索取完整检测报告，欢迎留下联系方式。" },
       { id: "c2", title: "项目咨询", body: "可提供项目介绍、产品资料及合作方案讨论。正式团队联络方式待补。" },
@@ -566,25 +566,25 @@ export const defaultContent: SiteContent = {
     formName: "ash-content-note",
   },
   media: [
-    { id: "hero-cover", src: "/media/hero-cover.jpg", alt: "火山与农田", note: "首页主视觉" },
-    { id: "hero-crater", src: "/media/hero-crater.jpg", alt: "火山口", note: "项目页" },
-    { id: "eruption", src: "/media/resource-eruption.jpg", alt: "喷发", note: "资源页" },
-    { id: "caldera", src: "/media/resource-caldera.jpg", alt: "火山口航拍", note: "资源页" },
-    { id: "mine-site", src: "/media/mine-site.jpg", alt: "矿区", note: "供应页" },
-    { id: "mine-bench", src: "/media/mine-bench.jpg", alt: "台阶开采", note: "供应页" },
-    { id: "raw-hand", src: "/media/raw-hand.jpg", alt: "原料", note: "供应页" },
-    { id: "port", src: "/media/port.jpg", alt: "海运", note: "供应页" },
-    { id: "warehouse", src: "/media/warehouse.jpg", alt: "仓储", note: "产品页" },
-    { id: "soil", src: "/media/soil-compare.jpg", alt: "土壤对照", note: "产品页" },
-    { id: "cattle", src: "/media/cattle.jpg", alt: "牧场", note: "产品页" },
-    { id: "lab", src: "/media/lab.jpg", alt: "实验室", note: "检测页" },
-    { id: "map", src: "/media/map-china.jpg", alt: "市场地图", note: "市场页" },
-    { id: "rice", src: "/media/rice.jpg", alt: "水稻", note: "方案页" },
-    { id: "mango", src: "/media/mango.jpg", alt: "芒果香蕉", note: "方案页" },
-    { id: "citrus-tea", src: "/media/citrus-tea.jpg", alt: "柑橘茶叶", note: "方案页" },
-    { id: "farmer", src: "/media/farmer.jpg", alt: "田间", note: "案例页" },
-    { id: "cycle", src: "/media/cycle.jpg", alt: "循环农业", note: "案例页" },
-    { id: "invite", src: "/media/invite.jpg", alt: "邀请", note: "联络页" },
+    { id: "hero-cover", src: "", alt: "火山与农田", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "hero-crater", src: "", alt: "火山口", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "eruption", src: "", alt: "喷发", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "caldera", src: "", alt: "火山口航拍", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "mine-site", src: "", alt: "矿区", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "mine-bench", src: "", alt: "台阶开采", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "raw-hand", src: "", alt: "原料", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "port", src: "", alt: "海运", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "warehouse", src: "", alt: "仓储", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "soil", src: "", alt: "土壤对照", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "cattle", src: "", alt: "牧场", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "lab", src: "", alt: "实验室", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "map", src: "", alt: "市场地图", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "rice", src: "", alt: "水稻", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "mango", src: "", alt: "芒果香蕉", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "citrus-tea", src: "", alt: "柑橘茶叶", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "farmer", src: "", alt: "田间", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "cycle", src: "", alt: "循环农业", note: "有自己的现场照片再填路径。手册截图不上公网。" },
+    { id: "invite", src: "", alt: "邀请", note: "有自己的现场照片再填路径。手册截图不上公网。" },
   ],
   gaps: [
     {
