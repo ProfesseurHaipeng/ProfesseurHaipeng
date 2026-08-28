@@ -1,5 +1,6 @@
+import { deriveGaps } from "../cms/gaps"
 import type { ContentModuleId, SiteContent } from "../cms/types"
-import { BlockList, CheckField, Field, StringList } from "./fields"
+import { BlockList, CheckField, Field, MediaFields, StringList } from "./fields"
 
 type EditorProps = {
   content: SiteContent
@@ -104,6 +105,53 @@ export function ModuleEditor({
               patch(content, onChange, "settings", { ...content.settings, noIndex })
             }
           />
+          <Field
+            label="对外邮箱"
+            value={content.settings.channels.email}
+            onChange={(email) =>
+              patch(content, onChange, "settings", {
+                ...content.settings,
+                channels: { ...content.settings.channels, email },
+              })
+            }
+          />
+          <Field
+            label="对外电话"
+            value={content.settings.channels.phone}
+            onChange={(phone) =>
+              patch(content, onChange, "settings", {
+                ...content.settings,
+                channels: { ...content.settings.channels, phone },
+              })
+            }
+          />
+          <Field
+            label="微信 / 视频号"
+            value={content.settings.channels.wechat}
+            onChange={(wechat) =>
+              patch(content, onChange, "settings", {
+                ...content.settings,
+                channels: { ...content.settings.channels, wechat },
+              })
+            }
+          />
+          <Field
+            label="对外地址"
+            value={content.settings.channels.address}
+            onChange={(address) =>
+              patch(content, onChange, "settings", {
+                ...content.settings,
+                channels: { ...content.settings.channels, address },
+              })
+            }
+          />
+          <Field
+            label="手册下载链接"
+            value={content.settings.brochureUrl}
+            onChange={(brochureUrl) =>
+              patch(content, onChange, "settings", { ...content.settings, brochureUrl })
+            }
+          />
         </section>
       )
     case "nav":
@@ -145,19 +193,10 @@ export function ModuleEditor({
             items={content.hero.points}
             onChange={(points) => patch(content, onChange, "hero", { ...content.hero, points })}
           />
-          <Field
-            label="主图路径"
-            value={content.hero.image.src}
-            onChange={(src) =>
-              patch(content, onChange, "hero", { ...content.hero, image: { ...content.hero.image, src } })
-            }
-          />
-          <Field
-            label="主图说明"
-            value={content.hero.image.alt}
-            onChange={(alt) =>
-              patch(content, onChange, "hero", { ...content.hero, image: { ...content.hero.image, alt } })
-            }
+          <MediaFields
+            label="主图"
+            image={content.hero.image}
+            onChange={(image) => patch(content, onChange, "hero", { ...content.hero, image })}
           />
           <Field
             label="主按钮文字"
@@ -273,14 +312,18 @@ export function ModuleEditor({
               patch(content, onChange, "overview", { ...content.overview, valuesTitle })
             }
           />
-          <Field
+          <MediaFields
             label="价值体系配图"
-            value={content.overview.valuesImage.src}
-            onChange={(src) =>
-              patch(content, onChange, "overview", {
-                ...content.overview,
-                valuesImage: { ...content.overview.valuesImage, src },
-              })
+            image={content.overview.valuesImage}
+            onChange={(valuesImage) =>
+              patch(content, onChange, "overview", { ...content.overview, valuesImage })
+            }
+          />
+          <MediaFields
+            label="火山口配图"
+            image={content.overview.craterImage}
+            onChange={(craterImage) =>
+              patch(content, onChange, "overview", { ...content.overview, craterImage })
             }
           />
           <BlockList
@@ -302,9 +345,23 @@ export function ModuleEditor({
       return (
         <section className="admin-module">
           <Field
+            label="章节眉题"
+            value={content.resource.kicker}
+            onChange={(kicker) =>
+              patch(content, onChange, "resource", { ...content.resource, kicker })
+            }
+          />
+          <Field
             label="标题"
             value={content.resource.title}
             onChange={(title) => patch(content, onChange, "resource", { ...content.resource, title })}
+          />
+          <Field
+            label="背景标题"
+            value={content.resource.backgroundTitle}
+            onChange={(backgroundTitle) =>
+              patch(content, onChange, "resource", { ...content.resource, backgroundTitle })
+            }
           />
           <StringList
             label="背景段落"
@@ -313,14 +370,23 @@ export function ModuleEditor({
               patch(content, onChange, "resource", { ...content.resource, background })
             }
           />
+          <MediaFields
+            label="背景配图"
+            image={content.resource.image}
+            onChange={(image) => patch(content, onChange, "resource", { ...content.resource, image })}
+          />
+          <MediaFields
+            label="喷发配图"
+            image={content.resource.eruptionImage}
+            onChange={(eruptionImage) =>
+              patch(content, onChange, "resource", { ...content.resource, eruptionImage })
+            }
+          />
           <Field
-            label="配图路径"
-            value={content.resource.image.src}
-            onChange={(src) =>
-              patch(content, onChange, "resource", {
-                ...content.resource,
-                image: { ...content.resource.image, src },
-              })
+            label="形成机制标题"
+            value={content.resource.formationTitle}
+            onChange={(formationTitle) =>
+              patch(content, onChange, "resource", { ...content.resource, formationTitle })
             }
           />
           <Field
@@ -329,6 +395,36 @@ export function ModuleEditor({
             value={content.resource.formationLead}
             onChange={(formationLead) =>
               patch(content, onChange, "resource", { ...content.resource, formationLead })
+            }
+          />
+          <Field
+            label="形成机制注"
+            multiline
+            value={content.resource.formationNote}
+            onChange={(formationNote) =>
+              patch(content, onChange, "resource", { ...content.resource, formationNote })
+            }
+          />
+          <Field
+            label="特点标题"
+            value={content.resource.traitsTitle}
+            onChange={(traitsTitle) =>
+              patch(content, onChange, "resource", { ...content.resource, traitsTitle })
+            }
+          />
+          <Field
+            label="矿物标题"
+            value={content.resource.mineralsTitle}
+            onChange={(mineralsTitle) =>
+              patch(content, onChange, "resource", { ...content.resource, mineralsTitle })
+            }
+          />
+          <Field
+            label="矿物导语"
+            multiline
+            value={content.resource.mineralsLead}
+            onChange={(mineralsLead) =>
+              patch(content, onChange, "resource", { ...content.resource, mineralsLead })
             }
           />
           <BlockList
@@ -381,19 +477,90 @@ export function ModuleEditor({
       return (
         <section className="admin-module">
           <Field
+            label="章节眉题"
+            value={content.supply.kicker}
+            onChange={(kicker) => patch(content, onChange, "supply", { ...content.supply, kicker })}
+          />
+          <Field
+            label="标题"
+            value={content.supply.title}
+            onChange={(title) => patch(content, onChange, "supply", { ...content.supply, title })}
+          />
+          <Field
+            label="矿区标题"
+            value={content.supply.mineTitle}
+            onChange={(mineTitle) =>
+              patch(content, onChange, "supply", { ...content.supply, mineTitle })
+            }
+          />
+          <Field
             label="矿区说明"
             multiline
             value={content.supply.mineBody}
             onChange={(mineBody) => patch(content, onChange, "supply", { ...content.supply, mineBody })}
           />
+          <MediaFields
+            label="矿区主图"
+            image={content.supply.mineImage}
+            onChange={(mineImage) =>
+              patch(content, onChange, "supply", { ...content.supply, mineImage })
+            }
+          />
+          <BlockList
+            label="矿区相册"
+            items={content.supply.minePhotos}
+            onChange={(minePhotos) =>
+              patch(content, onChange, "supply", { ...content.supply, minePhotos })
+            }
+            blank={() => ({ src: "", alt: "" })}
+          >
+            {(item, update) => (
+              <MediaFields label="照片" image={item} onChange={(image) => update(image)} />
+            )}
+          </BlockList>
           <Field
-            label="矿区图"
-            value={content.supply.mineImage.src}
-            onChange={(src) =>
-              patch(content, onChange, "supply", {
-                ...content.supply,
-                mineImage: { ...content.supply.mineImage, src },
-              })
+            label="原料标题"
+            value={content.supply.rawTitle}
+            onChange={(rawTitle) => patch(content, onChange, "supply", { ...content.supply, rawTitle })}
+          />
+          <MediaFields
+            label="原料图"
+            image={content.supply.rawImage}
+            onChange={(rawImage) => patch(content, onChange, "supply", { ...content.supply, rawImage })}
+          />
+          <Field
+            label="加工标题"
+            value={content.supply.processTitle}
+            onChange={(processTitle) =>
+              patch(content, onChange, "supply", { ...content.supply, processTitle })
+            }
+          />
+          <Field
+            label="加工说明"
+            value={content.supply.processNote}
+            onChange={(processNote) =>
+              patch(content, onChange, "supply", { ...content.supply, processNote })
+            }
+          />
+          <Field
+            label="海运标题"
+            value={content.supply.shippingTitle}
+            onChange={(shippingTitle) =>
+              patch(content, onChange, "supply", { ...content.supply, shippingTitle })
+            }
+          />
+          <MediaFields
+            label="海运图"
+            image={content.supply.shippingImage}
+            onChange={(shippingImage) =>
+              patch(content, onChange, "supply", { ...content.supply, shippingImage })
+            }
+          />
+          <Field
+            label="海运注"
+            value={content.supply.shippingNote}
+            onChange={(shippingNote) =>
+              patch(content, onChange, "supply", { ...content.supply, shippingNote })
             }
           />
           <BlockList
@@ -442,10 +609,114 @@ export function ModuleEditor({
     case "products":
       return (
         <section className="admin-module">
+          <Field
+            label="章节眉题"
+            value={content.products.kicker}
+            onChange={(kicker) =>
+              patch(content, onChange, "products", { ...content.products, kicker })
+            }
+          />
+          <Field
+            label="标题"
+            value={content.products.title}
+            onChange={(title) => patch(content, onChange, "products", { ...content.products, title })}
+          />
+          <Field
+            label="来源标题"
+            value={content.products.sourceTitle}
+            onChange={(sourceTitle) =>
+              patch(content, onChange, "products", { ...content.products, sourceTitle })
+            }
+          />
           <StringList
             label="产品来源"
             items={content.products.source}
             onChange={(source) => patch(content, onChange, "products", { ...content.products, source })}
+          />
+          <MediaFields
+            label="仓储图"
+            image={content.products.warehouseImage}
+            onChange={(warehouseImage) =>
+              patch(content, onChange, "products", { ...content.products, warehouseImage })
+            }
+          />
+          <Field
+            label="方向标题"
+            value={content.products.directionsTitle}
+            onChange={(directionsTitle) =>
+              patch(content, onChange, "products", { ...content.products, directionsTitle })
+            }
+          />
+          <Field
+            label="土壤标题"
+            value={content.products.soilTitle}
+            onChange={(soilTitle) =>
+              patch(content, onChange, "products", { ...content.products, soilTitle })
+            }
+          />
+          <MediaFields
+            label="土壤对照图"
+            image={content.products.soilImage}
+            onChange={(soilImage) =>
+              patch(content, onChange, "products", { ...content.products, soilImage })
+            }
+          />
+          <Field
+            label="肥基料标题"
+            value={content.products.fertilizerTitle}
+            onChange={(fertilizerTitle) =>
+              patch(content, onChange, "products", { ...content.products, fertilizerTitle })
+            }
+          />
+          <Field
+            label="肥基料导语"
+            multiline
+            value={content.products.fertilizerLead}
+            onChange={(fertilizerLead) =>
+              patch(content, onChange, "products", { ...content.products, fertilizerLead })
+            }
+          />
+          <Field
+            label="畜牧标题"
+            value={content.products.livestockTitle}
+            onChange={(livestockTitle) =>
+              patch(content, onChange, "products", { ...content.products, livestockTitle })
+            }
+          />
+          <MediaFields
+            label="畜牧图"
+            image={content.products.livestockImage}
+            onChange={(livestockImage) =>
+              patch(content, onChange, "products", { ...content.products, livestockImage })
+            }
+          />
+          <Field
+            label="其他方向标题"
+            value={content.products.otherTitle}
+            onChange={(otherTitle) =>
+              patch(content, onChange, "products", { ...content.products, otherTitle })
+            }
+          />
+          <Field
+            label="包装标题"
+            value={content.products.packTitle}
+            onChange={(packTitle) =>
+              patch(content, onChange, "products", { ...content.products, packTitle })
+            }
+          />
+          <Field
+            label="产能标题"
+            value={content.products.capacityTitle}
+            onChange={(capacityTitle) =>
+              patch(content, onChange, "products", { ...content.products, capacityTitle })
+            }
+          />
+          <Field
+            label="客户标题"
+            value={content.products.customersTitle}
+            onChange={(customersTitle) =>
+              patch(content, onChange, "products", { ...content.products, customersTitle })
+            }
           />
           <BlockList
             label="关键数字"
@@ -520,6 +791,34 @@ export function ModuleEditor({
             )}
           </BlockList>
           <BlockList
+            label="其他方向"
+            items={content.products.other}
+            onChange={(other) => patch(content, onChange, "products", { ...content.products, other })}
+            blank={() => ({ title: "", body: "" })}
+          >
+            {(item, update) => (
+              <>
+                <Field label="标题" value={item.title} onChange={(title) => update({ title })} />
+                <Field label="正文" multiline value={item.body} onChange={(body) => update({ body })} />
+              </>
+            )}
+          </BlockList>
+          <BlockList
+            label="产能"
+            items={content.products.capacity}
+            onChange={(capacity) =>
+              patch(content, onChange, "products", { ...content.products, capacity })
+            }
+            blank={() => ({ title: "", body: "" })}
+          >
+            {(item, update) => (
+              <>
+                <Field label="标题" value={item.title} onChange={(title) => update({ title })} />
+                <Field label="正文" multiline value={item.body} onChange={(body) => update({ body })} />
+              </>
+            )}
+          </BlockList>
+          <BlockList
             label="包装"
             items={content.products.packs}
             onChange={(packs) => patch(content, onChange, "products", { ...content.products, packs })}
@@ -545,10 +844,47 @@ export function ModuleEditor({
       return (
         <section className="admin-module">
           <Field
+            label="章节眉题"
+            value={content.testing.kicker}
+            onChange={(kicker) => patch(content, onChange, "testing", { ...content.testing, kicker })}
+          />
+          <Field
+            label="标题"
+            value={content.testing.title}
+            onChange={(title) => patch(content, onChange, "testing", { ...content.testing, title })}
+          />
+          <Field
             label="导语"
             multiline
             value={content.testing.intro}
             onChange={(intro) => patch(content, onChange, "testing", { ...content.testing, intro })}
+          />
+          <MediaFields
+            label="实验室图"
+            image={content.testing.image}
+            onChange={(image) => patch(content, onChange, "testing", { ...content.testing, image })}
+          />
+          <Field
+            label="资料标题"
+            value={content.testing.docsTitle}
+            onChange={(docsTitle) =>
+              patch(content, onChange, "testing", { ...content.testing, docsTitle })
+            }
+          />
+          <Field
+            label="指标标题"
+            value={content.testing.assayTitle}
+            onChange={(assayTitle) =>
+              patch(content, onChange, "testing", { ...content.testing, assayTitle })
+            }
+          />
+          <Field
+            label="指标导语"
+            multiline
+            value={content.testing.assayLead}
+            onChange={(assayLead) =>
+              patch(content, onChange, "testing", { ...content.testing, assayLead })
+            }
           />
           <BlockList
             label="检测层级"
@@ -605,10 +941,25 @@ export function ModuleEditor({
       return (
         <section className="admin-module">
           <Field
+            label="章节眉题"
+            value={content.market.kicker}
+            onChange={(kicker) => patch(content, onChange, "market", { ...content.market, kicker })}
+          />
+          <Field
+            label="标题"
+            value={content.market.title}
+            onChange={(title) => patch(content, onChange, "market", { ...content.market, title })}
+          />
+          <Field
             label="导语"
             multiline
             value={content.market.lead}
             onChange={(lead) => patch(content, onChange, "market", { ...content.market, lead })}
+          />
+          <MediaFields
+            label="地图"
+            image={content.market.image}
+            onChange={(image) => patch(content, onChange, "market", { ...content.market, image })}
           />
           <BlockList
             label="区域组"
@@ -663,10 +1014,45 @@ export function ModuleEditor({
       return (
         <section className="admin-module">
           <Field
+            label="章节眉题"
+            value={content.solutions.kicker}
+            onChange={(kicker) =>
+              patch(content, onChange, "solutions", { ...content.solutions, kicker })
+            }
+          />
+          <Field
+            label="标题"
+            value={content.solutions.title}
+            onChange={(title) =>
+              patch(content, onChange, "solutions", { ...content.solutions, title })
+            }
+          />
+          <Field
             label="作物列表"
             value={content.solutions.crops}
             onChange={(crops) =>
               patch(content, onChange, "solutions", { ...content.solutions, crops })
+            }
+          />
+          <MediaFields
+            label="栏目主图"
+            image={content.solutions.image}
+            onChange={(image) =>
+              patch(content, onChange, "solutions", { ...content.solutions, image })
+            }
+          />
+          <Field
+            label="其他作物标题"
+            value={content.solutions.extrasTitle}
+            onChange={(extrasTitle) =>
+              patch(content, onChange, "solutions", { ...content.solutions, extrasTitle })
+            }
+          />
+          <Field
+            label="原则标题"
+            value={content.solutions.principlesTitle}
+            onChange={(principlesTitle) =>
+              patch(content, onChange, "solutions", { ...content.solutions, principlesTitle })
             }
           />
           <BlockList
@@ -675,7 +1061,7 @@ export function ModuleEditor({
             onChange={(schemes) =>
               patch(content, onChange, "solutions", { ...content.solutions, schemes })
             }
-            blank={() => ({ crop: "", value: "", dosage: "", method: "" })}
+            blank={() => ({ crop: "", value: "", dosage: "", method: "", image: { src: "", alt: "" } })}
           >
             {(item, update) => (
               <>
@@ -688,6 +1074,7 @@ export function ModuleEditor({
                   value={item.method}
                   onChange={(method) => update({ method })}
                 />
+                <MediaFields label="配图" image={item.image} onChange={(image) => update({ image })} />
               </>
             )}
           </BlockList>
@@ -718,6 +1105,43 @@ export function ModuleEditor({
     case "cases":
       return (
         <section className="admin-module">
+          <Field
+            label="章节眉题"
+            value={content.cases.kicker}
+            onChange={(kicker) => patch(content, onChange, "cases", { ...content.cases, kicker })}
+          />
+          <Field
+            label="标题"
+            value={content.cases.title}
+            onChange={(title) => patch(content, onChange, "cases", { ...content.cases, title })}
+          />
+          <MediaFields
+            label="栏目主图"
+            image={content.cases.image}
+            onChange={(image) => patch(content, onChange, "cases", { ...content.cases, image })}
+          />
+          <Field
+            label="对照导语"
+            multiline
+            value={content.cases.compareLead}
+            onChange={(compareLead) =>
+              patch(content, onChange, "cases", { ...content.cases, compareLead })
+            }
+          />
+          <Field
+            label="施用前标题"
+            value={content.cases.beforeTitle}
+            onChange={(beforeTitle) =>
+              patch(content, onChange, "cases", { ...content.cases, beforeTitle })
+            }
+          />
+          <Field
+            label="施用后标题"
+            value={content.cases.afterTitle}
+            onChange={(afterTitle) =>
+              patch(content, onChange, "cases", { ...content.cases, afterTitle })
+            }
+          />
           <BlockList
             label="案例"
             items={content.cases.items}
@@ -729,11 +1153,13 @@ export function ModuleEditor({
               solution: "",
               effects: [""],
               value: "",
+              image: { src: "", alt: "" },
             })}
           >
             {(item, update) => (
               <>
                 <Field label="标题" value={item.title} onChange={(title) => update({ title })} />
+                <MediaFields label="配图" image={item.image} onChange={(image) => update({ image })} />
                 <Field label="导语" multiline value={item.intro} onChange={(intro) => update({ intro })} />
                 <Field
                   label="背景"
@@ -779,6 +1205,16 @@ export function ModuleEditor({
       return (
         <section className="admin-module">
           <Field
+            label="章节眉题"
+            value={content.videos.kicker}
+            onChange={(kicker) => patch(content, onChange, "videos", { ...content.videos, kicker })}
+          />
+          <Field
+            label="标题"
+            value={content.videos.title}
+            onChange={(title) => patch(content, onChange, "videos", { ...content.videos, title })}
+          />
+          <Field
             label="导语"
             multiline
             value={content.videos.lead}
@@ -809,9 +1245,26 @@ export function ModuleEditor({
       return (
         <section className="admin-module">
           <Field
+            label="章节眉题"
+            value={content.contact.kicker}
+            onChange={(kicker) => patch(content, onChange, "contact", { ...content.contact, kicker })}
+          />
+          <Field
             label="标题"
             value={content.contact.title}
             onChange={(title) => patch(content, onChange, "contact", { ...content.contact, title })}
+          />
+          <MediaFields
+            label="配图"
+            image={content.contact.image}
+            onChange={(image) => patch(content, onChange, "contact", { ...content.contact, image })}
+          />
+          <Field
+            label="表单名称"
+            value={content.contact.formName}
+            onChange={(formName) =>
+              patch(content, onChange, "contact", { ...content.contact, formName })
+            }
           />
           <Field
             label="导语"
@@ -839,12 +1292,82 @@ export function ModuleEditor({
           />
         </section>
       )
+    case "gaps":
+      return (
+        <section className="admin-module">
+          <p className="admin-hint">上面是根据当前内容自动算出来的缺口，改品牌和联络后会变。下面是可编辑的备忘清单。</p>
+          <ul className="admin-gap-live">
+            {deriveGaps(content).map((gap) => (
+              <li key={gap.id}>
+                <strong>{gap.label}</strong>
+                <span className={`status status--${gap.status}`}>
+                  {gap.status === "empty" ? "空着" : gap.status === "draft" ? "已有草稿" : "可定稿"}
+                </span>
+                <p>{gap.value || "（还没有内容）"}</p>
+              </li>
+            ))}
+          </ul>
+          <BlockList
+            label="备忘清单"
+            items={content.gaps}
+            onChange={(gaps) => patch(content, onChange, "gaps", gaps)}
+            blank={() => ({
+              label: "",
+              why: "",
+              example: "",
+              status: "empty" as const,
+              value: "",
+            })}
+          >
+            {(item, update) => (
+              <>
+                <Field label="栏位" value={item.label} onChange={(label) => update({ label })} />
+                <Field label="为什么要" multiline value={item.why} onChange={(why) => update({ why })} />
+                <Field label="例子" value={item.example} onChange={(example) => update({ example })} />
+                <Field
+                  label="状态 empty / draft / ready"
+                  value={item.status}
+                  onChange={(status) =>
+                    update({
+                      status:
+                        status === "ready" || status === "draft" || status === "empty" ? status : item.status,
+                    })
+                  }
+                />
+                <Field label="已有内容" multiline value={item.value} onChange={(value) => update({ value })} />
+              </>
+            )}
+          </BlockList>
+        </section>
+      )
+    case "media":
+      return (
+        <section className="admin-module">
+          <p className="admin-hint">图库只登记路径。把文件放进 `web/public/media/`，各页用同一路径引用。</p>
+          <BlockList
+            label="媒体"
+            items={content.media}
+            onChange={(media) => patch(content, onChange, "media", media)}
+            blank={() => ({ src: "", alt: "", note: "" })}
+          >
+            {(item, update) => (
+              <>
+                <Field label="路径" value={item.src} onChange={(src) => update({ src })} />
+                <Field label="说明" value={item.alt} onChange={(alt) => update({ alt })} />
+                <Field label="用在哪" value={item.note} onChange={(note) => update({ note })} />
+              </>
+            )}
+          </BlockList>
+        </section>
+      )
     default:
       return null
   }
 }
 
 export const moduleMeta: { id: ContentModuleId; label: string }[] = [
+  { id: "gaps", label: "待补缺口" },
+  { id: "media", label: "图库" },
   { id: "settings", label: "站点与品牌" },
   { id: "nav", label: "导航" },
   { id: "hero", label: "首页主视觉" },

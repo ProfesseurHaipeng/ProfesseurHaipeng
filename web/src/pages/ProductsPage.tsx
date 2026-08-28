@@ -10,13 +10,16 @@ export function ProductsPage() {
   return (
     <article className="page">
       <PageIntro kicker={page.kicker} title={page.title} />
-      <section className="stack">
-        <h2>{page.sourceTitle}</h2>
-        {page.source.map((p) => (
-          <p key={p} className="measure">
-            {p}
-          </p>
-        ))}
+      <section className="split">
+        <div className="stack">
+          <h2>{page.sourceTitle}</h2>
+          {page.source.map((p) => (
+            <p key={p} className="measure">
+              {p}
+            </p>
+          ))}
+        </div>
+        <MediaFrame image={page.warehouseImage} />
       </section>
       <section className="stat-row">
         {page.stats.map((stat) => (

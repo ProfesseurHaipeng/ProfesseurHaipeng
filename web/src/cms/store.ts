@@ -1,5 +1,6 @@
 import { cloneJson } from "./clone"
 import { defaultContent } from "./defaultContent"
+import { mergeContent } from "./merge"
 import type { SiteContent } from "./types"
 import { isSiteContent } from "./validate"
 
@@ -25,7 +26,7 @@ export function readDraft(): SiteContent | null {
     const raw = localStorage.getItem(DRAFT_KEY)
     if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
-    return isSiteContent(parsed) ? parsed : null
+    return isSiteContent(parsed) ? mergeContent(parsed) : null
   } catch {
     return null
   }
@@ -67,7 +68,7 @@ export async function fetchPublished(): Promise<SiteContent> {
     const response = await fetch("/api/content", { headers: { Accept: "application/json" } })
     if (!response.ok) return publishedFallback()
     const parsed: unknown = await response.json()
-    return isSiteContent(parsed) ? parsed : publishedFallback()
+    return isSiteContent(parsed) ? mergeContent(parsed) : publishedFallback()
   } catch {
     return publishedFallback()
   }
@@ -109,5 +110,5 @@ export async function readImportedFile(file: File): Promise<SiteContent> {
   if (!isSiteContent(parsed)) {
     throw new Error("这个文件不是本站的内容格式")
   }
-  return parsed
+  return mergeContent(parsed)
 }

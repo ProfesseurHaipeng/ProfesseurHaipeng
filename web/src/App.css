@@ -322,6 +322,91 @@ th {
   background: var(--card);
 }
 
+.preview-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.7rem var(--space);
+  background: #b54a22;
+  color: #fff8f2;
+}
+
+.preview-banner a,
+.preview-banner button {
+  color: #fff8f2;
+  background: transparent;
+  border: 1px solid rgba(255, 248, 242, 0.5);
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -3rem;
+  background: var(--ember);
+  color: #fff;
+  padding: 0.4rem 0.7rem;
+  z-index: 20;
+}
+
+.skip-link:focus {
+  top: 0.6rem;
+}
+
+.field-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.field-card {
+  border: 1px solid var(--line);
+  background: var(--card);
+  padding: 1.15rem 1.2rem 1.3rem;
+}
+
+.field-card__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.field-card__n,
+.status {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+}
+
+.status {
+  border: 1px solid var(--line-strong);
+  padding: 0.15rem 0.45rem;
+}
+
+.status--draft {
+  color: #8a6a20;
+}
+
+.status--empty {
+  color: var(--muted);
+}
+
+.example,
+.value {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.value {
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--line);
+}
+
 @media (max-width: 900px) {
   .hero-split,
   .split,

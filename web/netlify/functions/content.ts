@@ -1,4 +1,6 @@
 import type { Handler } from "@netlify/functions"
+import { mergeContent } from "../../src/cms/merge"
+import { isSiteContent } from "../../src/cms/validate"
 
 type BlobStore = {
   get: (key: string, options: { type: "json" }) => Promise<unknown>
@@ -7,7 +9,12 @@ type BlobStore = {
 
 const json = (body: unknown, status = 200) => ({
   statusCode: status,
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,PUT,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  },
   body: JSON.stringify(body),
 })
 
@@ -21,13 +28,18 @@ async function store(): Promise<BlobStore | null> {
 }
 
 export const handler: Handler = async (event) => {
+  if (event.httpMethod === "OPTIONS") {
+    return json({ ok: true })
+  }
+
   const blobs = await store()
 
   if (event.httpMethod === "GET") {
     if (!blobs) return json({ error: "no-store" }, 404)
     const published = await blobs.get("site", { type: "json" })
     if (!published) return json({ error: "empty" }, 404)
-    return json(published)
+    if (!isSiteContent(published)) return json({ error: "invalid" }, 404)
+    return json(mergeContent(published))
   }
 
   if (event.httpMethod === "PUT") {
@@ -41,12 +53,13 @@ export const handler: Handler = async (event) => {
     if (payload.password !== password) {
       return json({ error: "unauthorized" }, 401)
     }
-    if (!payload.content || typeof payload.content !== "object") {
-      return json({ error: "missing-content" }, 400)
+    if (!isSiteContent(payload.content)) {
+      return json({ error: "invalid-content" }, 400)
     }
     if (!blobs) return json({ error: "no-store" }, 503)
-    await blobs.setJSON("site", payload.content)
-    return json({ ok: true })
+    const content = mergeContent(payload.content)
+    await blobs.setJSON("site", content)
+    return json({ ok: true, updatedAt: content.updatedAt })
   }
 
   return json({ error: "method" }, 405)

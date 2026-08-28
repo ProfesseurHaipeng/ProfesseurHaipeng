@@ -19,7 +19,10 @@ export function ResourcePage() {
             </p>
           ))}
         </div>
-        <MediaFrame image={page.image} />
+        <div className="stack">
+          <MediaFrame image={page.image} />
+          <MediaFrame image={page.eruptionImage} />
+        </div>
       </section>
       <section className="stack">
         <h2>{page.formationTitle}</h2>

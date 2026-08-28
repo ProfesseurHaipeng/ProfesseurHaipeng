@@ -14,6 +14,8 @@ export function HomePage() {
           <p className="latin-kicker">{content.hero.kicker}</p>
           <h1>{name}</h1>
           <p className="hero__lead">{content.hero.subtitle}</p>
+          <p className="measure">{content.settings.tagline}</p>
+          <p className="measure faint">{content.settings.audience}</p>
           {content.hero.points.map((point) => (
             <p key={point} className="measure">
               {point}

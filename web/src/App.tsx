@@ -6,6 +6,7 @@ import { CasesPage } from "./pages/CasesPage"
 import { ContactPage } from "./pages/ContactPage"
 import { HomePage } from "./pages/HomePage"
 import { MarketPage } from "./pages/MarketPage"
+import { NextPage } from "./pages/NextPage"
 import { NotFoundPage } from "./pages/NotFoundPage"
 import { ProductsPage } from "./pages/ProductsPage"
 import { ProjectPage } from "./pages/ProjectPage"
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="solutions" element={<SolutionsPage />} />
             <Route path="cases" element={<CasesPage />} />
             <Route path="videos" element={<VideosPage />} />
+            <Route path="next" element={<NextPage />} />
             <Route path="contact" element={<ContactPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

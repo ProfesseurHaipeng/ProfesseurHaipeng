@@ -12,6 +12,7 @@ export function CasesPage() {
       <MediaFrame image={page.image} />
       {page.items.map((item) => (
         <section className="stack card" key={item.id}>
+          <MediaFrame image={item.image} />
           <h2>{item.title}</h2>
           <p>{item.intro}</p>
           <p>

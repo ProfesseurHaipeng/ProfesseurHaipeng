@@ -15,7 +15,14 @@ export function SupplyPage() {
           <h2>{page.mineTitle}</h2>
           <p className="measure">{page.mineBody}</p>
         </div>
-        <MediaFrame image={page.mineImage} />
+        <div className="stack">
+          <MediaFrame image={page.mineImage} />
+          <div className="card-grid">
+            {page.minePhotos.map((photo) => (
+              <MediaFrame key={photo.id} image={photo} />
+            ))}
+          </div>
+        </div>
       </section>
       <section className="split">
         <MediaFrame image={page.rawImage} />

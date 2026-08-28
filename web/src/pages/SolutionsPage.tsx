@@ -14,6 +14,7 @@ export function SolutionsPage() {
       <div className="card-grid">
         {page.schemes.map((scheme) => (
           <article className="card" key={scheme.id}>
+            <MediaFrame image={scheme.image} />
             <h3>{scheme.crop}</h3>
             <p>
               <strong>应用价值</strong> {scheme.value}

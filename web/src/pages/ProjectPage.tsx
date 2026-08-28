@@ -30,6 +30,7 @@ export function ProjectPage() {
           ))}
         </ol>
       </section>
+      <MediaFrame image={page.craterImage} />
       <section className="split">
         <MediaFrame image={page.valuesImage} />
         <div className="stack">

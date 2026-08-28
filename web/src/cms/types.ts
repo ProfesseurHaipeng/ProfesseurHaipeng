@@ -68,6 +68,7 @@ export type CropScheme = {
   value: string
   dosage: string
   method: string
+  image: MediaRef
 }
 
 export type CaseStudy = {
@@ -78,6 +79,36 @@ export type CaseStudy = {
   solution: string
   effects: string[]
   value: string
+  image: MediaRef
+}
+
+export type ContactChannels = {
+  email: string
+  phone: string
+  wechat: string
+  address: string
+}
+
+export type MediaAsset = {
+  id: string
+  src: string
+  alt: string
+  note: string
+}
+
+export type GapStatus = "empty" | "draft" | "ready"
+
+export type ContentGap = {
+  id: string
+  label: string
+  why: string
+  example: string
+  status: GapStatus
+  value: string
+}
+
+export type LabeledImage = MediaRef & {
+  id: string
 }
 
 export type VideoItem = {
@@ -102,6 +133,8 @@ export type SiteContent = {
     footerNote: string
     contactHint: string
     noIndex: boolean
+    channels: ContactChannels
+    brochureUrl: string
   }
   nav: NavItem[]
   hero: {
@@ -123,6 +156,7 @@ export type SiteContent = {
     strategyLayers: TextBlock[]
     valuesTitle: string
     valuesImage: MediaRef
+    craterImage: MediaRef
     values: TextBlock[]
   }
   resource: {
@@ -131,6 +165,7 @@ export type SiteContent = {
     backgroundTitle: string
     background: string[]
     image: MediaRef
+    eruptionImage: MediaRef
     formationTitle: string
     formationLead: string
     formationSteps: ProcessStep[]
@@ -147,6 +182,7 @@ export type SiteContent = {
     mineTitle: string
     mineBody: string
     mineImage: MediaRef
+    minePhotos: LabeledImage[]
     rawTitle: string
     rawImage: MediaRef
     rawPoints: TextBlock[]
@@ -163,6 +199,7 @@ export type SiteContent = {
     title: string
     sourceTitle: string
     source: string[]
+    warehouseImage: MediaRef
     stats: { id: string; value: string; label: string; body: string }[]
     directionsTitle: string
     directions: TextBlock[]
@@ -243,9 +280,13 @@ export type SiteContent = {
     slogan: string
     formName: string
   }
+  media: MediaAsset[]
+  gaps: ContentGap[]
 }
 
 export type ContentModuleId =
+  | "gaps"
+  | "media"
   | "settings"
   | "hero"
   | "overview"

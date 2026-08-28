@@ -125,6 +125,26 @@
   font: inherit;
 }
 
+.admin-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.admin-gap-live {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.admin-gap-live li {
+  border: 1px solid #ddd4c6;
+  padding: 0.7rem 0.8rem;
+  background: #fff;
+}
+
 @media (max-width: 860px) {
   .admin-shell {
     grid-template-columns: 1fr;

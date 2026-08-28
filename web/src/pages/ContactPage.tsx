@@ -53,6 +53,30 @@ export function ContactPage() {
         </div>
       </div>
       <p className="measure faint">{content.settings.contactHint}</p>
+      {content.settings.channels.email ||
+      content.settings.channels.phone ||
+      content.settings.channels.wechat ||
+      content.settings.channels.address ? (
+        <section className="card">
+          <h3>对外联络</h3>
+          {content.settings.channels.email ? (
+            <p>
+              邮箱{" "}
+              <a href={`mailto:${content.settings.channels.email}`}>{content.settings.channels.email}</a>
+            </p>
+          ) : null}
+          {content.settings.channels.phone ? <p>电话 {content.settings.channels.phone}</p> : null}
+          {content.settings.channels.wechat ? <p>微信 {content.settings.channels.wechat}</p> : null}
+          {content.settings.channels.address ? <p>地址 {content.settings.channels.address}</p> : null}
+        </section>
+      ) : null}
+      {content.settings.brochureUrl ? (
+        <p>
+          <a className="btn btn--ghost" href={content.settings.brochureUrl} target="_blank" rel="noreferrer">
+            下载招商手册
+          </a>
+        </p>
+      ) : null}
       {sent ? (
         <p className="notice" role="status">
           便条已记下。品牌未定期间，它只作为内容线索。

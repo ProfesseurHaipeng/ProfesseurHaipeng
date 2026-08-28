@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from "react"
 import { Link } from "react-router-dom"
 import { cloneJson } from "../cms/clone"
 import { defaultContent } from "../cms/defaultContent"
+import { emptyGapCount } from "../cms/gaps"
+import { mergeContent } from "../cms/merge"
 import {
   clearDraft,
   downloadContent,
@@ -21,13 +23,27 @@ const LOCAL_UNLOCK = "ash-draft"
 export function AdminApp() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem(SESSION_KEY) === "1")
   const [password, setPassword] = useState("")
-  const [moduleId, setModuleId] = useState<ContentModuleId>("settings")
-  const [content, setContent] = useState<SiteContent>(() => readDraft() ?? cloneJson(defaultContent))
+  const [moduleId, setModuleId] = useState<ContentModuleId>("gaps")
+  const [content, setContent] = useState<SiteContent>(() =>
+    mergeContent(readDraft() ?? defaultContent),
+  )
+  const [saved, setSaved] = useState(() => JSON.stringify(mergeContent(readDraft() ?? defaultContent)))
   const [message, setMessage] = useState("")
+  const dirty = JSON.stringify(content) !== saved
 
   useEffect(() => {
     document.title = "内容后台 · 火山灰"
   }, [])
+
+  useEffect(() => {
+    const onLeave = (event: BeforeUnloadEvent) => {
+      if (!dirty) return
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    window.addEventListener("beforeunload", onLeave)
+    return () => window.removeEventListener("beforeunload", onLeave)
+  }, [dirty])
 
   const unlock = (event: FormEvent) => {
     event.preventDefault()
@@ -43,6 +59,7 @@ export function AdminApp() {
   const saveDraft = () => {
     const next = writeDraft(content)
     setContent(next)
+    setSaved(JSON.stringify(next))
     setMessage("草稿已保存在这台浏览器里。前台要看到改动，请点「前台预览草稿」。")
   }
 
@@ -61,6 +78,7 @@ export function AdminApp() {
   const resetPublished = () => {
     const next = cloneJson(defaultContent)
     setContent(next)
+    setSaved(JSON.stringify(next))
     clearDraft()
     setPreviewDraft(false)
     setMessage("已回到仓库里的已发布稿。")
@@ -71,6 +89,7 @@ export function AdminApp() {
     try {
       const next = await readImportedFile(file)
       setContent(next)
+      setSaved("")
       setMessage("已读入 JSON，记得再保存草稿或发布。")
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "导入失败")
@@ -80,7 +99,8 @@ export function AdminApp() {
   const onPublish = async () => {
     try {
       await publishContent(content, password || LOCAL_UNLOCK)
-      writeDraft(content)
+      const next = writeDraft(content)
+      setSaved(JSON.stringify(next))
       setMessage("已发布到站点存储。若在本地 Vite 里，这个接口还不存在，请改用导出 JSON。")
     } catch (error) {
       setMessage(
@@ -124,6 +144,7 @@ export function AdminApp() {
       <aside className="admin-side">
         <p className="latin-kicker">CMS</p>
         <h1>内容后台</h1>
+        <p className="admin-hint">还空着 {emptyGapCount(content)} 项对外信息</p>
         <nav>
           {moduleMeta.map((item) => (
             <button
@@ -141,7 +162,7 @@ export function AdminApp() {
       <section className="admin-main">
         <header className="admin-toolbar">
           <button type="button" className="btn" onClick={saveDraft}>
-            保存草稿
+            {dirty ? "保存草稿（未存）" : "保存草稿"}
           </button>
           <button type="button" className="btn btn--ghost" onClick={preview}>
             前台预览草稿
