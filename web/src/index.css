@@ -39,6 +39,17 @@ a:hover {
   color: var(--ember);
 }
 
+:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 img {
   display: block;
   max-width: 100%;

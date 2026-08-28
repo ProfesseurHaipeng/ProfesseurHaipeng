@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react"
-import { NavLink } from "react-router-dom"
+import { Link, NavLink, useLocation } from "react-router-dom"
 import { useSiteContent } from "../cms/ContentContext"
 import { publicNav } from "../nav"
 
 export function SiteHeader() {
   const { content } = useSiteContent()
+  const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
   const name = content.settings.brandName || content.settings.productName
+
+  useEffect(() => {
+    setOpen(false)
+  }, [pathname])
 
   useEffect(() => {
     if (!open) return
@@ -49,9 +54,9 @@ export function SiteHeader() {
             {item.label}
           </NavLink>
         ))}
-        <NavLink className="nav-cta" to="/contact" onClick={() => setOpen(false)}>
+        <Link className="nav-cta" to="/contact" onClick={() => setOpen(false)}>
           谈合作
-        </NavLink>
+        </Link>
       </nav>
     </header>
   )

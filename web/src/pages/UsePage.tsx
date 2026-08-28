@@ -6,13 +6,21 @@ import { useSiteContent } from "../cms/ContentContext"
 export function UsePage() {
   const { content } = useSiteContent()
   const { market, solutions } = content
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const cropFromUrl = params.get("crop") ?? "全部"
   const [crop, setCrop] = useState(cropFromUrl)
 
   useEffect(() => {
     setCrop(cropFromUrl)
   }, [cropFromUrl])
+
+  const selectCrop = (name: string) => {
+    setCrop(name)
+    const next = new URLSearchParams(params)
+    if (name === "全部") next.delete("crop")
+    else next.set("crop", name)
+    setParams(next, { replace: true })
+  }
 
   const cropNames = useMemo(() => {
     const fromLine = solutions.crops.split("·").map((item) => item.trim()).filter(Boolean)
@@ -55,7 +63,7 @@ export function UsePage() {
       <section>
         <div className="section-head">
           <h2>按作物看方案</h2>
-          <p className="fine">点作物名过滤。手册照片不在这一页展开。</p>
+          <p className="fine">点作物名过滤方案和对应省份。</p>
         </div>
         <div className="filter-row" role="tablist" aria-label="作物筛选">
           {cropNames.map((name) => (
@@ -65,7 +73,7 @@ export function UsePage() {
               role="tab"
               aria-selected={crop === name}
               className={crop === name ? "chip chip--on" : "chip"}
-              onClick={() => setCrop(name)}
+              onClick={() => selectCrop(name)}
             >
               {name}
             </button>
