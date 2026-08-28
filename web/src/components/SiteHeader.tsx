@@ -31,10 +31,7 @@ export function SiteHeader() {
     <header className="site-header">
       <NavLink className="wordmark" to="/" onClick={() => setOpen(false)}>
         <span className="wordmark__mark" aria-hidden="true" />
-        <span>
-          <span className="wordmark__zh">{name}</span>
-          <span className="wordmark__en">{content.settings.latinName}</span>
-        </span>
+        <span className="wordmark__zh">{name}</span>
       </NavLink>
       <button
         type="button"

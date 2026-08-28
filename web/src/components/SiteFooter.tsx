@@ -28,7 +28,7 @@ export function SiteFooter() {
               <a href={`mailto:${channels.email}`}>{channels.email}</a>
             </p>
           ) : (
-            <p className="faint">对外邮箱待补</p>
+            <p className="faint">先留线索，再交换正式联络方式</p>
           )}
           {channels.phone ? (
             <p>

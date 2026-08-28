@@ -21,8 +21,11 @@ body {
 body {
   font-family: var(--font-sans);
   font-size: 17px;
-  line-height: 1.75;
+  line-height: 1.47;
+  font-weight: 400;
+  letter-spacing: -0.011em;
   text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
@@ -30,13 +33,13 @@ body {
 }
 
 a {
-  color: inherit;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.22em;
+  color: var(--ember);
+  text-decoration: none;
 }
 
 a:hover {
-  color: var(--ember);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 
 :focus-visible {
@@ -47,6 +50,10 @@ a:hover {
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+
+  * {
+    transition: none !important;
   }
 }
 
