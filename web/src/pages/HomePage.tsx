@@ -10,17 +10,19 @@ export function HomePage() {
   return (
     <article className="home">
       <section className="hero">
-        <div className="wrap hero__center">
-          <p className="eyebrow">{hero.kicker}</p>
-          <h1>{hero.title}</h1>
-          <p className="lede">{hero.subtitle}</p>
-          <div className="btn-row btn-row--center">
-            <Link className="btn" to={hero.primaryCta.href}>
-              {hero.primaryCta.label}
-            </Link>
-            <Link className="btn btn--ghost" to={hero.secondaryCta.href}>
-              {hero.secondaryCta.label}
-            </Link>
+        <div className="wrap hero__grid">
+          <div className="hero__copy">
+            <p className="eyebrow">{hero.kicker}</p>
+            <h1>{hero.title}</h1>
+            <p className="lede">{hero.subtitle}</p>
+            <div className="btn-row">
+              <Link className="btn" to={hero.primaryCta.href}>
+                {hero.primaryCta.label}
+              </Link>
+              <Link className="btn btn--ghost" to={hero.secondaryCta.href}>
+                {hero.secondaryCta.label}
+              </Link>
+            </div>
           </div>
           <div className="hero__visual">
             <TopoField />
@@ -38,7 +40,7 @@ export function HomePage() {
             </div>
           ))}
         </div>
-        <p className="wrap fine center">数字来自招商手册，以最新检测和供应口径为准。</p>
+        <p className="wrap fine">数字来自招商手册，以最新检测和供应口径为准。</p>
       </section>
 
       <section className="block">
@@ -67,7 +69,7 @@ export function HomePage() {
               <h2>{products.directionsTitle}</h2>
             </div>
             <Link className="text-link" to="/products">
-              进一步了解 ›
+              进一步了解 →
             </Link>
           </header>
           <div className="tile-grid">
@@ -88,16 +90,16 @@ export function HomePage() {
             <h2>先选作物</h2>
             <p className="lede">水稻、蕉果、茶柑和南方红壤是当前主谈方向。</p>
           </header>
-          <ul className="chip-row" style={{ justifyContent: "center" }}>
+          <ul className="chip-row">
             {crops.map((crop) => (
               <li key={crop}>
                 <Link to={`/use?crop=${encodeURIComponent(crop)}`}>{crop}</Link>
               </li>
             ))}
           </ul>
-          <p className="center">
+          <p>
             <Link className="text-link" to="/use">
-              看全部方案 ›
+              看全部方案 →
             </Link>
           </p>
         </div>
@@ -111,7 +113,7 @@ export function HomePage() {
               <h2>两则案例</h2>
             </div>
             <Link className="text-link" to="/cases">
-              进一步了解 ›
+              进一步了解 →
             </Link>
           </header>
           <div className="case-grid">

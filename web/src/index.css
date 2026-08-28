@@ -21,9 +21,9 @@ body {
 body {
   font-family: var(--font-sans);
   font-size: 17px;
-  line-height: 1.47;
+  line-height: 1.55;
   font-weight: 400;
-  letter-spacing: -0.011em;
+  letter-spacing: 0.01em;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -33,17 +33,16 @@ body {
 }
 
 a {
-  color: var(--ember);
+  color: inherit;
   text-decoration: none;
 }
 
 a:hover {
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
+  color: var(--ember);
 }
 
 :focus-visible {
-  outline: 2px solid var(--ember);
+  outline: 1px solid var(--ember);
   outline-offset: 3px;
 }
 
