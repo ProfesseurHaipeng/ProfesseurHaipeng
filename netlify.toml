@@ -12,6 +12,36 @@
   status = 200
 
 [[redirects]]
+  from = "/resource"
+  to = "/project"
+  status = 301
+
+[[redirects]]
+  from = "/supply"
+  to = "/products"
+  status = 301
+
+[[redirects]]
+  from = "/testing"
+  to = "/products"
+  status = 301
+
+[[redirects]]
+  from = "/market"
+  to = "/use"
+  status = 301
+
+[[redirects]]
+  from = "/solutions"
+  to = "/use"
+  status = 301
+
+[[redirects]]
+  from = "/videos"
+  to = "/cases"
+  status = 301
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
