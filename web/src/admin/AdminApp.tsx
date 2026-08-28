@@ -49,7 +49,7 @@ export function AdminApp() {
   const preview = () => {
     writeDraft(content)
     setPreviewDraft(true)
-    window.open("/", "_blank", "noopener")
+    window.open("/?preview=1", "_blank", "noopener")
     setMessage("已打开前台预览。关掉预览后，访客仍只看到已发布内容。")
   }
 

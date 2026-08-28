@@ -4,6 +4,7 @@ import {
   fetchPublished,
   isPreviewDraft,
   resolvePublicContent,
+  setPreviewDraft,
   subscribeContent,
 } from "./store"
 import type { SiteContent } from "./types"
@@ -28,6 +29,9 @@ export function ContentProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("preview") === "1") {
+      setPreviewDraft(true)
+    }
     let alive = true
     fetchPublished().then((doc) => {
       if (alive) {

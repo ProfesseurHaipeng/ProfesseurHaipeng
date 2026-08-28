@@ -47,13 +47,15 @@ export function clearDraft() {
 }
 
 export function setPreviewDraft(on: boolean) {
-  if (on) sessionStorage.setItem(PREVIEW_KEY, "1")
-  else sessionStorage.removeItem(PREVIEW_KEY)
+  if (on) localStorage.setItem(PREVIEW_KEY, "1")
+  else localStorage.removeItem(PREVIEW_KEY)
   emit()
 }
 
 export function isPreviewDraft() {
-  return sessionStorage.getItem(PREVIEW_KEY) === "1"
+  if (typeof window === "undefined") return false
+  if (localStorage.getItem(PREVIEW_KEY) === "1") return true
+  return new URLSearchParams(window.location.search).get("preview") === "1"
 }
 
 export function publishedFallback() {

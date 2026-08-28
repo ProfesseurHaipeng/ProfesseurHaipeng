@@ -5,7 +5,7 @@ import { useSiteContent } from "../cms/ContentContext"
 
 export function HomePage() {
   const { content } = useSiteContent()
-  const name = content.settings.brandName || content.hero.title
+  const name = content.settings.brandName || content.settings.productName || content.hero.title
 
   return (
     <article className="page home">
