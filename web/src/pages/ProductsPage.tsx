@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { MediaFrame } from "../components/MediaFrame"
 import { PageHero } from "../components/PageHero"
 import { SectionTabs } from "../components/SectionTabs"
 import { useSiteContent } from "../cms/ContentContext"
@@ -17,6 +18,7 @@ export function ProductsPage() {
     <article className="page wrap">
       <PageHero kicker={products.kicker} title={products.title} lead={products.source[0]}>
         <p>{products.source[1]}</p>
+        <MediaFrame image={products.warehouseImage} caption={products.warehouseImage.alt} />
       </PageHero>
 
       <section className="stats" aria-label="产品数字">
@@ -54,6 +56,7 @@ export function ProductsPage() {
             content: (
               <section className="stack">
                 <h2>{products.soilTitle}</h2>
+                <MediaFrame image={products.soilImage} caption={products.soilImage.alt} />
                 <div className="tile-grid tile-grid--2">
                   {products.soil.map((item) => (
                     <article key={item.id} className="tile">
@@ -73,6 +76,7 @@ export function ProductsPage() {
                   ))}
                 </div>
                 <h2>{products.livestockTitle}</h2>
+                <MediaFrame image={products.livestockImage} caption={products.livestockImage.alt} />
                 <div className="tile-grid tile-grid--2">
                   {products.livestock.map((item) => (
                     <article key={item.id} className="tile">
@@ -101,6 +105,7 @@ export function ProductsPage() {
                 <div className="stack">
                   <p className="eyebrow">{testing.kicker}</p>
                   <h2>{testing.assayTitle}</h2>
+                  <MediaFrame image={testing.image} caption={testing.image.alt} />
                   <p className="lede">{testing.assayLead}</p>
                   <p>{testing.intro}</p>
                   <ul className="plain-list">
@@ -143,8 +148,10 @@ export function ProductsPage() {
                 <p className="eyebrow">{supply.kicker}</p>
                 <h2>{supply.title}</h2>
                 <h3>{supply.mineTitle}</h3>
+                <MediaFrame image={supply.mineImage} caption={supply.mineImage.alt} />
                 <p>{supply.mineBody}</p>
                 <h3>{supply.rawTitle}</h3>
+                <MediaFrame image={supply.rawImage} caption={supply.rawImage.alt} />
                 <div className="tile-grid tile-grid--2">
                   {supply.rawPoints.map((item) => (
                     <article key={item.id} className="tile">
@@ -167,6 +174,7 @@ export function ProductsPage() {
                   ))}
                 </ol>
                 <h3>{supply.shippingTitle}</h3>
+                <MediaFrame image={supply.shippingImage} caption={supply.shippingImage.alt} />
                 <div className="tile-grid">
                   {supply.shipping.map((item) => (
                     <article key={item.id} className="tile">

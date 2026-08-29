@@ -13,6 +13,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/guide"
+  to = "/.netlify/functions/guide"
+  status = 200
+
+[[redirects]]
   from = "/resource"
   to = "/project"
   status = 301

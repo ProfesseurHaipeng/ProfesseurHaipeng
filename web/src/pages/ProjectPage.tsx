@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { MediaFrame } from "../components/MediaFrame"
 import { PageHero } from "../components/PageHero"
 import { SectionTabs } from "../components/SectionTabs"
 import { useSiteContent } from "../cms/ContentContext"
@@ -43,6 +44,7 @@ export function ProjectPage() {
                   ))}
                 </ol>
                 <h2>{overview.valuesTitle}</h2>
+                <MediaFrame image={overview.valuesImage} caption={overview.valuesImage.alt} />
                 <div className="tile-grid tile-grid--2">
                   {overview.values.map((item) => (
                     <article key={item.id} className="tile">
@@ -62,6 +64,7 @@ export function ProjectPage() {
                 <div className="stack">
                   <p className="eyebrow">{resource.kicker}</p>
                   <h2>{resource.title}</h2>
+                  <MediaFrame image={resource.image} caption={resource.image.alt} />
                   <h3>{resource.backgroundTitle}</h3>
                   {resource.background.map((para) => (
                     <p key={para}>{para}</p>
@@ -80,6 +83,7 @@ export function ProjectPage() {
                     ))}
                   </ol>
                   <p className="fine">{resource.formationNote}</p>
+                  <MediaFrame image={resource.eruptionImage} caption={resource.eruptionImage.alt} />
                 </div>
                 <aside className="note-card">
                   <p className="eyebrow">{resource.traitsTitle}</p>

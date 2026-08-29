@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { MediaFrame } from "../components/MediaFrame"
 import { TopoField } from "../components/TopoField"
 import { useSiteContent } from "../cms/ContentContext"
 
@@ -6,6 +7,7 @@ export function HomePage() {
   const { content } = useSiteContent()
   const { hero, overview, products, solutions, cases, contact } = content
   const crops = solutions.crops.split("·").map((item) => item.trim()).filter(Boolean)
+  const cropPhotos = solutions.schemes.filter((item) => ["rice", "banana", "tea"].includes(item.id))
 
   return (
     <article className="home">
@@ -25,8 +27,14 @@ export function HomePage() {
             </div>
           </div>
           <div className="hero__visual">
-            <TopoField />
-            <p className="hero__caption">吕宋岛中西部 · 矿带示意</p>
+            {hero.image.src ? (
+              <MediaFrame image={hero.image} caption={hero.image.alt} />
+            ) : (
+              <>
+                <TopoField />
+                <p className="hero__caption">吕宋岛中西部 · 矿带示意</p>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -58,6 +66,7 @@ export function HomePage() {
               </article>
             ))}
           </div>
+          <MediaFrame image={overview.craterImage} caption={overview.craterImage.alt} />
         </div>
       </section>
 
@@ -97,6 +106,11 @@ export function HomePage() {
               </li>
             ))}
           </ul>
+          <div className="photo-strip">
+            {cropPhotos.map((item) => (
+              <MediaFrame key={item.id} image={item.image} caption={item.crop} />
+            ))}
+          </div>
           <p>
             <Link className="text-link" to="/use">
               看全部方案 →
@@ -119,6 +133,7 @@ export function HomePage() {
           <div className="case-grid">
             {cases.items.slice(0, 2).map((item) => (
               <Link key={item.id} className="case-card tile--link" to="/cases">
+                <MediaFrame image={item.image} />
                 <h3>{item.title}</h3>
                 <p>{item.intro}</p>
               </Link>

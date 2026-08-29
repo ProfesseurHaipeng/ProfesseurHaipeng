@@ -30,6 +30,15 @@ function mergeValue(base: unknown, incoming: unknown): unknown {
     }
     const next: Record<string, unknown> = { ...(base as Record<string, unknown>) }
     for (const [key, value] of Object.entries(incoming as Record<string, unknown>)) {
+      if (
+        key === "src" &&
+        typeof value === "string" &&
+        value.trim() === "" &&
+        typeof next.src === "string" &&
+        next.src.trim()
+      ) {
+        continue
+      }
       next[key] = key in next ? mergeValue(next[key], value) : value
     }
     return next

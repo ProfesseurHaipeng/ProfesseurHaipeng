@@ -20,9 +20,11 @@
   position: sticky;
   top: 0;
   z-index: 8;
-  background: var(--void);
+  background: rgba(5, 5, 6, 0.58);
   color: var(--paper);
   border-bottom: 1px solid var(--line-light);
+  backdrop-filter: saturate(180%) blur(22px);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
 }
 
 .wordmark {
@@ -1065,6 +1067,184 @@ h3 {
   border-top: 1px solid var(--line);
 }
 
+.media-frame {
+  margin: 0 0 1rem;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background: #111;
+}
+
+.media-frame img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+}
+
+.media-frame figcaption {
+  padding: 0.55rem 0 0;
+  font-family: var(--font-latin);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+  border: 0;
+}
+
+.hero .media-frame {
+  margin: 0;
+  border-color: var(--line-light);
+}
+
+.hero .media-frame img {
+  min-height: 22rem;
+}
+
+.photo-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin: 1.4rem 0 0;
+}
+
+.photo-strip .media-frame {
+  margin: 0;
+}
+
+.solution-card .media-frame,
+.case-card .media-frame,
+.case-detail .media-frame,
+.contact-card .media-frame {
+  margin: 0 0 0.8rem;
+}
+
+.site-guide {
+  position: fixed;
+  right: 1.15rem;
+  bottom: 1.15rem;
+  z-index: 14;
+  display: grid;
+  justify-items: end;
+  gap: 0.7rem;
+}
+
+.site-guide__toggle {
+  border: 1px solid var(--line-light);
+  background: rgba(5, 5, 6, 0.72);
+  color: var(--paper);
+  font-family: var(--font-latin);
+  letter-spacing: 0.16em;
+  font-size: 0.72rem;
+  padding: 0.7rem 0.95rem;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.site-guide__panel {
+  width: min(22.5rem, calc(100vw - 1.6rem));
+  max-height: min(34rem, calc(100svh - 6.5rem));
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  background: rgba(5, 5, 6, 0.82);
+  color: var(--paper);
+  border: 1px solid var(--line-light);
+  backdrop-filter: saturate(160%) blur(22px);
+  -webkit-backdrop-filter: saturate(160%) blur(22px);
+}
+
+.site-guide__head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 0.8rem;
+  padding: 0.9rem 1rem 0.7rem;
+  border-bottom: 1px solid var(--line-light);
+}
+
+.site-guide__head .eyebrow {
+  grid-column: 1;
+  color: var(--ember-soft);
+}
+
+.site-guide__head h2 {
+  grid-column: 1;
+  font-size: 1.2rem;
+  color: var(--paper);
+}
+
+.site-guide__close {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: start;
+  background: transparent;
+  border: 0;
+  color: rgba(243, 239, 230, 0.7);
+  font-family: var(--font-latin);
+  letter-spacing: 0.12em;
+  font-size: 0.68rem;
+}
+
+.site-guide__log {
+  overflow: auto;
+  padding: 0.9rem 1rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.site-guide__bubble {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.site-guide__bubble--user {
+  justify-self: end;
+  max-width: 90%;
+  color: var(--ember-soft);
+}
+
+.site-guide__hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0 1rem 0.6rem;
+}
+
+.site-guide__hints .chip {
+  color: var(--paper);
+  border-color: var(--line-light);
+}
+
+.site-guide__form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.45rem;
+  padding: 0.7rem 1rem 1rem;
+  border-top: 1px solid var(--line-light);
+}
+
+.site-guide__form input {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line-light);
+  color: var(--paper);
+  padding: 0.55rem 0;
+}
+
+.site-guide__form .btn {
+  background: var(--paper);
+  color: var(--void);
+  border-color: var(--paper);
+  padding: 0.55rem 0.8rem;
+}
+
+.tabs,
+.filter-row {
+  backdrop-filter: saturate(140%) blur(14px);
+  -webkit-backdrop-filter: saturate(140%) blur(14px);
+  background: rgba(243, 239, 230, 0.78);
+}
+
 @media (max-width: 900px) {
   .hero__grid,
   .split,
@@ -1134,8 +1314,10 @@ h3 {
     left: 0;
     right: 0;
     padding: 0.9rem var(--space) 1.2rem;
-    background: var(--void);
+    background: rgba(5, 5, 6, 0.82);
     border-bottom: 1px solid var(--line-light);
+    backdrop-filter: saturate(160%) blur(18px);
+    -webkit-backdrop-filter: saturate(160%) blur(18px);
     flex-direction: column;
     align-items: stretch;
     z-index: 7;
@@ -1159,6 +1341,14 @@ h3 {
   .page-jump,
   .tabs {
     width: 100%;
+  }
+
+  .photo-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .hero .media-frame img {
+    min-height: 16rem;
   }
 
   body.nav-lock {

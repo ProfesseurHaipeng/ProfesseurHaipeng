@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
+import { MediaFrame } from "../components/MediaFrame"
 import { PageHero } from "../components/PageHero"
 import { useSiteContent } from "../cms/ContentContext"
 
@@ -53,11 +54,13 @@ export function UsePage() {
   return (
     <article className="page wrap">
       <PageHero kicker={solutions.kicker} title={solutions.title} lead={solutions.crops} />
+      <MediaFrame image={solutions.image} caption={solutions.image.alt} />
 
       <section className="band band--inset">
         <p className="eyebrow">{market.kicker}</p>
         <h2>{market.title}</h2>
         <p className="lede">{market.lead}</p>
+        <MediaFrame image={market.image} caption={market.image.alt} />
       </section>
 
       <section>
@@ -83,6 +86,7 @@ export function UsePage() {
         <div className="solution-list">
           {schemes.map((item) => (
             <article key={item.id} className="solution-card">
+              <MediaFrame image={item.image} caption={item.crop} />
               <p className="eyebrow">{item.crop}</p>
               <h3>{item.crop}方案</h3>
               <p>{item.value}</p>

@@ -29,6 +29,15 @@ describe("mergeContent", () => {
     expect(merged.resource.minerals.length).toBe(defaultContent.resource.minerals.length)
   })
 
+  it("keeps default media when a published draft leaves src empty", () => {
+    const merged = mergeContent({
+      schemaVersion: 1,
+      hero: { image: { src: "", alt: "" } },
+    })
+    expect(merged.hero.image.src).toBe(defaultContent.hero.image.src)
+    expect(merged.hero.image.src.length).toBeGreaterThan(0)
+  })
+
   it("lets a boolean false overwrite the default", () => {
     const merged = mergeContent({
       schemaVersion: 1,

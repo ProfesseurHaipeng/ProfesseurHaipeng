@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { MediaFrame } from "../components/MediaFrame"
 import { PageHero } from "../components/PageHero"
 import { useSiteContent } from "../cms/ContentContext"
 
@@ -20,6 +21,7 @@ export function CasesPage() {
             <span>{String(index + 1).padStart(2, "0")}</span>
             <div className="stack">
               <h2>{item.title}</h2>
+              <MediaFrame image={item.image} caption={item.image.alt} />
               <p className="lede">{item.intro}</p>
               <p>{item.background}</p>
               <p>

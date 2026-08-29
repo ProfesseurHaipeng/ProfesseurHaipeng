@@ -3,6 +3,7 @@ import { DocumentMeta } from "./DocumentMeta"
 import { PreviewBanner } from "./PreviewBanner"
 import { ScrollToTop } from "./ScrollToTop"
 import { SiteFooter } from "./SiteFooter"
+import { SiteGuide } from "./SiteGuide"
 import { SiteHeader } from "./SiteHeader"
 
 export function SiteLayout() {
@@ -19,6 +20,7 @@ export function SiteLayout() {
         <Outlet />
       </main>
       <SiteFooter />
+      <SiteGuide />
     </div>
   )
 }

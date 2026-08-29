@@ -13,6 +13,7 @@
   "dependencies": {
     "@netlify/blobs": "^11.0.2",
     "@netlify/functions": "^6.0.0",
+    "openai": "^7.8.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2"
