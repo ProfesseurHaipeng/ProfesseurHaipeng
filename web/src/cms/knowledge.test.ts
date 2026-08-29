@@ -20,10 +20,14 @@ describe("site guide knowledge", () => {
 
   it("does not mention banned source language", () => {
     const brief = flattenKnowledge(defaultContent)
+    const answer = localGuideAnswer("水稻怎么用", brief)
     expect(brief).not.toMatch(/招商/)
     expect(brief).not.toMatch(/独立试验/)
     expect(brief).not.toMatch(/独立站/)
     expect(JSON.stringify(defaultContent)).not.toMatch(/招商/)
     expect(JSON.stringify(defaultContent)).not.toMatch(/独立试验/)
+    expect(JSON.stringify(defaultContent)).not.toMatch(/独立站/)
+    expect(answer).not.toMatch(/招商/)
+    expect(answer).not.toMatch(/独立/)
   })
 })

@@ -13,7 +13,7 @@ export function flattenKnowledge(content: SiteContent): string {
   const { settings, hero, overview, resource, supply, products, testing, market, solutions, cases, videos, contact } =
     content
   const blocks: string[] = [
-    "这是菲律宾皮纳图博火山灰农业综合产业项目官网。品牌尚未最终落实。检测数字与效果以最新批次报告和田间记录为准。",
+    "这是菲律宾皮纳图博火山灰农业综合产业项目官网。",
     line("产品名", settings.productName || "皮纳图博火山灰"),
     line("项目名", settings.projectName),
     line("定位", settings.tagline),
@@ -94,12 +94,10 @@ export function flattenKnowledge(content: SiteContent): string {
     line(contact.title, contact.lead),
     ...contact.cards.map((item) => line(item.title, item.body)),
     line("口号", contact.slogan),
-    line("邮箱", settings.channels.email || "尚未公开，请在联络表单留下线索"),
-    line("电话", settings.channels.phone || "尚未公开"),
-    line("微信", settings.channels.wechat || "尚未公开"),
-    line("地址", settings.channels.address || "尚未公开"),
-    line("后台", "内容可在 /admin 修改，口令由站点管理员掌握，不要对访客泄露。"),
-    "配图目前是示意画面，不是矿区现场原片。有原片后可在后台替换。",
+    line("邮箱", settings.channels.email || "请在联络页留下线索"),
+    line("电话", settings.channels.phone || "请在联络页留下线索"),
+    line("微信", settings.channels.wechat || "请在联络页留下线索"),
+    line("地址", settings.channels.address || "请在联络页留下线索"),
   ]
 
   return blocks.filter(Boolean).join("\n")
@@ -131,7 +129,7 @@ export function localGuideAnswer(question: string, knowledge: string): string {
     return "我是本站导览。可以介绍项目、产品、改土、检测、供应、作物方案、案例和联络方式。请尽量用站点里的词来问，例如「水稻怎么用」「月供应多少」「怎么谈合作」。"
   }
 
-  return `根据本站现有文案：\n\n${scored.map((item) => `· ${item.line}`).join("\n")}\n\n数字与效果以最新检测和田间记录为准。若要谈样品，请到「联络」页留下作物和吨位。`
+  return `${scored.map((item) => `· ${item.line}`).join("\n")}\n\n若要谈样品或检测，请到「联络」页留下作物和吨位。`
 }
 
 function tokensFrom(question: string) {

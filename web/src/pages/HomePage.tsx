@@ -35,7 +35,7 @@ export function HomePage() {
           {hero.image.src ? null : (
             <div className="hero__visual">
               <TopoField />
-              <p className="hero__caption">吕宋岛中西部 · 矿带示意</p>
+              <p className="hero__caption">吕宋岛中西部</p>
             </div>
           )}
         </div>
@@ -50,7 +50,6 @@ export function HomePage() {
             </div>
           ))}
         </div>
-        <p className="wrap fine">数字以最新检测和供应口径为准。</p>
       </section>
 
       <section className="block">

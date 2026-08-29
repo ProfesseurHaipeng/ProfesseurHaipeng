@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from "react"
-import { emptyGapCount } from "../cms/gaps"
 import { MediaFrame } from "../components/MediaFrame"
 import { PageHero } from "../components/PageHero"
 import { useSiteContent } from "../cms/ContentContext"
@@ -12,7 +11,6 @@ export function ContactPage() {
   const { content } = useSiteContent()
   const { contact, settings } = content
   const { channels } = settings
-  const missing = emptyGapCount(content)
   const [sent, setSent] = useState(false)
   const hasChannel = filled(channels.email) || filled(channels.phone) || filled(channels.wechat) || filled(channels.address)
 
@@ -92,16 +90,14 @@ export function ContactPage() {
               </li>
             ))}
           </ul>
-          <p className="fine">
-            {missing > 0 ? "品牌和对外联络还没齐，不影响先谈作物、区域和吨位。" : "对外信息已齐，可以直接发。"}
-          </p>
+          <p className="fine">留下作物、区域和吨位即可。</p>
         </section>
 
         <section className="contact-card">
           <h2>留一条线索</h2>
           {sent ? (
             <p className="notice">
-              {channels.email ? "已打开你的邮箱草稿。若没有弹出，请直接写信。" : "已记在这台浏览器里。对外邮箱补上后，这条可以转成正式来信。"}
+              {channels.email ? "已打开你的邮箱。若没有弹出，请直接写信。" : "已记下。我们按这条线索回复。"}
             </p>
           ) : (
             <form className="note-form" name={contact.formName} method="POST" data-netlify="true" netlify-honeypot="bot-field" onSubmit={onSubmit}>

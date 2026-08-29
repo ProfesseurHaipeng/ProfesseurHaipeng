@@ -5,16 +5,16 @@ export const defaultContent: SiteContent = {
   updatedAt: "2026-08-28T00:00:00.000Z",
   settings: {
     brandName: "",
-    brandStatus: "品牌未定 · 内容草案",
+    brandStatus: "",
     productName: "皮纳图博火山灰",
     latinName: "Pinatubo Volcanic Ash",
     projectName: "菲律宾皮纳图博火山灰农业综合产业项目",
     tagline: "天然矿物资源 × 土壤改良 × 生态农业解决方案",
     audience: "面向农业集团 · 肥料企业 · 规模化种植企业 · 生态农业项目合作方",
     description:
-      "菲律宾皮纳图博火山灰农业综合产业项目官网。品牌名称尚未落实，内容可在后台随时改写。",
-    footerNote: "草案站点。检测数字与效果数据以最新批次报告和田间记录为准，后台改过的内容会覆盖前台。",
-    contactHint: "正式对外邮箱、电话、地址仍空着，可在后台「站点与品牌」里补上。",
+      "菲律宾皮纳图博火山灰农业综合产业项目。天然矿物资源，用于土壤改良与生态农业。",
+    footerNote: "菲律宾皮纳图博火山灰农业综合产业项目",
+    contactHint: "留下作物、区域和吨位，我们按这条线索回复。",
     noIndex: true,
     channels: {
       email: "",
@@ -119,7 +119,7 @@ export const defaultContent: SiteContent = {
       { id: "f4", title: "优质矿物资源", body: "颗粒细、比表面积大、生物有效性高。" },
     ],
     formationNote:
-      "这一天然形成过程赋予皮纳图博火山灰独特的矿物组成，是人工合成矿物产品难以复制的。品牌未定期间，这句话可在后台改成更克制的表述。",
+      "这一天然形成过程赋予皮纳图博火山灰独特的矿物组成，是人工合成矿物产品难以复制的。",
     traitsTitle: "火山灰资源特点",
     traits: [
       {
@@ -192,7 +192,7 @@ export const defaultContent: SiteContent = {
     shipping: [
       { id: "port", title: "港口优势", body: "矿区距菲律宾苏比克湾自由港约 80 公里。苏比克湾港口具备集装箱装卸设施与国际航运网络，可直航中国各主要港口。" },
       { id: "route", title: "航线覆盖", body: "定期航班覆盖中国广州、深圳、厦门、上海、天津等主要港口，航行时间约 5-10 天。" },
-      { id: "cap", title: "供应能力", body: "月供应能力达 500000 吨以上，可根据客户需求调整规模。数字以最新供应口径为准。" },
+      { id: "cap", title: "供应能力", body: "月供应能力达 500000 吨以上，可根据客户需求调整规模。" },
     ],
     shippingNote: "海关进口资料、检验检疫证书、原产地证明等完整供应链证明文件可作为附件提供。",
   },
@@ -202,7 +202,7 @@ export const defaultContent: SiteContent = {
     sourceTitle: "产品来源与基本介绍",
     source: [
       "菲律宾皮纳图博火山灰产品源自 1991 年皮纳图博火山大喷发后形成的天然火山灰矿物沉积层。经过 30 余年的自然风化与矿化，矿物元素转化为高生物有效性形态。",
-      "本产品经菲律宾及国际权威检测机构检测认证。重金属与农用安全以最新报告为准，可在「检测」页和后台改写承诺语气。",
+      "本产品经菲律宾及国际权威检测机构检测认证。重金属与农用安全见检测报告。",
     ],
     warehouseImage: { src: "/media/ash_warehouse.jpg", alt: "成品仓储与吨袋堆码" },
     stats: [
@@ -255,11 +255,11 @@ export const defaultContent: SiteContent = {
       { id: "bulk", title: "散装规格", body: "集装箱散装，每标准 20 英尺集装箱装载量约 25-28 吨，适合大型农业企业直采。" },
       { id: "ton", title: "吨袋包装", body: "标准 1 吨/袋，PP 编织吨袋，防水防潮，便于叉车装卸。" },
       { id: "small", title: "小袋包装", body: "提供 25kg/袋、50kg/袋，适合零售渠道、示范基地和小规模种植户。" },
-      { id: "oem", title: "定制包装", body: "可根据客户品牌提供印刷与规格定制，支持 OEM/ODM。品牌未定时先作为能力说明。" },
+      { id: "oem", title: "定制包装", body: "可根据客户品牌提供印刷与规格定制，支持 OEM/ODM。" },
     ],
     capacityTitle: "产能信息与供应保障",
     capacity: [
-      { id: "c-now", title: "现有产能", body: "矿区年开采能力达 500 万吨以上，月供应能力 500000 吨。请在后台按实际修订。" },
+      { id: "c-now", title: "现有产能", body: "矿区年开采能力达 500 万吨以上，月供应能力 500000 吨。" },
       { id: "c-exp", title: "扩产计划", body: "可在 6-12 个月内将年产能扩大至 1000 万吨以上。" },
       { id: "c-qc", title: "质量保障", body: "每批次产品经过专业检测，并提供检测报告。" },
     ],
@@ -289,12 +289,12 @@ export const defaultContent: SiteContent = {
     docsTitle: "检测资料展示",
     docs: [
       { id: "xrf", title: "矿物成分全项分析报告", body: "采用 X 射线荧光光谱（XRF）分析主量与微量元素。" },
-      { id: "hm", title: "重金属安全检测报告", body: "对铅、镉、汞、砷、铬等做专项检测。是否符合 GB/T 23349 等，以后台上传的实际报告为准。" },
+      { id: "hm", title: "重金属安全检测报告", body: "对铅、镉、汞、砷、铬等做专项检测，对照 GB/T 23349 等农用安全要求。" },
       { id: "phy", title: "物理特性检测报告", body: "粒径分布、比表面积、容重、含水率等。" },
       { id: "ag", title: "农业应用效果评估报告", body: "田间与盆栽试验，评估对土壤理化性质及作物生长的影响。" },
     ],
     assayTitle: "主要矿物元素检测指标",
-    assayLead: "以下为参考值。实际检测数据以最新批次报告为准。",
+    assayLead: "主要矿物元素含量如下。",
     assay: [
       { id: "sio2", name: "二氧化硅", symbol: "SiO₂", amount: "57.71", meaning: "增强茎秆，抗倒伏" },
       { id: "al2o3", name: "三氧化二铝", symbol: "Al₂O₃", amount: "17.13", meaning: "土壤结构改善" },
@@ -316,7 +316,7 @@ export const defaultContent: SiteContent = {
       {
         id: "jx-hn",
         title: "江西 · 湖南南部",
-        insight: "湖南南部重金属污染土壤修复是重点方向：硅钙成分用于钝化镉等重金属、降低水稻镉吸收。具体效果以检测与田间记录为准。",
+        insight: "湖南南部重金属污染土壤修复是重点方向：硅钙成分用于钝化镉等重金属、降低水稻镉吸收。",
         regions: [
           {
             id: "jx",
@@ -488,7 +488,7 @@ export const defaultContent: SiteContent = {
           "化学肥料用量减少 40%",
           "土壤微生物多样性提升",
         ],
-        value: "可作为可复制的有机 / 友善农业改土方案。效果数字以田间记录为准，后台可按核验结果修订。",
+        value: "可复制的有机 / 友善农业改土方案。",
         image: { src: "/media/ash_farm_case.jpg", alt: "台湾友善农业田间" },
       },
       {
@@ -505,11 +505,11 @@ export const defaultContent: SiteContent = {
           "实现废弃物零排放，并获得绿色农业认证",
         ],
         value: "以火山灰为介质，把养殖废弃物转成种植投入。",
-        image: { src: "/media/ash_cycle.jpg", alt: "畜牧循环农业示意" },
+        image: { src: "/media/ash_cycle.jpg", alt: "畜牧循环农业" },
       },
     ],
     compareTitle: "植物使用前后对比案例",
-    compareLead: "以下为田间对照中的典型结果，以最新记录为准。",
+    compareLead: "田间对照记录了施用前后的土壤与作物变化。",
     beforeTitle: "施用前（对照组）",
     before: [
       "土壤酸化严重，pH 4.5-5.0",
@@ -530,7 +530,7 @@ export const defaultContent: SiteContent = {
   videos: {
     kicker: "第九部分",
     title: "项目视频案例展示",
-    lead: "微信视频号链接在部分环境可能打不开，后台可改成更稳定的地址。",
+    lead: "矿区、田间和循环农业的视频记录。",
     items: [
       {
         id: "v1",
@@ -556,37 +556,37 @@ export const defaultContent: SiteContent = {
   contact: {
     kicker: "邀请",
     title: "携手共建绿色农业未来",
-    lead: "品牌与对外邮箱还没定。你可以先留机构、作物和 tonnage，我们按这条线索回复。",
+    lead: "留下机构、作物和吨位，我们按这条线索回复。",
     image: { src: "/media/ash_hero_volcano_farm.jpg", alt: "火山与农田" },
     cards: [
       { id: "c1", title: "联系我们", body: "如需了解更多项目详情、索取完整检测报告，欢迎留下联系方式。" },
-      { id: "c2", title: "项目咨询", body: "可提供项目介绍、产品资料及合作方案讨论。正式团队联络方式待补。" },
+      { id: "c2", title: "项目咨询", body: "可提供项目介绍、产品资料及合作方案讨论。" },
     ],
     slogan: "天然矿物资源 × 土壤改良科学 × 生态农业实践 — 共同开创可持续农业的美好未来",
     formName: "ash-content-note",
   },
   media: [
-    { id: "hero-cover", src: "/media/ash_hero_volcano_farm.jpg", alt: "火山与农田", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "hero-crater", src: "/media/ash_crater.jpg", alt: "火山口", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "eruption", src: "/media/ash_eruption.jpg", alt: "喷发", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "caldera", src: "/media/ash_crater.jpg", alt: "火山口航拍", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "mine-site", src: "/media/ash_mine.jpg", alt: "矿区", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "mine-bench", src: "/media/ash_mine_bench.jpg", alt: "台阶开采", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "raw-hand", src: "/media/ash_raw_powder.jpg", alt: "原料", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "port", src: "/media/ash_shipping.jpg", alt: "海运", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "warehouse", src: "/media/ash_warehouse.jpg", alt: "仓储", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "soil", src: "/media/ash_soil.jpg", alt: "土壤对照", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "cattle", src: "/media/ash_livestock.jpg", alt: "牧场", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "lab", src: "/media/ash_lab.jpg", alt: "实验室", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "map", src: "/media/ash_tea_citrus.jpg", alt: "市场地图", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "rice", src: "/media/ash_rice.jpg", alt: "水稻", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "banana", src: "/media/ash_banana.jpg", alt: "香蕉园", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "veg", src: "/media/ash_vegetables.jpg", alt: "蔬菜田间", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "mango", src: "/media/ash_mango.jpg", alt: "芒果园", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "citrus-tea", src: "/media/ash_tea.jpg", alt: "茶园", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "farmer", src: "/media/ash_farm_case.jpg", alt: "田间", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "cycle", src: "/media/ash_cycle.jpg", alt: "循环农业", note: "现为示意配图。有现场原片后在后台替换路径。" },
-    { id: "invite", src: "/media/ash_hero_volcano_farm.jpg", alt: "邀请", note: "现为示意配图。有现场原片后在后台替换路径。" },
+    { id: "hero-cover", src: "/media/ash_hero_volcano_farm.jpg", alt: "火山与农田", note: "可替换为现场照片。" },
+    { id: "hero-crater", src: "/media/ash_crater.jpg", alt: "火山口", note: "可替换为现场照片。" },
+    { id: "eruption", src: "/media/ash_eruption.jpg", alt: "喷发", note: "可替换为现场照片。" },
+    { id: "caldera", src: "/media/ash_crater.jpg", alt: "火山口航拍", note: "可替换为现场照片。" },
+    { id: "mine-site", src: "/media/ash_mine.jpg", alt: "矿区", note: "可替换为现场照片。" },
+    { id: "mine-bench", src: "/media/ash_mine_bench.jpg", alt: "台阶开采", note: "可替换为现场照片。" },
+    { id: "raw-hand", src: "/media/ash_raw_powder.jpg", alt: "原料", note: "可替换为现场照片。" },
+    { id: "port", src: "/media/ash_shipping.jpg", alt: "海运", note: "可替换为现场照片。" },
+    { id: "warehouse", src: "/media/ash_warehouse.jpg", alt: "仓储", note: "可替换为现场照片。" },
+    { id: "soil", src: "/media/ash_soil.jpg", alt: "土壤对照", note: "可替换为现场照片。" },
+    { id: "cattle", src: "/media/ash_livestock.jpg", alt: "牧场", note: "可替换为现场照片。" },
+    { id: "lab", src: "/media/ash_lab.jpg", alt: "实验室", note: "可替换为现场照片。" },
+    { id: "map", src: "/media/ash_tea_citrus.jpg", alt: "市场地图", note: "可替换为现场照片。" },
+    { id: "rice", src: "/media/ash_rice.jpg", alt: "水稻", note: "可替换为现场照片。" },
+    { id: "banana", src: "/media/ash_banana.jpg", alt: "香蕉园", note: "可替换为现场照片。" },
+    { id: "veg", src: "/media/ash_vegetables.jpg", alt: "蔬菜田间", note: "可替换为现场照片。" },
+    { id: "mango", src: "/media/ash_mango.jpg", alt: "芒果园", note: "可替换为现场照片。" },
+    { id: "citrus-tea", src: "/media/ash_tea.jpg", alt: "茶园", note: "可替换为现场照片。" },
+    { id: "farmer", src: "/media/ash_farm_case.jpg", alt: "田间", note: "可替换为现场照片。" },
+    { id: "cycle", src: "/media/ash_cycle.jpg", alt: "循环农业", note: "可替换为现场照片。" },
+    { id: "invite", src: "/media/ash_hero_volcano_farm.jpg", alt: "邀请", note: "可替换为现场照片。" },
   ],
   gaps: [
     {
@@ -603,7 +603,7 @@ export const defaultContent: SiteContent = {
       why: "现在偏标本说明。可以改成更工业或更产品。",
       example: "冷静、不要口号；或需要一点温度。",
       status: "draft",
-      value: "当前偏克制，品牌未定。",
+      value: "当前语气偏产品说明。",
     },
     {
       id: "evidence",

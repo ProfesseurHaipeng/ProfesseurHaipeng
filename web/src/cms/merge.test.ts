@@ -45,4 +45,16 @@ describe("mergeContent", () => {
     })
     expect(merged.settings.noIndex).toBe(false)
   })
+
+  it("strips source-disclaimer language from an old published draft", () => {
+    const merged = mergeContent({
+      schemaVersion: 1,
+      cases: {
+        compareLead: "效果数字来自招商资料，不是本站独立试验。有原件后再把口径改硬。",
+      },
+    })
+    expect(merged.cases.compareLead).not.toMatch(/招商/)
+    expect(merged.cases.compareLead).not.toMatch(/独立试验/)
+    expect(merged.cases.compareLead).not.toMatch(/独立站/)
+  })
 })

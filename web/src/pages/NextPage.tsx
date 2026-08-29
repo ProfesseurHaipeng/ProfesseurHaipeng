@@ -18,7 +18,7 @@ export function NextPage() {
       <PageIntro
         kicker="Supply later"
         title="还缺什么"
-        lead="品牌可以后定。下面是根据当前文案自动标出来的空位。"
+        lead="下面是品牌和对外联络还空着的栏位。"
       />
       <ol className="field-list">
         {live.map((field, index) => (

@@ -12,7 +12,7 @@ export function SiteGuide() {
   const [turns, setTurns] = useState<ChatTurn[]>([
     {
       role: "assistant",
-      content: "我是本站导览，可以介绍项目、产品、作物方案、案例和联络方式。你之后接入自己的 API 后，我会走那条接口。",
+      content: "我是本站导览，可以介绍项目、产品、作物方案、案例和联络方式。",
     },
   ])
   const scroller = useRef<HTMLDivElement>(null)

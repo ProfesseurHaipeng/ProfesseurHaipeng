@@ -1,5 +1,6 @@
 import { cloneJson } from "./clone"
 import { defaultContent } from "./defaultContent"
+import { scrubTree } from "./scrub"
 import type { SiteContent } from "./types"
 
 function hasId(value: unknown): value is { id: string } {
@@ -50,5 +51,5 @@ export function mergeContent(partial: unknown, base: SiteContent = defaultConten
   const merged = mergeValue(base, partial) as SiteContent
   merged.schemaVersion = 1
   if (!merged.updatedAt) merged.updatedAt = base.updatedAt
-  return merged
+  return scrubTree(merged)
 }

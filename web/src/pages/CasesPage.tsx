@@ -12,7 +12,7 @@ export function CasesPage() {
       <PageHero
         kicker={cases.kicker}
         title={cases.title}
-        lead="以下为田间对照中的典型结果，以最新记录为准。"
+        lead={cases.compareLead}
       />
 
       <section className="case-stack">

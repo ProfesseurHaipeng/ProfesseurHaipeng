@@ -48,7 +48,7 @@ export function AdminApp() {
   const unlock = (event: FormEvent) => {
     event.preventDefault()
     if (password !== LOCAL_UNLOCK) {
-      setMessage("本地口令不对。草案阶段使用 ash-draft。发布到 Netlify 后再改成环境变量口令。")
+      setMessage("口令不对。")
       return
     }
     sessionStorage.setItem(SESSION_KEY, "1")
@@ -117,7 +117,7 @@ export function AdminApp() {
         <form onSubmit={unlock}>
           <p className="latin-kicker">Content desk</p>
           <h1>内容后台</h1>
-          <p>改官网文案、数字、案例和导航。品牌未定时，先用本地口令进入。</p>
+          <p>改官网文案、数字、案例和导航。</p>
           <label>
             口令
             <input
