@@ -311,7 +311,7 @@ export const defaultContent: SiteContent = {
     kicker: "第六部分",
     title: "中国农业市场布局",
     lead: "中国南方农业主产区土壤普遍存在酸化、板结、矿物元素缺乏等问题。皮纳图博火山灰的弱碱性与矿物组成，与南方土壤改良需求契合。重点布局以下区域。",
-    image: { src: "/media/ash_tea_citrus.jpg", alt: "中国南方农业区域" },
+    image: { src: "/media/ash_tea_citrus.jpg", alt: "中国农业区域示意" },
     groups: [
       {
         id: "jx-hn",
@@ -557,7 +557,7 @@ export const defaultContent: SiteContent = {
     kicker: "邀请",
     title: "携手共建绿色农业未来",
     lead: "留下机构、作物和吨位，我们按这条线索回复。",
-    image: { src: "/media/ash_hero_volcano_farm.jpg", alt: "火山与农田" },
+    image: { src: "/media/ash_invite.jpg", alt: "皮纳图博火山与山前农田" },
     cards: [
       { id: "c1", title: "联系我们", body: "如需了解更多项目详情、索取完整检测报告，欢迎留下联系方式。" },
       { id: "c2", title: "项目咨询", body: "可提供项目介绍、产品资料及合作方案讨论。" },
@@ -578,7 +578,7 @@ export const defaultContent: SiteContent = {
     { id: "soil", src: "/media/ash_soil.jpg", alt: "土壤对照", note: "可替换为现场照片。" },
     { id: "cattle", src: "/media/ash_livestock.jpg", alt: "牧场", note: "可替换为现场照片。" },
     { id: "lab", src: "/media/ash_lab.jpg", alt: "实验室", note: "可替换为现场照片。" },
-    { id: "map", src: "/media/ash_tea_citrus.jpg", alt: "市场地图", note: "可替换为现场照片。" },
+    { id: "map", src: "/media/ash_tea_citrus.jpg", alt: "中国农业区域示意", note: "可替换为现场照片。" },
     { id: "rice", src: "/media/ash_rice.jpg", alt: "水稻", note: "可替换为现场照片。" },
     { id: "banana", src: "/media/ash_banana.jpg", alt: "香蕉园", note: "可替换为现场照片。" },
     { id: "veg", src: "/media/ash_vegetables.jpg", alt: "蔬菜田间", note: "可替换为现场照片。" },
@@ -586,7 +586,7 @@ export const defaultContent: SiteContent = {
     { id: "citrus-tea", src: "/media/ash_tea.jpg", alt: "茶园", note: "可替换为现场照片。" },
     { id: "farmer", src: "/media/ash_farm_case.jpg", alt: "田间", note: "可替换为现场照片。" },
     { id: "cycle", src: "/media/ash_cycle.jpg", alt: "循环农业", note: "可替换为现场照片。" },
-    { id: "invite", src: "/media/ash_hero_volcano_farm.jpg", alt: "邀请", note: "可替换为现场照片。" },
+    { id: "invite", src: "/media/ash_invite.jpg", alt: "火山与农田", note: "可替换为现场照片。" },
   ],
   gaps: [
     {

@@ -11,33 +11,22 @@ export function HomePage() {
 
   return (
     <article className="home">
-      <section className={hero.image.src ? "hero hero--bleed" : "hero"}>
-        {hero.image.src ? (
-          <div className="hero__bleed">
-            <img src={hero.image.src} alt="" />
+      <section className="hero">
+        <div className="hero__photo">
+          {hero.image.src ? <img src={hero.image.src} alt="" /> : <TopoField />}
+        </div>
+        <div className="hero__copy">
+          <p className="eyebrow">{hero.kicker}</p>
+          <h1>{hero.title}</h1>
+          <p className="lede">{hero.subtitle}</p>
+          <div className="btn-row">
+            <Link className="btn" to={hero.primaryCta.href}>
+              {hero.primaryCta.label}
+            </Link>
+            <Link className="btn btn--ghost" to={hero.secondaryCta.href}>
+              {hero.secondaryCta.label}
+            </Link>
           </div>
-        ) : null}
-        <div className="wrap hero__grid">
-          <div className="hero__copy">
-            <p className="eyebrow">{hero.kicker}</p>
-            <h1>{hero.title}</h1>
-            <p className="lede">{hero.subtitle}</p>
-            <div className="btn-row">
-              <Link className="btn" to={hero.primaryCta.href}>
-                {hero.primaryCta.label}
-              </Link>
-              <Link className="btn btn--ghost" to={hero.secondaryCta.href}>
-                {hero.secondaryCta.label}
-              </Link>
-            </div>
-            {hero.image.src ? <p className="hero__caption">{hero.image.alt}</p> : null}
-          </div>
-          {hero.image.src ? null : (
-            <div className="hero__visual">
-              <TopoField />
-              <p className="hero__caption">吕宋岛中西部</p>
-            </div>
-          )}
         </div>
       </section>
 
@@ -53,8 +42,17 @@ export function HomePage() {
       </section>
 
       <section className="block">
+        <div className="wrap schematic-block">
+          <figure className="schematic">
+            <img src="/media/ash_belt.png" alt="吕宋岛中西部 · 矿带示意" />
+            <figcaption>吕宋岛中西部 · 矿带示意</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section className="block">
         <div className="wrap">
-          <header className="block-head block-head--center">
+          <header className="block-head">
             <p className="eyebrow">项目</p>
             <h2>{overview.title}</h2>
             <p className="lede">{overview.intro[0]}</p>
@@ -95,7 +93,7 @@ export function HomePage() {
 
       <section className="block">
         <div className="wrap">
-          <header className="block-head block-head--center">
+          <header className="block-head">
             <p className="eyebrow">应用</p>
             <h2>先选作物</h2>
             <p className="lede">水稻、蕉果、茶柑和南方红壤是当前主谈方向。</p>
@@ -124,7 +122,7 @@ export function HomePage() {
         <div className="wrap">
           <header className="section-head">
             <div className="block-head">
-              <p className="eyebrow">验证</p>
+              <p className="eyebrow">案例</p>
               <h2>两则案例</h2>
             </div>
             <Link className="text-link" to="/cases">

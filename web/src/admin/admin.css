@@ -1,8 +1,8 @@
 .admin-gate,
 .admin-shell {
   min-height: 100vh;
-  background: #f4efe6;
-  color: #1c1814;
+  background: #ffffff;
+  color: #111111;
 }
 
 .admin-gate {
@@ -30,13 +30,14 @@
 
 .admin-side {
   padding: 1.4rem 1.1rem;
-  border-right: 1px solid #d8d0c4;
-  background: #fffaf2;
+  border-right: 1px solid #eceef8;
+  background: #f6f6fa;
 }
 
 .admin-side h1 {
-  font-family: var(--font-serif);
-  font-size: 1.5rem;
+  font-family: var(--font-sans);
+  font-size: 1.35rem;
+  font-weight: 800;
   margin: 0.2rem 0 1rem;
 }
 
@@ -55,8 +56,8 @@
 }
 
 .admin-side button.is-active {
-  background: #efe3d2;
-  color: #9a3d18;
+  background: var(--lavender);
+  color: var(--lavender-ink);
 }
 
 .admin-main {
@@ -79,7 +80,7 @@
 
 .admin-hint,
 .admin-field span {
-  color: #5c5348;
+  color: #5f5f6a;
   font-size: 0.92rem;
 }
 
@@ -99,16 +100,16 @@
 .admin-list input,
 .admin-gate input {
   width: 100%;
-  border: 1px solid #cfc6b8;
+  border: 1px solid #eceef8;
   background: #fff;
   padding: 0.55rem 0.65rem;
 }
 
 .admin-list,
 .admin-card {
-  border: 1px solid #ddd4c6;
+  border: 1px solid #eceef8;
   padding: 0.9rem;
-  background: #fffaf2;
+  background: #ffffff;
 }
 
 .admin-list__row {
@@ -140,7 +141,7 @@
 }
 
 .admin-gap-live li {
-  border: 1px solid #ddd4c6;
+  border: 1px solid #eceef8;
   padding: 0.7rem 0.8rem;
   background: #fff;
 }
