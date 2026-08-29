@@ -45,7 +45,6 @@ export function HomePage() {
         <div className="wrap schematic-block">
           <figure className="schematic">
             <img src="/media/ash_belt.png" alt="吕宋岛中西部 · 矿带示意" />
-            <figcaption>吕宋岛中西部 · 矿带示意</figcaption>
           </figure>
         </div>
       </section>
