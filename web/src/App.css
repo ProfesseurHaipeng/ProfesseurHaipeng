@@ -471,28 +471,28 @@ h3 {
   border-color: var(--ink);
 }
 
-.cta .btn,
-.hero .btn {
+.cta a.btn,
+.hero a.btn {
   background: var(--ink);
   color: var(--paper);
   border-color: var(--ink);
 }
 
-.cta .btn:hover,
-.hero .btn:hover {
+.cta a.btn:hover,
+.hero a.btn:hover {
   background: #2a2a30;
   color: var(--paper);
 }
 
-.cta .btn--ghost,
-.hero .btn--ghost {
-  background: transparent;
+.cta a.btn.btn--ghost,
+.hero a.btn.btn--ghost {
+  background: #ffffff;
   color: var(--ink);
   border-color: var(--ink);
 }
 
-.cta .btn--ghost:hover,
-.hero .btn--ghost:hover {
+.cta a.btn.btn--ghost:hover,
+.hero a.btn.btn--ghost:hover {
   background: var(--ink);
   color: var(--paper);
   border-color: var(--ink);
