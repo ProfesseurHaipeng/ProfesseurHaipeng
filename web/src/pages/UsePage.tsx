@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
-import { MediaFrame } from "../components/MediaFrame"
 import { PageHero } from "../components/PageHero"
+import { SplitPanel } from "../components/SplitPanel"
 import { useSiteContent } from "../cms/ContentContext"
 
 export function UsePage() {
@@ -53,15 +53,13 @@ export function UsePage() {
 
   return (
     <article className="page wrap">
-      <PageHero kicker={solutions.kicker} title={solutions.title} lead={solutions.crops} />
-      <MediaFrame image={solutions.image} caption={solutions.image.alt} />
+      <PageHero kicker={solutions.kicker} title={solutions.title} lead={solutions.crops} image={solutions.image} />
 
-      <section className="band band--inset">
+      <SplitPanel image={market.image} caption={market.image.alt} ratio="auto">
         <p className="eyebrow">{market.kicker}</p>
         <h2>{market.title}</h2>
         <p className="lede">{market.lead}</p>
-        <MediaFrame image={market.image} caption={market.image.alt} />
-      </section>
+      </SplitPanel>
 
       <section>
         <div className="section-head">
@@ -86,24 +84,29 @@ export function UsePage() {
         <div className="solution-list">
           {schemes.map((item) => (
             <article key={item.id} className="solution-card">
-              <MediaFrame image={item.image} caption={item.crop} />
-              <p className="eyebrow">{item.crop}</p>
-              <h3>{item.crop}方案</h3>
-              <p>{item.value}</p>
-              <dl className="meta-dl">
-                <div>
-                  <dt>用量</dt>
-                  <dd>{item.dosage}</dd>
-                </div>
-                <div>
-                  <dt>方法</dt>
-                  <dd>{item.method}</dd>
-                </div>
-              </dl>
+              <SplitPanel
+                image={item.image}
+                caption={item.crop}
+                ratio={["rice", "banana"].includes(item.id) ? "portrait" : "wide"}
+              >
+                <p className="eyebrow">{item.crop}</p>
+                <h3>{item.crop}方案</h3>
+                <p>{item.value}</p>
+                <dl className="meta-dl">
+                  <div>
+                    <dt>用量</dt>
+                    <dd>{item.dosage}</dd>
+                  </div>
+                  <div>
+                    <dt>方法</dt>
+                    <dd>{item.method}</dd>
+                  </div>
+                </dl>
+              </SplitPanel>
             </article>
           ))}
           {extras.map((item) => (
-            <article key={item.id} className="solution-card">
+            <article key={item.id} className="tile">
               <p className="eyebrow">其他作物</p>
               <h3>{item.title}</h3>
               <p>{item.body}</p>
@@ -116,17 +119,15 @@ export function UsePage() {
       </section>
 
       <section className="stack">
-        <h2>
-          {crop === "全部" ? "南方重点区域" : `${crop}相关区域`}
-        </h2>
+        <h2>{crop === "全部" ? "南方重点区域" : `${crop}相关区域`}</h2>
         {regions.length === 0 ? (
           <p className="fine">这一作物没有单独标到省份，区域说明仍可在「全部」里看。</p>
         ) : (
           regions.map((group) => (
             <div key={group.id} className="region-group">
               <h3>{group.title}</h3>
-              {group.insight ? <p className="fine">{group.insight}</p> : null}
-              <div className="tile-grid">
+              {group.insight ? <p className="callout">{group.insight}</p> : null}
+              <div className="tile-grid tile-grid--3">
                 {group.regions.map((region) => (
                   <article key={region.id} className="tile">
                     <h3>{region.name}</h3>
@@ -141,7 +142,7 @@ export function UsePage() {
         )}
       </section>
 
-      <section className="stack">
+      <section className="callout">
         <h2>{solutions.principlesTitle}</h2>
         <ol className="plain-list">
           {solutions.principles.map((item) => (

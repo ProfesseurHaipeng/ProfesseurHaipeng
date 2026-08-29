@@ -2,6 +2,7 @@ import { Link } from "react-router-dom"
 import { MediaFrame } from "../components/MediaFrame"
 import { PageHero } from "../components/PageHero"
 import { SectionTabs } from "../components/SectionTabs"
+import { SplitPanel } from "../components/SplitPanel"
 import { useSiteContent } from "../cms/ContentContext"
 
 export function ProjectPage() {
@@ -10,7 +11,7 @@ export function ProjectPage() {
 
   return (
     <article className="page wrap">
-      <PageHero kicker={overview.kicker} title={overview.title} lead={overview.intro[0]}>
+      <PageHero kicker={overview.kicker} title={overview.title} lead={overview.intro[0]} image={overview.craterImage}>
         <p>{overview.intro[1]}</p>
       </PageHero>
 
@@ -44,15 +45,16 @@ export function ProjectPage() {
                   ))}
                 </ol>
                 <h2>{overview.valuesTitle}</h2>
-                <MediaFrame image={overview.valuesImage} caption={overview.valuesImage.alt} />
-                <div className="tile-grid tile-grid--2">
-                  {overview.values.map((item) => (
-                    <article key={item.id} className="tile">
-                      <h3>{item.title}</h3>
-                      <p>{item.body}</p>
-                    </article>
-                  ))}
-                </div>
+                <SplitPanel image={overview.valuesImage} caption={overview.valuesImage.alt} ratio="portrait">
+                  <div className="stack">
+                    {overview.values.map((item) => (
+                      <article key={item.id} className="tile">
+                        <h3>{item.title}</h3>
+                        <p>{item.body}</p>
+                      </article>
+                    ))}
+                  </div>
+                </SplitPanel>
               </div>
             ),
           },
@@ -64,7 +66,7 @@ export function ProjectPage() {
                 <div className="stack">
                   <p className="eyebrow">{resource.kicker}</p>
                   <h2>{resource.title}</h2>
-                  <MediaFrame image={resource.image} caption={resource.image.alt} />
+                  <MediaFrame image={resource.image} caption={resource.image.alt} ratio="portrait" />
                   <h3>{resource.backgroundTitle}</h3>
                   {resource.background.map((para) => (
                     <p key={para}>{para}</p>
@@ -83,7 +85,7 @@ export function ProjectPage() {
                     ))}
                   </ol>
                   <p className="fine">{resource.formationNote}</p>
-                  <MediaFrame image={resource.eruptionImage} caption={resource.eruptionImage.alt} />
+                  <MediaFrame image={resource.eruptionImage} caption={resource.eruptionImage.alt} ratio="wide" />
                 </div>
                 <aside className="note-card">
                   <p className="eyebrow">{resource.traitsTitle}</p>

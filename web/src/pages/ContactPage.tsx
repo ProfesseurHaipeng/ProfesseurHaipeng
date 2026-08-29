@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from "react"
-import { MediaFrame } from "../components/MediaFrame"
 import { PageHero } from "../components/PageHero"
 import { useSiteContent } from "../cms/ContentContext"
 
@@ -42,8 +41,7 @@ export function ContactPage() {
 
   return (
     <article className="page wrap contact-page">
-      <PageHero kicker={contact.kicker} title={contact.title} lead={contact.lead} />
-      <MediaFrame image={contact.image} caption={contact.image.alt} />
+      <PageHero kicker={contact.kicker} title={contact.title} lead={contact.lead} image={contact.image} />
 
       <div className="contact-grid">
         <section className="contact-card">

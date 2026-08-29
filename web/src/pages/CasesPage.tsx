@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom"
-import { MediaFrame } from "../components/MediaFrame"
 import { PageHero } from "../components/PageHero"
+import { SplitPanel } from "../components/SplitPanel"
 import { useSiteContent } from "../cms/ContentContext"
 
 export function CasesPage() {
@@ -9,19 +9,14 @@ export function CasesPage() {
 
   return (
     <article className="page wrap">
-      <PageHero
-        kicker={cases.kicker}
-        title={cases.title}
-        lead={cases.compareLead}
-      />
+      <PageHero kicker={cases.kicker} title={cases.title} lead={cases.compareLead} image={cases.image} />
 
       <section className="case-stack">
         {cases.items.map((item, index) => (
           <article key={item.id} className="case-detail">
-            <span>{String(index + 1).padStart(2, "0")}</span>
-            <div className="stack">
+            <SplitPanel image={item.image} caption={item.image.alt} ratio="portrait">
+              <p className="eyebrow">{String(index + 1).padStart(2, "0")}</p>
               <h2>{item.title}</h2>
-              <MediaFrame image={item.image} caption={item.image.alt} />
               <p className="lede">{item.intro}</p>
               <p>{item.background}</p>
               <p>
@@ -34,16 +29,16 @@ export function CasesPage() {
                 ))}
               </ul>
               <p className="fine">{item.value}</p>
-            </div>
+            </SplitPanel>
           </article>
         ))}
       </section>
 
       <section className="compare">
-        <div>
+        <SplitPanel image={content.products.soilImage} caption={content.products.soilImage.alt} ratio="wide">
           <p className="eyebrow">{cases.compareTitle}</p>
           <p className="lede">{cases.compareLead}</p>
-        </div>
+        </SplitPanel>
         <div className="compare__cols">
           <div>
             <h3>{cases.beforeTitle}</h3>

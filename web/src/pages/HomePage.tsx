@@ -1,11 +1,12 @@
 import { Link } from "react-router-dom"
 import { MediaFrame } from "../components/MediaFrame"
+import { SplitPanel } from "../components/SplitPanel"
 import { TopoField } from "../components/TopoField"
 import { useSiteContent } from "../cms/ContentContext"
 
 export function HomePage() {
   const { content } = useSiteContent()
-  const { hero, overview, products, solutions, cases, contact } = content
+  const { hero, overview, products, solutions, cases, contact, settings } = content
   const crops = solutions.crops.split("·").map((item) => item.trim()).filter(Boolean)
   const cropPhotos = solutions.schemes.filter((item) => ["rice", "banana", "tea"].includes(item.id))
 
@@ -19,6 +20,8 @@ export function HomePage() {
           <p className="eyebrow">{hero.kicker}</p>
           <h1>{hero.title}</h1>
           <p className="lede">{hero.subtitle}</p>
+          {hero.points[0] ? <p className="hero__tagline">{hero.points[0]}</p> : null}
+          {hero.points[1] ? <p className="hero__audience">{hero.points[1]}</p> : null}
           <div className="btn-row">
             <Link className="btn" to={hero.primaryCta.href}>
               {hero.primaryCta.label}
@@ -42,10 +45,20 @@ export function HomePage() {
       </section>
 
       <section className="block">
-        <div className="wrap schematic-block">
+        <div className="wrap split-panel">
           <figure className="schematic">
             <img src="/media/ash_belt.png" alt="吕宋岛中西部 · 矿带示意" />
           </figure>
+          <div className="split-panel__copy">
+            <p className="eyebrow">资源位置</p>
+            <h2>吕宋岛中西部</h2>
+            <p className="lede">
+              皮纳图博位于邦板牙省、三描礼士省与苏比克湾自由港区交界。矿带集中，可规模开采，距苏比克湾约 80 公里。
+            </p>
+            <Link className="text-link" to="/project">
+              看项目与资源 →
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -64,7 +77,14 @@ export function HomePage() {
               </article>
             ))}
           </div>
-          <MediaFrame image={overview.craterImage} caption={overview.craterImage.alt} />
+          <SplitPanel image={overview.craterImage} caption={overview.craterImage.alt}>
+            <p className="eyebrow">现场</p>
+            <h2>火山口与矿带同在一处</h2>
+            <p>{overview.intro[1]}</p>
+            <Link className="text-link" to="/project">
+              看战略与矿物 →
+            </Link>
+          </SplitPanel>
         </div>
       </section>
 
@@ -106,7 +126,7 @@ export function HomePage() {
           </ul>
           <div className="photo-strip">
             {cropPhotos.map((item) => (
-              <MediaFrame key={item.id} image={item.image} caption={item.crop} />
+              <MediaFrame key={item.id} image={item.image} caption={item.crop} ratio="portrait" />
             ))}
           </div>
           <p>
@@ -131,7 +151,7 @@ export function HomePage() {
           <div className="case-grid">
             {cases.items.slice(0, 2).map((item) => (
               <Link key={item.id} className="case-card tile--link" to="/cases">
-                <MediaFrame image={item.image} />
+                <MediaFrame image={item.image} ratio="portrait" />
                 <h3>{item.title}</h3>
                 <p>{item.intro}</p>
               </Link>
@@ -146,6 +166,7 @@ export function HomePage() {
             <p className="eyebrow">下一步</p>
             <h2>拿样品谈，或留下作物和吨位</h2>
             <p>{contact.lead}</p>
+            <p className="fine">{settings.audience}</p>
           </div>
           <div className="btn-row">
             <Link className="btn" to="/contact">

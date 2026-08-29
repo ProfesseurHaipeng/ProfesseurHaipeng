@@ -2,6 +2,7 @@ import { Link } from "react-router-dom"
 import { MediaFrame } from "../components/MediaFrame"
 import { PageHero } from "../components/PageHero"
 import { SectionTabs } from "../components/SectionTabs"
+import { SplitPanel } from "../components/SplitPanel"
 import { useSiteContent } from "../cms/ContentContext"
 
 function barWidth(amount: string) {
@@ -18,8 +19,8 @@ export function ProductsPage() {
     <article className="page wrap">
       <PageHero kicker={products.kicker} title={products.title} lead={products.source[0]}>
         <p>{products.source[1]}</p>
-        <MediaFrame image={products.warehouseImage} caption={products.warehouseImage.alt} />
       </PageHero>
+      <MediaFrame image={products.warehouseImage} caption={products.warehouseImage.alt} ratio="wide" />
 
       <section className="stats" aria-label="产品数字">
         {products.stats.map((item) => (
@@ -55,16 +56,17 @@ export function ProductsPage() {
             label: "改土",
             content: (
               <section className="stack">
-                <h2>{products.soilTitle}</h2>
-                <MediaFrame image={products.soilImage} caption={products.soilImage.alt} />
-                <div className="tile-grid tile-grid--2">
-                  {products.soil.map((item) => (
-                    <article key={item.id} className="tile">
-                      <h3>{item.title}</h3>
-                      <p>{item.body}</p>
-                    </article>
-                  ))}
-                </div>
+                <SplitPanel image={products.soilImage} caption={products.soilImage.alt} ratio="wide">
+                  <h2>{products.soilTitle}</h2>
+                  <div className="tile-grid tile-grid--2">
+                    {products.soil.map((item) => (
+                      <article key={item.id} className="tile">
+                        <h3>{item.title}</h3>
+                        <p>{item.body}</p>
+                      </article>
+                    ))}
+                  </div>
+                </SplitPanel>
                 <h2>{products.fertilizerTitle}</h2>
                 <p className="lede">{products.fertilizerLead}</p>
                 <div className="tile-grid tile-grid--2">
@@ -75,8 +77,9 @@ export function ProductsPage() {
                     </article>
                   ))}
                 </div>
-                <h2>{products.livestockTitle}</h2>
-                <MediaFrame image={products.livestockImage} caption={products.livestockImage.alt} />
+                <SplitPanel image={products.livestockImage} caption={products.livestockImage.alt} ratio="portrait">
+                  <h2>{products.livestockTitle}</h2>
+                </SplitPanel>
                 <div className="tile-grid tile-grid--2">
                   {products.livestock.map((item) => (
                     <article key={item.id} className="tile">
@@ -105,7 +108,7 @@ export function ProductsPage() {
                 <div className="stack">
                   <p className="eyebrow">{testing.kicker}</p>
                   <h2>{testing.assayTitle}</h2>
-                  <MediaFrame image={testing.image} caption={testing.image.alt} />
+                  <MediaFrame image={testing.image} caption={testing.image.alt} ratio="wide" />
                   <p className="lede">{testing.assayLead}</p>
                   <p>{testing.intro}</p>
                   <ul className="plain-list">
@@ -147,11 +150,13 @@ export function ProductsPage() {
               <section className="stack">
                 <p className="eyebrow">{supply.kicker}</p>
                 <h2>{supply.title}</h2>
-                <h3>{supply.mineTitle}</h3>
-                <MediaFrame image={supply.mineImage} caption={supply.mineImage.alt} />
-                <p>{supply.mineBody}</p>
-                <h3>{supply.rawTitle}</h3>
-                <MediaFrame image={supply.rawImage} caption={supply.rawImage.alt} />
+                <SplitPanel image={supply.mineImage} caption={supply.mineImage.alt} ratio="portrait">
+                  <h3>{supply.mineTitle}</h3>
+                  <p>{supply.mineBody}</p>
+                </SplitPanel>
+                <SplitPanel image={supply.rawImage} caption={supply.rawImage.alt} ratio="portrait">
+                  <h3>{supply.rawTitle}</h3>
+                </SplitPanel>
                 <div className="tile-grid tile-grid--2">
                   {supply.rawPoints.map((item) => (
                     <article key={item.id} className="tile">
@@ -174,7 +179,7 @@ export function ProductsPage() {
                   ))}
                 </ol>
                 <h3>{supply.shippingTitle}</h3>
-                <MediaFrame image={supply.shippingImage} caption={supply.shippingImage.alt} />
+                <MediaFrame image={supply.shippingImage} caption={supply.shippingImage.alt} ratio="wide" />
                 <div className="tile-grid">
                   {supply.shipping.map((item) => (
                     <article key={item.id} className="tile">
