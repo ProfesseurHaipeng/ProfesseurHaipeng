@@ -11,7 +11,12 @@ export function HomePage() {
 
   return (
     <article className="home">
-      <section className="hero">
+      <section className={hero.image.src ? "hero hero--bleed" : "hero"}>
+        {hero.image.src ? (
+          <div className="hero__bleed">
+            <img src={hero.image.src} alt="" />
+          </div>
+        ) : null}
         <div className="wrap hero__grid">
           <div className="hero__copy">
             <p className="eyebrow">{hero.kicker}</p>
@@ -25,17 +30,14 @@ export function HomePage() {
                 {hero.secondaryCta.label}
               </Link>
             </div>
+            {hero.image.src ? <p className="hero__caption">{hero.image.alt}</p> : null}
           </div>
-          <div className="hero__visual">
-            {hero.image.src ? (
-              <MediaFrame image={hero.image} caption={hero.image.alt} />
-            ) : (
-              <>
-                <TopoField />
-                <p className="hero__caption">吕宋岛中西部 · 矿带示意</p>
-              </>
-            )}
-          </div>
+          {hero.image.src ? null : (
+            <div className="hero__visual">
+              <TopoField />
+              <p className="hero__caption">吕宋岛中西部 · 矿带示意</p>
+            </div>
+          )}
         </div>
       </section>
 
