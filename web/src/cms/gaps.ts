@@ -35,7 +35,7 @@ export function deriveGaps(content: SiteContent): ContentGap[] {
     {
       id: "phone",
       label: "对外电话",
-      why: "招商对象需要一个能打通的号码。",
+      why: "合作方需要一个能打通的号码。",
       example: "含区号的电话。",
       status: statusFor(settings.channels.phone),
       value: settings.channels.phone,
@@ -43,7 +43,7 @@ export function deriveGaps(content: SiteContent): ContentGap[] {
     {
       id: "wechat",
       label: "微信或视频号",
-      why: "手册视频链到微信，对外入口仍空着。",
+      why: "视频链到微信，对外入口仍空着。",
       example: "微信号、视频号名。",
       status: statusFor(settings.channels.wechat),
       value: settings.channels.wechat,
@@ -58,8 +58,8 @@ export function deriveGaps(content: SiteContent): ContentGap[] {
     },
     {
       id: "brochure",
-      label: "手册下载",
-      why: "封面是招商手册，站点还没有可下载的文件。",
+      label: "资料下载",
+      why: "站点还没有可下载的项目资料文件。",
       example: "/media/handbook.pdf 或网盘链接。",
       status: statusFor(settings.brochureUrl),
       value: settings.brochureUrl,

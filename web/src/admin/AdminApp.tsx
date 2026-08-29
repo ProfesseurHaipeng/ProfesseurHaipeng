@@ -195,12 +195,12 @@ export function AdminApp() {
             发布
           </button>
           <button type="button" className="btn btn--ghost" onClick={resetPublished}>
-            恢复手册原稿
+            恢复默认文案
           </button>
         </header>
         {message ? <p className="notice">{message}</p> : null}
         <p className="admin-hint">
-          当前模块：{moduleMeta.find((item) => item.id === moduleId)?.label}。改完先保存草稿，再预览。数字和效果来自招商手册，可以逐条改。
+          当前模块：{moduleMeta.find((item) => item.id === moduleId)?.label}。改完先保存草稿，再预览。数字和效果可以逐条改。
         </p>
         <ModuleEditor moduleId={moduleId} content={content} onChange={setContent} />
       </section>

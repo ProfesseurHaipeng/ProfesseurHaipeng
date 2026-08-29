@@ -13,7 +13,7 @@ export function flattenKnowledge(content: SiteContent): string {
   const { settings, hero, overview, resource, supply, products, testing, market, solutions, cases, videos, contact } =
     content
   const blocks: string[] = [
-    "这是菲律宾皮纳图博火山灰农业综合产业项目官网。品牌尚未最终落实，检测数字与效果数据来自招商手册，以最新批次报告为准。",
+    "这是菲律宾皮纳图博火山灰农业综合产业项目官网。品牌尚未最终落实。检测数字与效果以最新批次报告和田间记录为准。",
     line("产品名", settings.productName || "皮纳图博火山灰"),
     line("项目名", settings.projectName),
     line("定位", settings.tagline),

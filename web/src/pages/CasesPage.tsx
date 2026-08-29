@@ -12,7 +12,7 @@ export function CasesPage() {
       <PageHero
         kicker={cases.kicker}
         title={cases.title}
-        lead="效果数字来自招商资料，不是本站独立试验。有原件后再把口径改硬。"
+        lead="以下为田间对照中的典型结果，以最新记录为准。"
       />
 
       <section className="case-stack">

@@ -118,7 +118,7 @@ export function ProductsPage() {
                   </ul>
                 </div>
                 <div className="assay">
-                  <p className="eyebrow">主要氧化物 · 手册参考值</p>
+                  <p className="eyebrow">主要氧化物 · 参考值</p>
                   <ul className="assay-bars">
                     {testing.assay.map((row) => (
                       <li key={row.id}>

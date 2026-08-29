@@ -48,7 +48,7 @@ export function HomePage() {
             </div>
           ))}
         </div>
-        <p className="wrap fine">数字来自招商手册，以最新检测和供应口径为准。</p>
+        <p className="wrap fine">数字以最新检测和供应口径为准。</p>
       </section>
 
       <section className="block">

@@ -4,7 +4,7 @@ import { defaultContent } from "./defaultContent"
 import { deriveGaps, emptyGapCount } from "./gaps"
 
 describe("deriveGaps", () => {
-  it("marks brand and contact channels empty on the handbook draft", () => {
+  it("marks brand and contact channels empty on the default draft", () => {
     const gaps = deriveGaps(defaultContent)
     expect(gaps.find((gap) => gap.id === "brand")?.status).toBe("empty")
     expect(gaps.find((gap) => gap.id === "email")?.status).toBe("empty")

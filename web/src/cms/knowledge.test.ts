@@ -17,4 +17,13 @@ describe("site guide knowledge", () => {
     expect(answer).toContain("水稻")
     expect(answer).toMatch(/50-100|公斤|喜硅/)
   })
+
+  it("does not mention banned source language", () => {
+    const brief = flattenKnowledge(defaultContent)
+    expect(brief).not.toMatch(/招商/)
+    expect(brief).not.toMatch(/独立试验/)
+    expect(brief).not.toMatch(/独立站/)
+    expect(JSON.stringify(defaultContent)).not.toMatch(/招商/)
+    expect(JSON.stringify(defaultContent)).not.toMatch(/独立试验/)
+  })
 })

@@ -136,7 +136,7 @@ export function ContactPage() {
           {settings.brochureUrl ? (
             <p>
               <a className="text-link" href={settings.brochureUrl}>
-                下载手册
+                下载资料
               </a>
             </p>
           ) : null}
