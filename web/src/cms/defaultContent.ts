@@ -75,7 +75,7 @@ export const defaultContent: SiteContent = {
     valuesTitle: "项目核心价值体系",
     valuesImage: { src: "/media/ash_soil.jpg", alt: "作物田间与火山灰质土壤" },
     craterImage: { src: "/media/ash_crater.jpg", alt: "皮纳图博火山口" },
-    islandImage: { src: "/media/ash_luzon.jpg", alt: "吕宋岛中西部与皮纳图博火山" },
+    islandImage: { src: "/media/ash_luzon.jpg", alt: "吕宋岛中西部，岛内为火山与农田实景" },
     values: [
       {
         id: "v-resource",

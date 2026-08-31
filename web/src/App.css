@@ -388,27 +388,8 @@ h3 {
   letter-spacing: 0.04em;
 }
 
-.island-visual {
-  position: relative;
-  margin: 0;
-}
-
-.island-visual .media-frame {
-  margin: 0;
-}
-
-.island-visual .schematic--inset {
-  position: absolute;
-  left: 0.7rem;
-  bottom: 2.55rem;
-  width: min(44%, 10.8rem);
-  margin: 0;
-  background: transparent;
-}
-
-.island-visual .schematic--inset img {
-  border-color: rgba(243, 239, 230, 0.35);
-  box-shadow: 0 8px 22px rgba(8, 8, 10, 0.3);
+.split-panel__copy .schematic--aside {
+  width: min(100%, 13.5rem);
 }
 
 .split-panel {
