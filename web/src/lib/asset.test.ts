@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { routerBasename, withBase } from "../lib/asset"
+import { isHashBuild, routerBasename, withBase } from "../lib/asset"
 
 describe("withBase", () => {
   it("keeps remote urls untouched", () => {
@@ -14,5 +14,11 @@ describe("withBase", () => {
 describe("routerBasename", () => {
   it("omits basename when the app is served at root", () => {
     expect(routerBasename() === undefined || routerBasename() === "").toBe(true)
+  })
+})
+
+describe("isHashBuild", () => {
+  it("stays off unless the CDN build sets VITE_HASH", () => {
+    expect(isHashBuild()).toBe(false)
   })
 })

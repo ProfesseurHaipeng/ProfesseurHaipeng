@@ -5,7 +5,12 @@ export function withBase(path: string) {
   return `${base}${path.replace(/^\/+/, "")}`
 }
 
+export function isHashBuild() {
+  return import.meta.env.VITE_HASH === "1"
+}
+
 export function routerBasename() {
+  if (isHashBuild()) return undefined
   const trimmed = (import.meta.env.BASE_URL || "/").replace(/\/$/, "")
-  return trimmed || undefined
+  return trimmed && trimmed !== "." ? trimmed : undefined
 }

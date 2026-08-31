@@ -18,9 +18,9 @@
   --line-light: rgba(17, 17, 17, 0.08);
   --muted: #5f5f6a;
   --faint: #8a8a96;
-  --font-sans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
-  --font-serif: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", sans-serif;
-  --font-latin: "Noto Sans SC", "Space Grotesk", "PingFang SC", sans-serif;
+  --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Helvetica Neue", sans-serif;
+  --font-serif: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-latin: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif;
   --space: clamp(1.25rem, 4vw, 3.25rem);
   --wide: 1120px;
   --measure: 40rem;

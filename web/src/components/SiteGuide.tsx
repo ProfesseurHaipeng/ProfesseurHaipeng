@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react"
+import { useSiteContent } from "../cms/ContentContext"
+import { flattenKnowledge, localGuideAnswer } from "../cms/knowledge"
 import { withBase } from "../lib/asset"
 
 type ChatRole = "user" | "assistant"
@@ -7,6 +9,7 @@ type ChatTurn = { role: ChatRole; content: string }
 const starters = ["这是什么项目？", "水稻怎么用？", "检测里有什么？", "怎么谈合作？"]
 
 export function SiteGuide() {
+  const { content } = useSiteContent()
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState("")
   const [pending, setPending] = useState(false)
@@ -43,6 +46,7 @@ export function SiteGuide() {
     setTurns(nextTurns)
     setInput("")
     setPending(true)
+    const localReply = () => localGuideAnswer(question, flattenKnowledge(content))
     try {
       const response = await fetch(withBase("api/guide"), {
         method: "POST",
@@ -56,14 +60,11 @@ export function SiteGuide() {
         ...nextTurns,
         {
           role: "assistant",
-          content: payload.reply || "这一问暂时没有接到模型，请换个说法，或到联络页留下作物和吨位。",
+          content: payload.reply?.trim() || localReply(),
         },
       ])
     } catch {
-      setTurns([
-        ...nextTurns,
-        { role: "assistant", content: "网络暂时不通。你可以直接打开「产品」「应用」或「联络」。" },
-      ])
+      setTurns([...nextTurns, { role: "assistant", content: localReply() }])
     } finally {
       setPending(false)
     }

@@ -56,6 +56,11 @@ function localGuide(): Plugin {
 export default defineConfig({
   base: process.env.VITE_BASE || "/",
   plugins: [react(), localGuide()],
+  build: {
+    outDir: process.env.VITE_HASH === "1" ? "../site" : "dist",
+    emptyOutDir: true,
+    sourcemap: false,
+  },
   server: {
     host: true,
     port: 5173,
