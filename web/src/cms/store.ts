@@ -3,6 +3,7 @@ import { defaultContent } from "./defaultContent"
 import { mergeContent } from "./merge"
 import type { SiteContent } from "./types"
 import { isSiteContent } from "./validate"
+import { withBase } from "../lib/asset"
 
 export const DRAFT_KEY = "ash-cms-draft"
 export const PREVIEW_KEY = "ash-cms-preview"
@@ -65,7 +66,7 @@ export function publishedFallback() {
 
 export async function fetchPublished(): Promise<SiteContent> {
   try {
-    const response = await fetch("/api/content", { headers: { Accept: "application/json" } })
+    const response = await fetch(withBase("api/content"), { headers: { Accept: "application/json" } })
     if (!response.ok) return publishedFallback()
     const parsed: unknown = await response.json()
     return isSiteContent(parsed) ? mergeContent(parsed) : publishedFallback()
@@ -83,7 +84,7 @@ export function resolvePublicContent(published: SiteContent): SiteContent {
 
 export async function publishContent(content: SiteContent, password: string) {
   const body = JSON.stringify({ password, content })
-  const response = await fetch("/api/content", {
+  const response = await fetch(withBase("api/content"), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body,

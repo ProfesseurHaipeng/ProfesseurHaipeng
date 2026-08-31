@@ -1,4 +1,6 @@
+import { useState } from "react"
 import type { MediaRef } from "../cms/types"
+import { withBase } from "../lib/asset"
 
 export type MediaRatio = "wide" | "portrait" | "square" | "auto"
 
@@ -13,10 +15,16 @@ export function MediaFrame({
   caption?: string
   ratio?: MediaRatio
 }) {
+  const [ready, setReady] = useState(false)
   if (!image.src) return null
   return (
-    <figure className={`media-frame media-frame--${ratio} ${className}`.trim()}>
-      <img src={image.src} alt={image.alt} loading="lazy" />
+    <figure className={`media-frame media-frame--${ratio} ${ready ? "is-ready" : ""} ${className}`.trim()}>
+      <img
+        src={withBase(image.src)}
+        alt={image.alt}
+        loading="lazy"
+        onLoad={() => setReady(true)}
+      />
       {caption ? <figcaption>{caption}</figcaption> : null}
     </figure>
   )

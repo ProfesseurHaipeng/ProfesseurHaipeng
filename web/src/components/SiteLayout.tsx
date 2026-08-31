@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom"
+import { Outlet, useLocation } from "react-router-dom"
 import { DocumentMeta } from "./DocumentMeta"
 import { PreviewBanner } from "./PreviewBanner"
 import { ScrollToTop } from "./ScrollToTop"
@@ -7,6 +7,8 @@ import { SiteGuide } from "./SiteGuide"
 import { SiteHeader } from "./SiteHeader"
 
 export function SiteLayout() {
+  const { pathname } = useLocation()
+
   return (
     <div className="site-shell">
       <a className="skip-link" href="#site-main">
@@ -16,7 +18,7 @@ export function SiteLayout() {
       <DocumentMeta />
       <PreviewBanner />
       <SiteHeader />
-      <main className="site-main" id="site-main">
+      <main className="site-main" id="site-main" key={pathname}>
         <Outlet />
       </main>
       <SiteFooter />

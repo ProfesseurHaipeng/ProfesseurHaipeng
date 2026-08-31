@@ -3,6 +3,7 @@ import { MediaFrame } from "../components/MediaFrame"
 import { SplitPanel } from "../components/SplitPanel"
 import { TopoField } from "../components/TopoField"
 import { useSiteContent } from "../cms/ContentContext"
+import { withBase } from "../lib/asset"
 
 export function HomePage() {
   const { content } = useSiteContent()
@@ -14,7 +15,7 @@ export function HomePage() {
     <article className="home">
       <section className="hero">
         <div className="hero__photo">
-          {hero.image.src ? <img src={hero.image.src} alt="" /> : <TopoField />}
+          {hero.image.src ? <img src={withBase(hero.image.src)} alt={hero.image.alt} /> : <TopoField />}
         </div>
         <div className="hero__copy">
           <p className="eyebrow">{hero.kicker}</p>
@@ -124,7 +125,9 @@ export function HomePage() {
           </ul>
           <div className="photo-strip">
             {cropPhotos.map((item) => (
-              <MediaFrame key={item.id} image={item.image} caption={item.crop} ratio="portrait" />
+              <Link key={item.id} className="photo-strip__link" to={`/use?crop=${encodeURIComponent(item.crop)}`}>
+                <MediaFrame image={item.image} caption={item.crop} ratio="portrait" />
+              </Link>
             ))}
           </div>
           <p>

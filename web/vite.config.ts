@@ -54,6 +54,7 @@ function localGuide(): Plugin {
 }
 
 export default defineConfig({
+  base: process.env.VITE_BASE || "/",
   plugins: [react(), localGuide()],
   server: {
     host: true,

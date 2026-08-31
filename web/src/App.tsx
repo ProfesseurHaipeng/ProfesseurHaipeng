@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 import { AdminApp } from "./admin/AdminApp"
 import { ContentProvider } from "./cms/ContentContext"
 import { SiteLayout } from "./components/SiteLayout"
+import { routerBasename } from "./lib/asset"
 import { CasesPage } from "./pages/CasesPage"
 import { ContactPage } from "./pages/ContactPage"
 import { HomePage } from "./pages/HomePage"
@@ -15,7 +16,7 @@ import "./App.css"
 export default function App() {
   return (
     <ContentProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={routerBasename()}>
         <Routes>
           <Route path="/admin/*" element={<AdminApp />} />
           <Route element={<SiteLayout />}>

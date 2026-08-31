@@ -7,6 +7,7 @@ export function SiteHeader() {
   const { content } = useSiteContent()
   const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
   const name = content.settings.brandName || content.settings.productName
 
   useEffect(() => {
@@ -27,20 +28,30 @@ export function SiteHeader() {
     return () => document.body.classList.remove("nav-lock")
   }, [open])
 
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 16)
+    onScroll()
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
   return (
-    <header className="site-header">
+    <header className={`site-header${scrolled ? " is-scrolled" : ""}${open ? " is-open" : ""}`}>
       <NavLink className="wordmark" to="/" onClick={() => setOpen(false)}>
         <span className="wordmark__mark" aria-hidden="true" />
         <span className="wordmark__zh">{name}</span>
       </NavLink>
       <button
         type="button"
-        className="nav-toggle"
+        className={`nav-toggle${open ? " is-open" : ""}`}
         aria-expanded={open}
         aria-controls="site-nav"
+        aria-label={open ? "关闭菜单" : "打开菜单"}
         onClick={() => setOpen((value) => !value)}
       >
-        {open ? "收起" : "菜单"}
+        <span />
+        <span />
+        <span />
       </button>
       {open ? (
         <button type="button" className="nav-backdrop" aria-label="关闭菜单" onClick={() => setOpen(false)} />

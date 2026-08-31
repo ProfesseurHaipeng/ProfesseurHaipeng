@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { withBase } from "../lib/asset"
 
 type ChatRole = "user" | "assistant"
 type ChatTurn = { role: ChatRole; content: string }
@@ -16,10 +17,24 @@ export function SiteGuide() {
     },
   ])
   const scroller = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" })
   }, [turns, open])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false)
+    }
+    window.addEventListener("keydown", onKey)
+    const id = window.setTimeout(() => inputRef.current?.focus(), 80)
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      window.clearTimeout(id)
+    }
+  }, [open])
 
   const send = async (text: string) => {
     const question = text.trim()
@@ -29,7 +44,7 @@ export function SiteGuide() {
     setInput("")
     setPending(true)
     try {
-      const response = await fetch("/api/guide", {
+      const response = await fetch(withBase("api/guide"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -71,11 +86,13 @@ export function SiteGuide() {
                 {turn.content}
               </p>
             ))}
-            {pending ? <p className="site-guide__bubble site-guide__bubble--assistant">正在对照站点文案…</p> : null}
+            {pending ? (
+              <p className="site-guide__bubble site-guide__bubble--assistant is-pending">正在对照站点文案…</p>
+            ) : null}
           </div>
           <div className="site-guide__hints">
             {starters.map((item) => (
-              <button key={item} type="button" className="chip" onClick={() => void send(item)}>
+              <button key={item} type="button" className="chip" disabled={pending} onClick={() => void send(item)}>
                 {item}
               </button>
             ))}
@@ -92,13 +109,14 @@ export function SiteGuide() {
             </label>
             <input
               id="site-guide-input"
+              ref={inputRef}
               value={input}
               onChange={(event) => setInput(event.target.value)}
               placeholder="问作物、检测或联络"
               maxLength={500}
               autoComplete="off"
             />
-            <button className="btn" type="submit" disabled={pending}>
+            <button className="btn" type="submit" disabled={pending || !input.trim()}>
               发送
             </button>
           </form>

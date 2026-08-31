@@ -2,7 +2,9 @@ import { copyFileSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
 const dist = "dist"
+copyFileSync(join(dist, "index.html"), join(dist, "404.html"))
 const spaRoutes = ["project", "products", "use", "cases", "contact", "next", "admin"]
+const base = (process.env.VITE_BASE || "/").replace(/\/$/, "")
 
 for (const route of spaRoutes) {
   mkdirSync(join(dist, route), { recursive: true })
@@ -20,9 +22,9 @@ const redirects = {
 
 const bounce = (to) => `<!doctype html>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="0;url=${to}">
+<meta http-equiv="refresh" content="0;url=${base}${to}">
 <title>Redirecting</title>
-<script>location.replace(${JSON.stringify(to)})</script>
+<script>location.replace(${JSON.stringify(base + to)})</script>
 `
 
 for (const [from, to] of Object.entries(redirects)) {
