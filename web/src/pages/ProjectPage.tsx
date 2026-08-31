@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { LocationMap } from "../components/LocationMap"
 import { MediaFrame } from "../components/MediaFrame"
 import { PageHero } from "../components/PageHero"
 import { SectionTabs } from "../components/SectionTabs"
@@ -71,6 +72,7 @@ export function ProjectPage() {
                   {resource.background.map((para) => (
                     <p key={para}>{para}</p>
                   ))}
+                  <LocationMap />
                   <h3>{resource.formationTitle}</h3>
                   <p>{resource.formationLead}</p>
                   <ol className="timeline">

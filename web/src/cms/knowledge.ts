@@ -19,6 +19,7 @@ export function flattenKnowledge(content: SiteContent): string {
     line("定位", settings.tagline),
     line("受众", settings.audience),
     line("站点结构", "首页 / 项目 / 产品 / 应用 / 案例 / 联络。旧路径 /resource 会转到项目，/supply 与 /testing 转到产品，/market 与 /solutions 转到应用，/videos 转到案例。"),
+    "首页「吕宋岛中西部」是谷歌地图实图，标记皮纳图博火山（Mount Pinatubo，约北纬 15.14°、东经 120.35°），地处邦板牙省、三描礼士省与苏比克湾自由港区交界，距苏比克湾约 80 公里。国内网络若谷歌地图未加载，会改用开放街图，仍指向同一坐标。",
     "",
     "【首页】",
     line("标题", hero.title),

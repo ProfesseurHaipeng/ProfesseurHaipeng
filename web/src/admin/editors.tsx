@@ -332,7 +332,7 @@ export function ModuleEditor({
             }
           />
           <MediaFields
-            label="吕宋岛配图"
+            label="吕宋岛备用配图（首页已改用谷歌地图实图）"
             image={content.overview.islandImage}
             onChange={(islandImage) =>
               patch(content, onChange, "overview", { ...content.overview, islandImage })

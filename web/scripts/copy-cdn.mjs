@@ -2,10 +2,10 @@ import { existsSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const site = join(dirname(fileURLToPath(import.meta.url)), "../../site")
+const docs = join(dirname(fileURLToPath(import.meta.url)), "../../docs")
 
-if (!existsSync(join(site, "index.html"))) {
-  throw new Error("site/index.html is missing; run the Vite CDN build first")
+if (!existsSync(join(docs, "index.html"))) {
+  throw new Error("docs/index.html is missing; run the Vite CDN build first")
 }
 
-writeFileSync(join(site, ".nojekyll"), "")
+writeFileSync(join(docs, ".nojekyll"), "")

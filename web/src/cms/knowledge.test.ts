@@ -9,6 +9,8 @@ describe("site guide knowledge", () => {
     expect(brief).toContain("/products")
     expect(brief).toContain("水稻")
     expect(brief).toContain("500000")
+    expect(brief).toContain("谷歌地图")
+    expect(brief).toContain("15.14")
   })
 
   it("answers from the brief when no model is wired", () => {
