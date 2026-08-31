@@ -157,6 +157,7 @@ export type SiteContent = {
     valuesTitle: string
     valuesImage: MediaRef
     craterImage: MediaRef
+    islandImage: MediaRef
     values: TextBlock[]
   }
   resource: {

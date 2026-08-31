@@ -13,6 +13,7 @@ describe("mergeContent", () => {
     expect(merged.settings.channels.email).toBe("")
     expect(merged.settings.brochureUrl).toBe("")
     expect(merged.resource.eruptionImage).toHaveProperty("src")
+    expect(merged.overview.islandImage.src).toContain("ash_luzon")
     expect(merged.solutions.schemes[0]?.image).toHaveProperty("alt")
     expect(merged.nav.length).toBeGreaterThan(0)
   })

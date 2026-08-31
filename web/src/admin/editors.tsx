@@ -331,6 +331,13 @@ export function ModuleEditor({
               patch(content, onChange, "overview", { ...content.overview, craterImage })
             }
           />
+          <MediaFields
+            label="吕宋岛配图"
+            image={content.overview.islandImage}
+            onChange={(islandImage) =>
+              patch(content, onChange, "overview", { ...content.overview, islandImage })
+            }
+          />
           <BlockList
             label="价值条目"
             items={content.overview.values}

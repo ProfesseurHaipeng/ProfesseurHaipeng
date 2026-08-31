@@ -46,9 +46,12 @@ export function HomePage() {
 
       <section className="block">
         <div className="wrap split-panel">
-          <figure className="schematic">
-            <img src="/media/ash_belt.png" alt="吕宋岛中西部 · 矿带示意" />
-          </figure>
+          <div className="island-visual">
+            <MediaFrame image={overview.islandImage} caption={overview.islandImage.alt} ratio="portrait" />
+            <figure className="schematic schematic--inset">
+              <img src="/media/ash_belt.png" alt="吕宋岛中西部 · 矿带示意" />
+            </figure>
+          </div>
           <div className="split-panel__copy">
             <p className="eyebrow">资源位置</p>
             <h2>吕宋岛中西部</h2>
