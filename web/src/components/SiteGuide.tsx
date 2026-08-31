@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from "react"
 import { useSiteContent } from "../cms/ContentContext"
+import { GUIDE_GREETING, GUIDE_STARTERS } from "../cms/guidePrompt"
 import { flattenKnowledge, localGuideAnswer } from "../cms/knowledge"
 import { withBase } from "../lib/asset"
 
 type ChatRole = "user" | "assistant"
 type ChatTurn = { role: ChatRole; content: string }
 
-const starters = ["这是什么项目？", "水稻怎么用？", "检测里有什么？", "怎么谈合作？"]
+function guideEndpoint() {
+  const remote = import.meta.env.VITE_GUIDE_URL
+  if (typeof remote === "string" && remote.trim()) return remote.trim()
+  return withBase("api/guide")
+}
 
 export function SiteGuide() {
   const { content } = useSiteContent()
@@ -16,7 +21,7 @@ export function SiteGuide() {
   const [turns, setTurns] = useState<ChatTurn[]>([
     {
       role: "assistant",
-      content: "我是本站导览，可以介绍项目、产品、作物方案、案例和联络方式。",
+      content: GUIDE_GREETING,
     },
   ])
   const scroller = useRef<HTMLDivElement>(null)
@@ -48,7 +53,7 @@ export function SiteGuide() {
     setPending(true)
     const localReply = () => localGuideAnswer(question, flattenKnowledge(content))
     try {
-      const response = await fetch(withBase("api/guide"), {
+      const response = await fetch(guideEndpoint(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -92,7 +97,7 @@ export function SiteGuide() {
             ) : null}
           </div>
           <div className="site-guide__hints">
-            {starters.map((item) => (
+            {GUIDE_STARTERS.map((item) => (
               <button key={item} type="button" className="chip" disabled={pending} onClick={() => void send(item)}>
                 {item}
               </button>

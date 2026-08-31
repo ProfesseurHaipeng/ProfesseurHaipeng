@@ -29,15 +29,18 @@ function localGuide(): Plugin {
         try {
           const knowledgeMod = await server.ssrLoadModule("/src/cms/knowledge.ts")
           const contentMod = await server.ssrLoadModule("/src/cms/defaultContent.ts")
+          const runtimeMod = await server.ssrLoadModule("/src/cms/guideRuntime.ts")
           const raw = await readBody(req)
           const body = raw ? (JSON.parse(raw) as { messages?: { role?: string; content?: string }[] }) : {}
           const messages = Array.isArray(body.messages) ? body.messages : []
-          const last = [...messages].reverse().find((item) => item.role === "user")
-          const question = typeof last?.content === "string" ? last.content : ""
-          const reply = knowledgeMod.localGuideAnswer(question, knowledgeMod.flattenKnowledge(contentMod.defaultContent))
+          const result = await runtimeMod.resolveGuideReply(
+            messages,
+            knowledgeMod.flattenKnowledge(contentMod.defaultContent),
+            process.env,
+          )
           res.statusCode = 200
           res.setHeader("Content-Type", "application/json")
-          res.end(JSON.stringify({ reply, source: "local" }))
+          res.end(JSON.stringify(result))
         } catch {
           res.statusCode = 500
           res.setHeader("Content-Type", "application/json")

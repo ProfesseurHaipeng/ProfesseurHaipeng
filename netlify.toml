@@ -97,6 +97,9 @@
 [context.production.environment]
   # 部署后在 Netlify UI 里覆盖为正式口令
   # ADMIN_PASSWORD = "change-me"
+  # MINIMAX_API_KEY = ""
+  # MINIMAX_API_BASE = "https://api.minimax.io/v1"
+  # MINIMAX_MODEL = "MiniMax-Text-01"
 
 [[headers]]
   for = "/admin/*"
