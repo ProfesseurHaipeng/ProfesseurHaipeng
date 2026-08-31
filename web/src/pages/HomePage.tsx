@@ -53,9 +53,6 @@ export function HomePage() {
             <p className="lede">
               皮纳图博位于邦板牙省、三描礼士省与苏比克湾自由港区交界。矿带集中，可规模开采，距苏比克湾约 80 公里。
             </p>
-            <figure className="schematic schematic--aside">
-              <img src="/media/ash_belt.png" alt="吕宋岛中西部 · 矿带示意" />
-            </figure>
             <Link className="text-link" to="/project">
               看项目与资源 →
             </Link>
