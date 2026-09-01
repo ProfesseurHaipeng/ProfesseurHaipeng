@@ -332,6 +332,7 @@ h3 {
   line-height: 1.55;
   font-weight: 400;
   color: var(--ash);
+  overflow-wrap: anywhere;
 }
 
 .faint,
@@ -1542,6 +1543,13 @@ h3 {
   display: grid;
   justify-items: end;
   gap: 0.75rem;
+  transition: opacity var(--dur-fast) var(--ease-out), visibility var(--dur-fast) var(--ease-out);
+}
+
+.site-shell:has(.site-header.is-open) .site-guide {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .site-guide__panel {
@@ -2161,6 +2169,11 @@ h3 {
     grid-area: media;
   }
 
+  .page-hero--split .media-frame--portrait img,
+  .page-hero--split .media-frame--square img {
+    aspect-ratio: 16 / 10;
+  }
+
   .hero__photo,
   .hero__photo img,
   .hero__photo .topo,
@@ -2339,10 +2352,19 @@ h3 {
   }
 
   .site-nav {
-    max-height: calc(100dvh - var(--header-offset));
+    position: fixed;
+    inset: var(--header-offset) 0 0 0;
+    height: calc(100dvh - var(--header-offset));
+    max-height: none;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 0.45rem max(var(--space), var(--safe-right)) max(1.35rem, var(--safe-bottom)) max(var(--space), var(--safe-left));
+    background: #fff;
+    border-bottom: 0;
+    padding: 0.55rem max(var(--space), var(--safe-right)) max(1.6rem, var(--safe-bottom)) max(var(--space), var(--safe-left));
+  }
+
+  .nav-backdrop {
+    background: rgba(0, 0, 0, 0.28);
   }
 
   .site-nav a:not(.nav-cta) {

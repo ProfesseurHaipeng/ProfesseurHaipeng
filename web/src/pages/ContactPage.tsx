@@ -100,7 +100,7 @@ export function ContactPage() {
               ) : null}
             </dl>
           ) : (
-            <p>对外邮箱和电话还在定。先把机构和需求写在右边，我们按这条线索回。</p>
+            <p>对外邮箱和电话还在定。先把机构和需求写在表单里，我们按这条线索回。</p>
           )}
           <ul className="plain-list">
             {contact.cards.map((card) => (

@@ -100,14 +100,14 @@ export function SiteGuide() {
       timers.current.add(id)
     })
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mounted.current = true
+    return () => {
       mounted.current = false
       window.clearTimeout(closeTimer.current)
       for (const id of timers.current) window.clearTimeout(id)
-    },
-    [],
-  )
+    }
+  }, [])
 
   const appendTurn = (turn: ChatTurn) => {
     turnsRef.current = [...turnsRef.current, turn]
@@ -204,7 +204,7 @@ export function SiteGuide() {
   // First open: play the "connecting you to an advisor" sequence, then greet.
   useEffect(() => {
     if (!open || greetedRef.current) return
-    greetedRef.current = true
+    let cancelled = false
     setStage("connecting")
     void (async () => {
       const startedAt = Date.now()
@@ -212,11 +212,15 @@ export function SiteGuide() {
       const minWait = reduceMotion() ? 120 : CONNECT_MIN_MS
       const elapsed = Date.now() - startedAt
       if (elapsed < minWait) await sleep(minWait - elapsed)
-      if (!mounted.current) return
+      if (cancelled || !mounted.current) return
+      greetedRef.current = true
       setLang(greeting.lang)
       setStage("live")
       await deliverReply(greeting.text)
     })()
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
