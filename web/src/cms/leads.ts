@@ -8,6 +8,10 @@ export type Lead = {
   email: string
   note: string
   place?: string
+  /** Phone / WeChat / email left in chat when the AI files the ticket. */
+  contact?: string
+  /** "form" (contact page) or "ai" (advisor-filed ticket). */
+  source?: string
 }
 
 export type LeadInput = Pick<Lead, "name" | "org" | "email" | "note">

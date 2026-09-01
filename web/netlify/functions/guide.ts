@@ -3,7 +3,9 @@ import { defaultContent } from "../../src/cms/defaultContent"
 import { buildGreeting, chinesePlace } from "../../src/cms/greeting"
 import { resolveGuideReply } from "../../src/cms/guideRuntime"
 import { flattenKnowledge } from "../../src/cms/knowledge"
+import { newLeadId, type Lead } from "../../src/cms/leads"
 import { mergeContent } from "../../src/cms/merge"
+import type { TicketDraft } from "../../src/cms/ticket"
 import { isSiteContent } from "../../src/cms/validate"
 import type { SiteContent } from "../../src/cms/types"
 import type { GuideMessage } from "../../src/cms/guidePrompt"
@@ -51,6 +53,28 @@ async function publishedContent(): Promise<SiteContent> {
   return mergeContent(defaultContent)
 }
 
+async function fileTicket(ticket: TicketDraft, place: string | null) {
+  try {
+    const { getStore } = await import("@netlify/blobs")
+    const blobs = getStore("ash-leads")
+    const lead: Lead = {
+      id: newLeadId(),
+      at: new Date().toISOString(),
+      name: ticket.name || "AI 对话客户",
+      org: ticket.org,
+      email: ticket.contact.includes("@") ? ticket.contact : "",
+      contact: ticket.contact,
+      note: ticket.note,
+      place: place ?? undefined,
+      source: "ai",
+    }
+    await blobs.setJSON(lead.id, lead)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function asMessages(raw: unknown): GuideMessage[] {
   if (!Array.isArray(raw)) return []
   return raw
@@ -87,7 +111,12 @@ export default async (req: Request, context: Context) => {
 
   const content = await publishedContent()
   const result = await resolveGuideReply(history, flattenKnowledge(content), envBag())
-  return json(result)
+  let ticketFiled = false
+  if (result.ticket) {
+    const geo = context.geo
+    ticketFiled = await fileTicket(result.ticket, chinesePlace(geo?.country?.code, geo?.subdivision?.name))
+  }
+  return json({ reply: result.reply, source: result.source, ticket: ticketFiled })
 }
 
 export const config: Config = {

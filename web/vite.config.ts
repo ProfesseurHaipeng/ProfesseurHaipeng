@@ -91,9 +91,24 @@ function localGuide(): Plugin {
             knowledgeMod.flattenKnowledge(contentMod.defaultContent),
             env,
           )
+          let ticketFiled = false
+          if (result.ticket) {
+            const leadsMod = await server.ssrLoadModule("/src/cms/leads.ts")
+            localLeads.unshift({
+              id: leadsMod.newLeadId(),
+              at: new Date().toISOString(),
+              name: result.ticket.name || "AI 对话客户",
+              org: result.ticket.org,
+              email: result.ticket.contact.includes("@") ? result.ticket.contact : "",
+              contact: result.ticket.contact,
+              note: result.ticket.note,
+              source: "ai",
+            })
+            ticketFiled = true
+          }
           res.statusCode = 200
           res.setHeader("Content-Type", "application/json")
-          res.end(JSON.stringify(result))
+          res.end(JSON.stringify({ reply: result.reply, source: result.source, ticket: ticketFiled }))
         } catch {
           res.statusCode = 500
           res.setHeader("Content-Type", "application/json")

@@ -62,5 +62,5 @@ export default async (req: Request) => {
   if (!history.some((item) => item.role === "user")) return json({ error: "empty" }, 400)
 
   const result = await resolveGuideReply(history, flattenKnowledge(defaultContent), envBag())
-  return json(result)
+  return json({ reply: result.reply, source: result.source })
 }

@@ -33,6 +33,13 @@ describe("guide system prompt", () => {
     expect(prompt).toContain("不要自称 AI")
   })
 
+  it("teaches the ticket protocol for filing leads from chat", () => {
+    expect(prompt).toContain("<ticket>")
+    expect(prompt).toContain("联系方式")
+    expect(prompt).toContain("只建一次工单")
+    expect(prompt).toContain("绝不输出标记")
+  })
+
   it("carries the sales playbook: stages, SPIN discovery, objections, advances", () => {
     expect(prompt).toContain("先判断阶段")
     expect(prompt).toContain("需求挖掘")

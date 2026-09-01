@@ -68,7 +68,8 @@ export default {
         ASH_AI_API_KEY: env.ASH_AI_API_KEY,
         ASH_AI_MODEL: env.ASH_AI_MODEL,
       })
-      return json(result)
+      // Workers have no lead store; drop the ticket but keep the clean reply.
+      return json({ reply: result.reply, source: result.source })
     }
     return env.ASSETS.fetch(request)
   },

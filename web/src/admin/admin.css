@@ -187,6 +187,19 @@
   font-size: 0.78rem;
 }
 
+.admin-lead__ai {
+  color: #8a5a17;
+  background: #fdf1de;
+  border-radius: 999px;
+  padding: 0.08rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.admin-lead__contact {
+  font-weight: 600;
+  color: #111;
+}
+
 .admin-lead time,
 .admin-lead__place {
   color: #8a8a96;

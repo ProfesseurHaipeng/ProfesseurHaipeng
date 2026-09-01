@@ -74,15 +74,20 @@ export function LeadsPanel({ auth }: { auth: AdminAuth }) {
           <li key={lead.id} className="admin-lead">
             <header>
               <strong>{lead.name}</strong>
+              {lead.source === "ai" ? <span className="admin-lead__ai">AI 工单</span> : null}
               {lead.org ? <span className="admin-lead__org">{lead.org}</span> : null}
               <time dateTime={lead.at}>{formatTime(lead.at)}</time>
               {lead.place ? <span className="admin-lead__place">{lead.place}</span> : null}
             </header>
             <p className="admin-lead__note">{lead.note}</p>
             <footer>
-              <a className="text-link" href={`mailto:${lead.email}`}>
-                {lead.email}
-              </a>
+              {lead.email ? (
+                <a className="text-link" href={`mailto:${lead.email}`}>
+                  {lead.email}
+                </a>
+              ) : (
+                <span className="admin-lead__contact">{lead.contact || "未留联系方式"}</span>
+              )}
               <button type="button" className="admin-lead__delete" onClick={() => void remove(lead)}>
                 删除
               </button>
