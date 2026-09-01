@@ -182,7 +182,17 @@
 
 .site-main {
   flex: 1;
-  animation: page-enter 0.5s var(--ease-out) both;
+  transition: opacity 0.17s var(--ease-inout), transform 0.17s var(--ease-inout);
+}
+
+.site-main.is-exiting {
+  opacity: 0;
+  transform: translateY(6px) scale(0.998);
+  pointer-events: none;
+}
+
+.site-main.is-entering {
+  animation: route-in 0.52s var(--ease-out) both;
 }
 
 .site-footer {
@@ -1049,6 +1059,7 @@ h3 {
 
 .tab-panel {
   padding-top: 1.8rem;
+  animation: tab-panel-in 0.4s var(--ease-out) both;
 }
 
 .section-tabs {
@@ -1222,6 +1233,7 @@ h3 {
   display: grid;
   gap: 0.7rem;
   justify-items: start;
+  animation: rise-in 0.45s var(--ease-out) both;
 }
 
 .slogan {
@@ -1494,7 +1506,12 @@ h3 {
   border-radius: 1.15rem;
   overflow: hidden;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.06);
-  animation: panel-enter 0.28s ease both;
+  transform-origin: calc(100% - 2.4rem) calc(100% + 0.8rem);
+  animation: panel-spring 0.5s var(--ease-out) both;
+}
+
+.site-guide__panel.is-closing {
+  animation: panel-out 0.22s var(--ease-inout) both;
 }
 
 .site-guide__toggle {
@@ -1527,6 +1544,16 @@ h3 {
 
 .site-guide__toggle svg {
   display: block;
+}
+
+.site-guide__toggle-icon {
+  display: grid;
+  place-items: center;
+  transition: transform 0.34s var(--ease-spring);
+}
+
+.site-guide.is-open .site-guide__toggle-icon {
+  transform: rotate(90deg) scale(0.94);
 }
 
 .site-guide__head {
@@ -1629,7 +1656,7 @@ h3 {
   align-items: flex-start;
   gap: 0.5rem;
   min-width: 0;
-  animation: message-in 0.32s var(--ease-out) both;
+  animation: message-in 0.38s var(--ease-spring) both;
 }
 
 .site-guide__row--user {
@@ -1900,8 +1927,8 @@ h3 {
     opacity: 0;
     pointer-events: none;
     visibility: hidden;
-    transform: translateY(-8px);
-    transition: opacity 0.26s var(--ease-out), transform 0.26s var(--ease-out), visibility 0.26s var(--ease-out);
+    transform: translateY(-10px);
+    transition: opacity 0.3s var(--ease-out), transform 0.34s var(--ease-spring), visibility 0.3s var(--ease-out);
   }
 
   .site-nav.is-open {
@@ -1969,10 +1996,10 @@ h3 {
   }
 }
 
-@keyframes page-enter {
+@keyframes route-in {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -1980,14 +2007,29 @@ h3 {
   }
 }
 
-@keyframes panel-enter {
-  from {
+@keyframes panel-spring {
+  0% {
     opacity: 0;
-    transform: translateY(10px) scale(0.98);
+    transform: translateY(18px) scale(0.94);
   }
-  to {
+  62% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.005);
+  }
+  100% {
     opacity: 1;
     transform: none;
+  }
+}
+
+@keyframes panel-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(14px) scale(0.95);
   }
 }
 
@@ -2050,6 +2092,17 @@ h3 {
   from {
     opacity: 0;
     transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes tab-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
   to {
     opacity: 1;

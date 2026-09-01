@@ -46,9 +46,12 @@ function IconSend() {
   )
 }
 
+const CLOSE_MS = 220
+
 export function SiteGuide() {
   const { content } = useSiteContent()
   const [open, setOpen] = useState(false)
+  const [closing, setClosing] = useState(false)
   const [input, setInput] = useState("")
   const [pending, setPending] = useState(false)
   const [turns, setTurns] = useState<ChatTurn[]>([
@@ -59,6 +62,22 @@ export function SiteGuide() {
   ])
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const closeTimer = useRef(0)
+
+  const close = () => {
+    if (closing) return
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setOpen(false)
+      return
+    }
+    setClosing(true)
+    closeTimer.current = window.setTimeout(() => {
+      setOpen(false)
+      setClosing(false)
+    }, CLOSE_MS)
+  }
+
+  useEffect(() => () => window.clearTimeout(closeTimer.current), [])
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" })
@@ -67,7 +86,7 @@ export function SiteGuide() {
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false)
+      if (event.key === "Escape") close()
     }
     window.addEventListener("keydown", onKey)
     const id = window.setTimeout(() => inputRef.current?.focus(), 80)
@@ -111,9 +130,9 @@ export function SiteGuide() {
   const showStarters = turns.length <= 1 && !pending
 
   return (
-    <div className={`site-guide ${open ? "is-open" : ""}`}>
+    <div className={`site-guide ${open && !closing ? "is-open" : ""}`}>
       {open ? (
-        <section className="site-guide__panel" aria-label="站点工单导览">
+        <section className={`site-guide__panel${closing ? " is-closing" : ""}`} aria-label="站点工单导览">
           <header className="site-guide__head">
             <div className="site-guide__identity">
               <span className="site-guide__avatar" aria-hidden="true" />
@@ -125,7 +144,7 @@ export function SiteGuide() {
                 </p>
               </div>
             </div>
-            <button type="button" className="site-guide__close" onClick={() => setOpen(false)} aria-label="关闭">
+            <button type="button" className="site-guide__close" onClick={close} aria-label="关闭">
               <IconClose />
             </button>
           </header>
@@ -187,9 +206,14 @@ export function SiteGuide() {
         className="site-guide__toggle"
         aria-expanded={open}
         aria-label={open ? "收起工单窗口" : "打开问 AI 工单"}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          if (open) close()
+          else setOpen(true)
+        }}
       >
-        {open ? <IconClose /> : <IconChat />}
+        <span className="site-guide__toggle-icon" aria-hidden="true">
+          {open ? <IconClose /> : <IconChat />}
+        </span>
         <span>{open ? "收起" : "问 AI"}</span>
       </button>
     </div>

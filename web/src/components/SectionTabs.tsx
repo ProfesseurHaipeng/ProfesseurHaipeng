@@ -37,7 +37,7 @@ export function SectionTabs({ tabs, queryKey = "tab" }: { tabs: SectionTab[]; qu
           </button>
         ))}
       </div>
-      <div className="tab-panel" role="tabpanel">
+      <div className="tab-panel" role="tabpanel" key={active.id}>
         {active.content}
       </div>
     </div>

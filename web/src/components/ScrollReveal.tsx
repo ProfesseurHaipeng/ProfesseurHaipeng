@@ -1,5 +1,5 @@
 import { useLayoutEffect } from "react"
-import { useLocation } from "react-router-dom"
+import { useRouteTransition } from "../lib/routeTransition"
 
 const TARGETS = [
   ".block-head",
@@ -23,7 +23,9 @@ const TARGETS = [
 ].join(", ")
 
 export function ScrollReveal() {
-  const { pathname } = useLocation()
+  const {
+    location: { pathname },
+  } = useRouteTransition()
 
   useLayoutEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
