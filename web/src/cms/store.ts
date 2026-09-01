@@ -7,7 +7,6 @@ import { withBase } from "../lib/asset"
 
 export const DRAFT_KEY = "ash-cms-draft"
 export const PREVIEW_KEY = "ash-cms-preview"
-export const SESSION_KEY = "ash-cms-session"
 
 const listeners = new Set<() => void>()
 

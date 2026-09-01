@@ -1,17 +1,10 @@
 import { useState, type FormEvent } from "react"
 import { PageHero } from "../components/PageHero"
 import { useSiteContent } from "../cms/ContentContext"
+import { withBase } from "../lib/asset"
 
 function filled(value: string) {
   return value.trim().length > 0
-}
-
-function encodeForm(data: FormData) {
-  const params = new URLSearchParams()
-  for (const [key, value] of data.entries()) {
-    if (typeof value === "string") params.append(key, value)
-  }
-  return params.toString()
 }
 
 export function ContactPage() {
@@ -20,6 +13,7 @@ export function ContactPage() {
   const { channels } = settings
   const [sent, setSent] = useState(false)
   const [sending, setSending] = useState(false)
+  const [failed, setFailed] = useState(false)
   const hasChannel =
     filled(channels.email) || filled(channels.phone) || filled(channels.wechat) || filled(channels.address)
 
@@ -27,37 +21,44 @@ export function ContactPage() {
     event.preventDefault()
     const form = event.currentTarget
     const data = new FormData(form)
-    const name = String(data.get("name") ?? "")
-    const org = String(data.get("org") ?? "")
-    const email = String(data.get("email") ?? "")
-    const note = String(data.get("note") ?? "")
+    const lead = {
+      name: String(data.get("name") ?? ""),
+      org: String(data.get("org") ?? ""),
+      email: String(data.get("email") ?? ""),
+      note: String(data.get("note") ?? ""),
+    }
     setSending(true)
+    setFailed(false)
     try {
-      sessionStorage.setItem(
-        "ash-inquiry",
-        JSON.stringify({ name, org, email, note, at: new Date().toISOString() }),
-      )
+      sessionStorage.setItem("ash-inquiry", JSON.stringify({ ...lead, at: new Date().toISOString() }))
     } catch {
       /* ignore quota */
     }
+    let stored = false
     try {
-      await fetch("/", {
+      const response = await fetch(withBase("api/leads"), {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: encodeForm(data),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lead),
       })
+      stored = response.ok
     } catch {
-      /* static hosts will reject this; the note is still kept locally */
+      stored = false
     }
-    if (channels.email) {
-      const body = [`称呼：${name}`, org ? `机构：${org}` : "", `邮箱：${email}`, "", note]
+    if (!stored && channels.email) {
+      const body = [`称呼：${lead.name}`, lead.org ? `机构：${lead.org}` : "", `邮箱：${lead.email}`, "", lead.note]
         .filter(Boolean)
         .join("\n")
       window.location.href = `mailto:${channels.email}?subject=${encodeURIComponent("火山灰合作线索")}&body=${encodeURIComponent(body)}`
+      stored = true
     }
-    setSent(true)
     setSending(false)
-    form.reset()
+    if (stored) {
+      setSent(true)
+      form.reset()
+    } else {
+      setFailed(true)
+    }
   }
 
   return (
@@ -116,7 +117,7 @@ export function ContactPage() {
           <h2>留一条线索</h2>
           {sent ? (
             <div className="notice">
-              <p>{channels.email ? "已打开你的邮箱。若没有弹出，请直接写信。" : "已记下。我们按这条线索回复。"}</p>
+              <p>已记下这条线索，我们的工作人员会尽快按这条线索联系您。</p>
               <button className="text-link" type="button" onClick={() => setSent(false)}>
                 再留一条
               </button>
@@ -156,6 +157,7 @@ export function ContactPage() {
               <button className="btn" type="submit" disabled={sending}>
                 {sending ? "正在发送…" : "发送"}
               </button>
+              {failed ? <p className="notice notice--warn">刚才没送出去，请稍后再试一次。</p> : null}
             </form>
           )}
           {settings.brochureUrl ? (

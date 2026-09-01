@@ -112,6 +112,112 @@
   background: #ffffff;
 }
 
+.admin-logout {
+  margin-top: 0.9rem;
+  border: 0;
+  background: transparent;
+  color: #8a2f1d;
+  padding: 0.35rem 0.5rem 0.35rem 0;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.admin-leads {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+}
+
+.admin-leads__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.admin-leads__head h2 {
+  margin: 0 0 0.2rem;
+  font-size: 1.25rem;
+}
+
+.admin-leads__empty {
+  color: #5f5f6a;
+  border: 1px dashed #d9dcef;
+  border-radius: 0.6rem;
+  padding: 1.4rem;
+  text-align: center;
+}
+
+.admin-leads__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.admin-lead {
+  border: 1px solid #eceef8;
+  border-radius: 0.7rem;
+  background: #fff;
+  padding: 0.85rem 1rem;
+  display: grid;
+  gap: 0.5rem;
+  animation: rise-in 0.4s var(--ease-out) both;
+}
+
+.admin-lead header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.admin-lead strong {
+  font-size: 1rem;
+}
+
+.admin-lead__org {
+  color: #4f5498;
+  background: #eceef8;
+  border-radius: 999px;
+  padding: 0.08rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.admin-lead time,
+.admin-lead__place {
+  color: #8a8a96;
+  font-size: 0.8rem;
+}
+
+.admin-lead__note {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.admin-lead footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.admin-lead__delete {
+  border: 0;
+  background: transparent;
+  color: #8a8a96;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.admin-lead__delete:hover {
+  color: #8a2f1d;
+}
+
 .admin-list__row {
   display: grid;
   grid-template-columns: 1fr auto;

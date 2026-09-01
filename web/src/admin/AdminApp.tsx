@@ -10,19 +10,37 @@ import {
   publishContent,
   readDraft,
   readImportedFile,
-  SESSION_KEY,
   setPreviewDraft,
   writeDraft,
 } from "../cms/store"
 import type { ContentModuleId, SiteContent } from "../cms/types"
+import { withBase } from "../lib/asset"
 import { ModuleEditor, moduleMeta } from "./editors"
+import { LeadsPanel, type AdminAuth } from "./LeadsPanel"
 import "./admin.css"
 
 const LOCAL_UNLOCK = "ash-draft"
+const AUTH_KEY = "ash-admin-auth"
+
+function readStoredAuth(): AdminAuth | null {
+  try {
+    const raw = sessionStorage.getItem(AUTH_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as AdminAuth
+    return parsed.user && parsed.pass ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+type AdminView = "leads" | "cms"
 
 export function AdminApp() {
-  const [authed, setAuthed] = useState(() => sessionStorage.getItem(SESSION_KEY) === "1")
+  const [auth, setAuth] = useState<AdminAuth | null>(() => readStoredAuth())
+  const [user, setUser] = useState("")
   const [password, setPassword] = useState("")
+  const [checking, setChecking] = useState(false)
+  const [view, setView] = useState<AdminView>("leads")
   const [moduleId, setModuleId] = useState<ContentModuleId>("gaps")
   const [content, setContent] = useState<SiteContent>(() =>
     mergeContent(readDraft() ?? defaultContent),
@@ -45,15 +63,43 @@ export function AdminApp() {
     return () => window.removeEventListener("beforeunload", onLeave)
   }, [dirty])
 
-  const unlock = (event: FormEvent) => {
+  const unlock = async (event: FormEvent) => {
     event.preventDefault()
-    if (password !== LOCAL_UNLOCK) {
-      setMessage("口令不对。")
+    const account = user.trim()
+    if (!account || !password) {
+      setMessage("请输入账号和密码。")
       return
     }
-    sessionStorage.setItem(SESSION_KEY, "1")
-    setAuthed(true)
+    setChecking(true)
     setMessage("")
+    let ok = false
+    try {
+      const response = await fetch(withBase("api/leads"), {
+        headers: { "X-Admin-User": account, "X-Admin-Pass": password },
+      })
+      if (response.ok) {
+        ok = true
+      } else if (response.status === 401) {
+        setMessage("账号或密码不对。")
+      } else {
+        setMessage(`后台接口异常（${response.status}），稍后再试。`)
+      }
+    } catch {
+      // Static builds have no API; keep the local-only fallback for drafts.
+      if (account === "admin" && password === LOCAL_UNLOCK) ok = true
+      else setMessage("连不上后台接口，请检查网络。")
+    }
+    setChecking(false)
+    if (!ok) return
+    const next = { user: account, pass: password }
+    sessionStorage.setItem(AUTH_KEY, JSON.stringify(next))
+    setAuth(next)
+  }
+
+  const logout = () => {
+    sessionStorage.removeItem(AUTH_KEY)
+    setAuth(null)
+    setPassword("")
   }
 
   const saveDraft = () => {
@@ -98,7 +144,7 @@ export function AdminApp() {
 
   const onPublish = async () => {
     try {
-      await publishContent(content, password || LOCAL_UNLOCK)
+      await publishContent(content, auth?.pass || LOCAL_UNLOCK)
       const next = writeDraft(content)
       setSaved(JSON.stringify(next))
       setMessage("已发布到站点存储。若在本地 Vite 里，这个接口还不存在，请改用导出 JSON。")
@@ -111,15 +157,24 @@ export function AdminApp() {
     }
   }
 
-  if (!authed) {
+  if (!auth) {
     return (
       <main className="admin-gate">
-        <form onSubmit={unlock}>
-          <p className="latin-kicker">Content desk</p>
-          <h1>内容后台</h1>
-          <p>改官网文案、数字、案例和导航。</p>
+        <form onSubmit={(event) => void unlock(event)}>
+          <p className="latin-kicker">Back office</p>
+          <h1>网站后台</h1>
+          <p>查看前台留下的线索，管理官网文案。</p>
           <label>
-            口令
+            账号
+            <input
+              value={user}
+              onChange={(e) => setUser(e.target.value)}
+              autoComplete="username"
+              placeholder="admin"
+            />
+          </label>
+          <label>
+            密码
             <input
               type="password"
               value={password}
@@ -127,8 +182,8 @@ export function AdminApp() {
               autoComplete="current-password"
             />
           </label>
-          <button className="btn" type="submit">
-            进入
+          <button className="btn" type="submit" disabled={checking}>
+            {checking ? "正在验证…" : "登录"}
           </button>
           {message ? <p className="notice notice--warn">{message}</p> : null}
           <p>
@@ -142,67 +197,78 @@ export function AdminApp() {
   return (
     <div className="admin-shell">
       <aside className="admin-side">
-        <p className="latin-kicker">CMS</p>
-        <h1>内容后台</h1>
+        <p className="latin-kicker">Back office</p>
+        <h1>网站后台</h1>
         <p className="admin-hint">还空着 {emptyGapCount(content)} 项对外信息</p>
         <nav>
+          <button
+            type="button"
+            className={view === "leads" ? "is-active" : ""}
+            onClick={() => setView("leads")}
+          >
+            前台线索
+          </button>
           {moduleMeta.map((item) => (
             <button
               key={item.id}
               type="button"
-              className={moduleId === item.id ? "is-active" : ""}
-              onClick={() => setModuleId(item.id)}
+              className={view === "cms" && moduleId === item.id ? "is-active" : ""}
+              onClick={() => {
+                setView("cms")
+                setModuleId(item.id)
+              }}
             >
               {item.label}
             </button>
           ))}
         </nav>
         <Link to="/">看前台</Link>
+        <button type="button" className="admin-logout" onClick={logout}>
+          退出登录
+        </button>
       </aside>
       <section className="admin-main">
-        <header className="admin-toolbar">
-          <button type="button" className="btn" onClick={saveDraft}>
-            {dirty ? "保存草稿（未存）" : "保存草稿"}
-          </button>
-          <button type="button" className="btn btn--ghost" onClick={preview}>
-            前台预览草稿
-          </button>
-          <button type="button" className="btn btn--ghost" onClick={stopPreview}>
-            停止预览
-          </button>
-          <button type="button" className="btn btn--ghost" onClick={() => downloadContent(content)}>
-            导出 JSON
-          </button>
-          <label className="btn btn--ghost">
-            导入 JSON
-            <input
-              className="sr-only"
-              type="file"
-              accept="application/json"
-              onChange={(e) => onImport(e.target.files?.[0])}
-            />
-          </label>
-          <label className="admin-field admin-field--inline">
-            <span>发布口令</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="ash-draft"
-            />
-          </label>
-          <button type="button" className="btn btn--ghost" onClick={onPublish}>
-            发布
-          </button>
-          <button type="button" className="btn btn--ghost" onClick={resetPublished}>
-            恢复默认文案
-          </button>
-        </header>
-        {message ? <p className="notice">{message}</p> : null}
-        <p className="admin-hint">
-          当前模块：{moduleMeta.find((item) => item.id === moduleId)?.label}。改完先保存草稿，再预览。数字和效果可以逐条改。
-        </p>
-        <ModuleEditor moduleId={moduleId} content={content} onChange={setContent} />
+        {view === "leads" ? (
+          <LeadsPanel auth={auth} />
+        ) : (
+          <>
+            <header className="admin-toolbar">
+              <button type="button" className="btn" onClick={saveDraft}>
+                {dirty ? "保存草稿（未存）" : "保存草稿"}
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={preview}>
+                前台预览草稿
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={stopPreview}>
+                停止预览
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={() => downloadContent(content)}>
+                导出 JSON
+              </button>
+              <label className="btn btn--ghost">
+                导入 JSON
+                <input
+                  className="sr-only"
+                  type="file"
+                  accept="application/json"
+                  onChange={(e) => onImport(e.target.files?.[0])}
+                />
+              </label>
+              <button type="button" className="btn btn--ghost" onClick={onPublish}>
+                发布
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={resetPublished}>
+                恢复默认文案
+              </button>
+            </header>
+            {message ? <p className="notice">{message}</p> : null}
+            <p className="admin-hint">
+              当前模块：{moduleMeta.find((item) => item.id === moduleId)?.label}
+              。改完先保存草稿，再预览。数字和效果可以逐条改。
+            </p>
+            <ModuleEditor moduleId={moduleId} content={content} onChange={setContent} />
+          </>
+        )}
       </section>
     </div>
   )

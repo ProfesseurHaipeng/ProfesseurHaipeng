@@ -18,6 +18,46 @@ function localGuide(): Plugin {
       ...process.env,
       ...loadEnv(server.config.mode, server.config.envDir || process.cwd(), ""),
     }
+    const localLeads: unknown[] = []
+    const staffOk = (req: IncomingMessage) => {
+      const user = env.ADMIN_USER || "admin"
+      const pass = env.ADMIN_PASSWORD || "ash-draft"
+      return req.headers["x-admin-user"] === user && req.headers["x-admin-pass"] === pass
+    }
+    server.middlewares.use("/api/leads", (req: IncomingMessage, res: ServerResponse) => {
+      void (async () => {
+        res.setHeader("Content-Type", "application/json")
+        if (req.method === "POST") {
+          try {
+            const raw = await readBody(req)
+            const leadsMod = await server.ssrLoadModule("/src/cms/leads.ts")
+            const input = leadsMod.sanitizeLead(raw ? JSON.parse(raw) : null)
+            if (!input) {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: "invalid" }))
+              return
+            }
+            localLeads.unshift({ ...input, id: leadsMod.newLeadId(), at: new Date().toISOString() })
+            res.end(JSON.stringify({ ok: true }))
+          } catch {
+            res.statusCode = 400
+            res.end(JSON.stringify({ error: "bad-json" }))
+          }
+          return
+        }
+        if (!staffOk(req)) {
+          res.statusCode = 401
+          res.end(JSON.stringify({ error: "unauthorized" }))
+          return
+        }
+        if (req.method === "GET") {
+          res.end(JSON.stringify({ leads: localLeads }))
+          return
+        }
+        res.statusCode = 405
+        res.end(JSON.stringify({ error: "method" }))
+      })()
+    })
     server.middlewares.use("/api/guide", (req: IncomingMessage, res: ServerResponse, next: () => void) => {
       void (async () => {
         if (req.method === "OPTIONS") {
