@@ -33,8 +33,25 @@ export function stripMarkdownNoise(text: string) {
     .trim()
 }
 
+const SYCOPHANCY_OPENERS =
+  /^(?:(?:that(?:'|’)s )?(?:a )?great question|good question|certainly|absolutely|sure thing|sure|i(?:'|’)d be happy to(?: help)?|thanks for reaching out|好问题|您说得对|问得好)(?=[!！.。，,\s]|$)[!！.。，,]?\s*/i
+
+/** Drop chat-bot openers the model sneaks in despite the prompt ban. */
+export function stripSycophancy(text: string) {
+  return text
+    .split("\n")
+    .map((line) => {
+      const stripped = line.replace(SYCOPHANCY_OPENERS, "")
+      if (stripped === line || !stripped.trim()) return stripped === line ? line : ""
+      return stripped.charAt(0).toUpperCase() + stripped.slice(1)
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
 export function cleanReplyText(text: string) {
-  return stripMarkdownNoise(stripModelThink(text))
+  return stripSycophancy(stripMarkdownNoise(stripModelThink(text)))
 }
 
 function alternateMinimaxBases(preferred: string) {

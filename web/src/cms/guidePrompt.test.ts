@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest"
 import { defaultContent } from "./defaultContent"
 import { buildGuideMessages, buildGuideSystemPrompt, GUIDE_GREETING } from "./guidePrompt"
 import { flattenKnowledge } from "./knowledge"
-import { cleanReplyText, minimaxEnvFrom, stripMarkdownNoise, stripModelThink } from "./chatCompletions"
+import {
+  cleanReplyText,
+  minimaxEnvFrom,
+  stripMarkdownNoise,
+  stripModelThink,
+  stripSycophancy,
+} from "./chatCompletions"
 
 describe("guide system prompt", () => {
   const prompt = buildGuideSystemPrompt(flattenKnowledge(defaultContent))
@@ -109,5 +115,20 @@ describe("stripMarkdownNoise", () => {
   it("keeps normal punctuation untouched", () => {
     const text = "适合水稻、茶叶（含硅钾）。建议 1. 基肥 2. 旋耕。"
     expect(stripMarkdownNoise(text)).toBe(text)
+  })
+})
+
+describe("stripSycophancy", () => {
+  it("cuts chat-bot openers in both languages", () => {
+    expect(stripSycophancy("Great question! For a 500-hectare farm, start with a trial plot.")).toBe(
+      "For a 500-hectare farm, start with a trial plot.",
+    )
+    expect(stripSycophancy("好问题！水稻每亩 50-100 公斤。")).toBe("水稻每亩 50-100 公斤。")
+    expect(cleanReplyText("**Certainly!** Here is the plan.")).toBe("Here is the plan.")
+  })
+
+  it("leaves normal sentences alone", () => {
+    const text = "Surely not a match: this line stays.\n\n水稻方案如下。"
+    expect(stripSycophancy(text)).toBe(text)
   })
 })
