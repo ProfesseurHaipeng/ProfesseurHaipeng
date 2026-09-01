@@ -69,7 +69,7 @@ export function HomePage() {
             <h2>{overview.title}</h2>
             <p className="lede">{overview.intro[0]}</p>
           </header>
-          <div className="tile-grid">
+          <div className="tile-grid tile-grid--index">
             {overview.pillars.map((item) => (
               <article key={item.id} className="tile">
                 <h3>{item.title}</h3>
@@ -99,7 +99,7 @@ export function HomePage() {
               进一步了解 →
             </Link>
           </header>
-          <div className="tile-grid">
+          <div className="tile-grid tile-grid--index">
             {products.directions.slice(0, 4).map((item) => (
               <Link key={item.id} className="tile tile--link" to="/products?tab=use">
                 <h3>{item.title}</h3>

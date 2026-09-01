@@ -812,12 +812,14 @@ h3 {
 .contact-card,
 .assay,
 .field-card {
+  position: relative;
   background: var(--lavender);
   border: 0;
   border-radius: var(--radius);
-  padding: 1.25rem 1.2rem 1.3rem 1.6rem;
+  padding: 1.2rem 1.2rem 1.25rem 1.55rem;
   display: grid;
-  gap: 0.5rem;
+  gap: 0.45rem;
+  align-content: start;
   transition: transform var(--dur-med) var(--ease-out), box-shadow var(--dur-med) var(--ease-out);
 }
 
@@ -828,9 +830,35 @@ h3 {
   box-shadow: 0 16px 32px rgba(79, 84, 152, 0.12);
 }
 
-.tile,
-.mineral {
-  box-shadow: inset 4px 0 0 var(--lavender-deep);
+.tile::before,
+.mineral::before,
+.layer-cards li::before {
+  content: "";
+  position: absolute;
+  left: 0.55rem;
+  top: 1.15rem;
+  bottom: 1.15rem;
+  width: 3px;
+  border-radius: 99px;
+  background: var(--lavender-deep);
+  pointer-events: none;
+}
+
+.tile h3,
+.mineral h3,
+.layer-cards li h3,
+.contact-card h2,
+.field-card h2 {
+  line-height: 1.3;
+}
+
+.tile p,
+.mineral p,
+.layer-cards li p,
+.contact-card p,
+.field-card p {
+  color: var(--ash);
+  line-height: 1.65;
 }
 
 .case-card {
@@ -871,17 +899,25 @@ h3 {
   width: 100%;
 }
 
-.tile-grid .tile:nth-child(odd),
-.mineral-grid .mineral:nth-child(odd),
-.layer-cards li:nth-child(odd) {
-  padding-right: 1.2rem;
+.tile-grid--index {
+  counter-reset: tiles;
 }
 
-.tile-grid .tile:nth-child(even),
-.mineral-grid .mineral:nth-child(even),
-.layer-cards li:nth-child(even) {
-  padding-left: 1.6rem;
-  border-left: 0;
+.tile-grid--index > .tile h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem 0.6rem;
+}
+
+.tile-grid--index > .tile h3::before {
+  counter-increment: tiles;
+  content: counter(tiles, decimal-leading-zero);
+  color: var(--lavender-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
 }
 
 .tile--link {
@@ -1343,7 +1379,7 @@ h3 {
 }
 
 .layer-cards li {
-  padding: 1.2rem 1.2rem;
+  padding: 1.2rem 1.2rem 1.2rem 1.55rem;
   border-top: 0;
   background: var(--lavender);
   border-radius: var(--radius);
@@ -1980,15 +2016,10 @@ h3 {
     border-top-color: var(--line);
   }
 
-  .tile-grid .tile:nth-child(odd),
-  .tile-grid .tile:nth-child(even),
-  .mineral-grid .mineral:nth-child(odd),
-  .mineral-grid .mineral:nth-child(even),
-  .layer-cards li:nth-child(odd),
-  .layer-cards li:nth-child(even) {
-    padding-left: 1.6rem;
-    padding-right: 1.15rem;
-    border-left: 0;
+  .tile,
+  .mineral,
+  .layer-cards li {
+    padding-left: 1.55rem;
   }
 
   .nav-toggle {
@@ -2331,11 +2362,19 @@ h3 {
   }
 
   .tile,
-  .mineral {
-    padding: 1.15rem 1.1rem 1.2rem 1.6rem;
+  .mineral,
+  .layer-cards li {
+    padding: 1.15rem 1.1rem 1.2rem 1.55rem;
   }
 
-  .layer-cards li,
+  .tile::before,
+  .mineral::before,
+  .layer-cards li::before {
+    left: 0.5rem;
+    top: 1.1rem;
+    bottom: 1.1rem;
+  }
+
   .contact-card,
   .assay,
   .field-card,
@@ -2343,7 +2382,7 @@ h3 {
   .compare__cols > div,
   .note-card,
   .solution-card .split-panel__copy {
-    padding: 1.15rem 1.1rem 1.2rem 1.4rem;
+    padding: 1.15rem 1.1rem 1.2rem 1.2rem;
   }
 
   .cta {
