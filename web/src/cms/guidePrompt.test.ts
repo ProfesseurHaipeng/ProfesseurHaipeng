@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { defaultContent } from "./defaultContent"
 import { buildGuideMessages, buildGuideSystemPrompt, GUIDE_GREETING } from "./guidePrompt"
 import { flattenKnowledge } from "./knowledge"
-import { minimaxEnvFrom, stripModelThink } from "./chatCompletions"
+import { cleanReplyText, minimaxEnvFrom, stripMarkdownNoise, stripModelThink } from "./chatCompletions"
 
 describe("guide system prompt", () => {
   const prompt = buildGuideSystemPrompt(flattenKnowledge(defaultContent))
@@ -61,5 +61,24 @@ describe("minimax env", () => {
 describe("stripModelThink", () => {
   it("drops MiniMax thinking traces before showing a reply", () => {
     expect(stripModelThink("<think>内部推理</think>\n水稻可以施用。")).toBe("水稻可以施用。")
+  })
+})
+
+describe("stripMarkdownNoise", () => {
+  it("removes bold, headings, and backticks from bubbles", () => {
+    expect(stripMarkdownNoise("**### 用量：**\n每亩 `50-100` 公斤。")).toBe("用量：\n每亩 50-100 公斤。")
+  })
+
+  it("turns asterisk bullets into plain dashes", () => {
+    expect(stripMarkdownNoise("* 第一点\n* 第二点")).toBe("- 第一点\n- 第二点")
+  })
+
+  it("cleans thinking traces and markdown together", () => {
+    expect(cleanReplyText("<think>x</think>**重点**：水稻适用。")).toBe("重点：水稻适用。")
+  })
+
+  it("keeps normal punctuation untouched", () => {
+    const text = "适合水稻、茶叶（含硅钾）。建议 1. 基肥 2. 旋耕。"
+    expect(stripMarkdownNoise(text)).toBe(text)
   })
 })

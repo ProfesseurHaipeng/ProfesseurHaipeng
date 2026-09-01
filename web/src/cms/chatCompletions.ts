@@ -22,6 +22,21 @@ export function stripModelThink(text: string) {
   return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim()
 }
 
+/** Chat bubbles are plain text; drop Markdown markers the model sneaks in. */
+export function stripMarkdownNoise(text: string) {
+  return text
+    .replace(/\*\*|__|`/g, "")
+    .replace(/^\s*[*•]\s+/gm, "- ")
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/\*/g, "")
+    .replace(/[ \t]+$/gm, "")
+    .trim()
+}
+
+export function cleanReplyText(text: string) {
+  return stripMarkdownNoise(stripModelThink(text))
+}
+
 function alternateMinimaxBases(preferred: string) {
   const ordered = [preferred.replace(/\/$/, ""), ...MINIMAX_HOSTS]
   return [...new Set(ordered)]
@@ -61,9 +76,9 @@ async function completeOnce(env: ChatCompletionsEnv, messages: GuideMessage[]) {
   }
 
   const content = payload.choices?.[0]?.message?.content
-  if (typeof content === "string") return stripModelThink(content)
+  if (typeof content === "string") return cleanReplyText(content)
   if (Array.isArray(content)) {
-    return stripModelThink(
+    return cleanReplyText(
       content.map((part) => (typeof part === "string" ? part : part.text || "")).join(""),
     )
   }
