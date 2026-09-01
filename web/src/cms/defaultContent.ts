@@ -312,7 +312,7 @@ export const defaultContent: SiteContent = {
     kicker: "第六部分",
     title: "中国农业市场布局",
     lead: "中国南方农业主产区土壤普遍存在酸化、板结、矿物元素缺乏等问题。皮纳图博火山灰的弱碱性与矿物组成，与南方土壤改良需求契合。重点布局以下区域。",
-    image: { src: "/media/ash_tea_citrus.jpg", alt: "中国农业区域示意" },
+    image: { src: "/media/china_map.svg", alt: "中国农业市场布局地图（含香港、澳门、台湾与南海诸岛）" },
     groups: [
       {
         id: "jx-hn",
@@ -579,7 +579,7 @@ export const defaultContent: SiteContent = {
     { id: "soil", src: "/media/ash_soil.jpg", alt: "土壤对照", note: "可替换为现场照片。" },
     { id: "cattle", src: "/media/ash_livestock.jpg", alt: "牧场", note: "可替换为现场照片。" },
     { id: "lab", src: "/media/ash_lab.jpg", alt: "实验室", note: "可替换为现场照片。" },
-    { id: "map", src: "/media/ash_tea_citrus.jpg", alt: "中国农业区域示意", note: "可替换为现场照片。" },
+    { id: "map", src: "/media/china_map.svg", alt: "中国农业市场布局地图（含香港、澳门、台湾与南海诸岛）", note: "由官方边界数据生成的竖版中国地图。" },
     { id: "rice", src: "/media/ash_rice.jpg", alt: "水稻", note: "可替换为现场照片。" },
     { id: "banana", src: "/media/ash_banana.jpg", alt: "香蕉园", note: "可替换为现场照片。" },
     { id: "veg", src: "/media/ash_vegetables.jpg", alt: "蔬菜田间", note: "可替换为现场照片。" },
