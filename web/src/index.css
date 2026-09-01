@@ -8,6 +8,8 @@
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 html,
@@ -16,6 +18,7 @@ body {
   min-height: 100%;
   background: var(--paper);
   color: var(--ink);
+  overflow-x: clip;
 }
 
 body {
@@ -29,7 +32,7 @@ body {
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 a {

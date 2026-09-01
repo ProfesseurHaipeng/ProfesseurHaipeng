@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useSiteContent } from "../cms/ContentContext"
 import { CHUNK_GAP_MS, splitReplyIntoChunks, typingDelayFor } from "../cms/chunks"
-import { buildGreeting, type VisitorLang } from "../cms/greeting"
+import { buildGreeting, buildGreetingEn, detectMessageLang, type VisitorLang } from "../cms/greeting"
 import { GUIDE_STARTERS, GUIDE_STARTERS_EN } from "../cms/guidePrompt"
 import { flattenKnowledge, localGuideAnswer } from "../cms/knowledge"
 import { withBase } from "../lib/asset"
@@ -138,7 +138,8 @@ export function SiteGuide() {
           messages: history.map((item) => ({ role: item.role, content: item.content })),
         }),
       })
-      const payload = (await response.json()) as { reply?: string }
+      const payload = (await response.json()) as { reply?: string; lang?: string }
+      if (payload.lang === "en" || payload.lang === "zh") setLang(payload.lang)
       return payload.reply?.trim() || null
     } catch {
       return null
@@ -171,6 +172,8 @@ export function SiteGuide() {
   const send = (text: string) => {
     const question = text.trim()
     if (!question) return
+    const typed = detectMessageLang(question)
+    if (typed) setLang(typed)
     appendTurn({ role: "user", content: question })
     setInput("")
     inputRef.current?.focus()
@@ -186,11 +189,15 @@ export function SiteGuide() {
       })
       const payload = (await response.json()) as { reply?: string; lang?: string }
       return {
-        text: payload.reply?.trim() || buildGreeting(null),
+        text: payload.reply?.trim() || (payload.lang === "en" ? buildGreetingEn(null) : buildGreeting(null)),
         lang: payload.lang === "en" ? "en" : "zh",
       }
     } catch {
-      return { text: buildGreeting(null), lang: "zh" }
+      const navZh = /^(zh)\b/i.test(navigator.language || "")
+      return {
+        text: navZh ? buildGreeting(null) : buildGreetingEn(null),
+        lang: navZh ? "zh" : "en",
+      }
     }
   }
 
@@ -231,6 +238,42 @@ export function SiteGuide() {
   }, [turns, open, typing, stage])
 
   useEffect(() => {
+    const syncLock = () => {
+      const compact = window.matchMedia("(max-width: 720px)").matches
+      document.body.classList.toggle("guide-lock", open && compact)
+    }
+    syncLock()
+    window.addEventListener("resize", syncLock)
+    return () => {
+      window.removeEventListener("resize", syncLock)
+      document.body.classList.remove("guide-lock")
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const root = document.documentElement
+    const apply = () => {
+      const viewport = window.visualViewport
+      const height = viewport?.height ?? window.innerHeight
+      const offsetTop = viewport?.offsetTop ?? 0
+      root.style.setProperty("--guide-vh", `${Math.round(height)}px`)
+      root.style.setProperty("--guide-offset", `${Math.round(offsetTop)}px`)
+    }
+    apply()
+    window.visualViewport?.addEventListener("resize", apply)
+    window.visualViewport?.addEventListener("scroll", apply)
+    window.addEventListener("resize", apply)
+    return () => {
+      window.visualViewport?.removeEventListener("resize", apply)
+      window.visualViewport?.removeEventListener("scroll", apply)
+      window.removeEventListener("resize", apply)
+      root.style.removeProperty("--guide-vh")
+      root.style.removeProperty("--guide-offset")
+    }
+  }, [open])
+
+  useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") close()
@@ -249,10 +292,15 @@ export function SiteGuide() {
   const statusLabel = stage === "connecting" ? ui.connecting : ui.online
 
   return (
-    <div className={`site-guide ${open && !closing ? "is-open" : ""}`}>
+    <div className={`site-guide${open ? " is-open" : ""}${closing ? " is-closing" : ""}`}>
       {open ? (
-        <section className={`site-guide__panel${closing ? " is-closing" : ""}`} aria-label="在线咨询">
+        <section
+          className={`site-guide__panel${closing ? " is-closing" : ""}`}
+          aria-label={ui.title}
+          lang={lang === "en" ? "en" : "zh-CN"}
+        >
           <header className="site-guide__head">
+            <span className="site-guide__handle" aria-hidden="true" />
             <div className="site-guide__identity">
               <span className="site-guide__avatar" aria-hidden="true" />
               <div>
@@ -319,6 +367,8 @@ export function SiteGuide() {
               placeholder={ui.placeholder}
               maxLength={500}
               autoComplete="off"
+              enterKeyHint="send"
+              autoCapitalize="sentences"
             />
             <button className="site-guide__send" type="submit" disabled={!input.trim()} aria-label="发送">
               <IconSend />

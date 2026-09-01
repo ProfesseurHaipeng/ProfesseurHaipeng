@@ -80,16 +80,26 @@ function localGuide(): Plugin {
             ? (JSON.parse(raw) as { messages?: { role?: string; content?: string }[]; greet?: boolean })
             : {}
           if (body.greet === true) {
+            const accept = String(req.headers["accept-language"] || "")
+            const lang = accept.toLowerCase().startsWith("zh") ? "zh" : accept ? "en" : "zh"
+            const reply = lang === "en" ? greetingMod.buildGreetingEn(null) : greetingMod.buildGreeting(null)
             res.statusCode = 200
             res.setHeader("Content-Type", "application/json")
-            res.end(JSON.stringify({ reply: greetingMod.buildGreeting(null), source: "greeting", lang: "zh" }))
+            res.end(JSON.stringify({ reply, source: "greeting", lang }))
             return
           }
           const messages = Array.isArray(body.messages) ? body.messages : []
+          const lastUser = [...messages].reverse().find((item) => item.role === "user")
+          const turnLang = greetingMod.replyLang("zh", lastUser?.content)
+          const langHint =
+            turnLang === "en"
+              ? "The customer's latest message is in English. You MUST answer this turn in natural English."
+              : "客户最后一条消息是中文。本轮必须全程用简体中文回答，不要夹英文段落。"
           const result = await runtimeMod.resolveGuideReply(
             messages,
             knowledgeMod.flattenKnowledge(contentMod.defaultContent),
             env,
+            langHint,
           )
           let ticketFiled = false
           if (result.ticket) {
@@ -108,7 +118,7 @@ function localGuide(): Plugin {
           }
           res.statusCode = 200
           res.setHeader("Content-Type", "application/json")
-          res.end(JSON.stringify({ reply: result.reply, source: result.source, ticket: ticketFiled }))
+          res.end(JSON.stringify({ reply: result.reply, source: result.source, ticket: ticketFiled, lang: turnLang }))
         } catch {
           res.statusCode = 500
           res.setHeader("Content-Type", "application/json")
