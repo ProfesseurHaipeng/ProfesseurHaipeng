@@ -68,6 +68,11 @@ describe("guide system prompt", () => {
     expect(prompt).toContain("合格线索")
   })
 
+  it("can hand the customer to senior advisor Hermes", () => {
+    expect(prompt).toContain("转高级顾问")
+    expect(prompt).toContain("Hermes")
+  })
+
   it("puts the system prompt first and keeps the latest turns", () => {
     const messages = buildGuideMessages(
       [

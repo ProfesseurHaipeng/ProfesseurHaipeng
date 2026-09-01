@@ -9,6 +9,7 @@ import {
   visitorLang,
 } from "../../src/cms/greeting"
 import { resolveGuideReply } from "../../src/cms/guideRuntime"
+import { hermesHandoffHint, hermesReady, type AdvisorId } from "../../src/cms/hermes"
 import { flattenKnowledge } from "../../src/cms/knowledge"
 import { newLeadId, type Lead } from "../../src/cms/leads"
 import { mergeContent } from "../../src/cms/merge"
@@ -45,6 +46,9 @@ function envBag() {
     ASH_AI_BASE_URL: readEnv("ASH_AI_BASE_URL"),
     ASH_AI_API_KEY: readEnv("ASH_AI_API_KEY"),
     ASH_AI_MODEL: readEnv("ASH_AI_MODEL"),
+    HERMES_API_BASE: readEnv("HERMES_API_BASE"),
+    HERMES_API_KEY: readEnv("HERMES_API_KEY"),
+    HERMES_MODEL: readEnv("HERMES_MODEL"),
   }
 }
 
@@ -100,11 +104,21 @@ export default async (req: Request, context: Context) => {
   if (req.method === "OPTIONS") return json({ ok: true })
   if (req.method !== "POST") return json({ error: "method" }, 405)
 
-  let body: { messages?: unknown; greet?: unknown } = {}
+  let body: { messages?: unknown; greet?: unknown; escalate?: unknown; advisor?: unknown; hermes?: unknown } = {}
   try {
-    body = (await req.json()) as { messages?: unknown; greet?: unknown }
+    body = (await req.json()) as {
+      messages?: unknown
+      greet?: unknown
+      escalate?: unknown
+      advisor?: unknown
+      hermes?: unknown
+    }
   } catch {
     return json({ error: "bad-json" }, 400)
+  }
+
+  if (body.hermes === "status") {
+    return json({ ready: hermesReady(envBag()) })
   }
 
   if (body.greet === true) {
@@ -114,11 +128,13 @@ export default async (req: Request, context: Context) => {
       lang === "en"
         ? buildGreetingEn(englishPlace(geo?.country?.code))
         : buildGreeting(chinesePlace(geo?.country?.code, geo?.subdivision?.name))
-    return json({ reply, source: "greeting", lang })
+    return json({ reply, source: "greeting", lang, hermesReady: hermesReady(envBag()) })
   }
 
   const history = asMessages(body.messages)
-  if (!history.some((item) => item.role === "user")) return json({ error: "empty" }, 400)
+  const escalate = body.escalate === true
+  const advisor: AdvisorId = body.advisor === "hermes" || escalate ? "hermes" : "lin"
+  if (!escalate && !history.some((item) => item.role === "user")) return json({ error: "empty" }, 400)
 
   const content = await publishedContent()
   const geo = context.geo
@@ -131,12 +147,24 @@ export default async (req: Request, context: Context) => {
     lang === "en"
       ? `Visitor location: ${place}. The customer's latest message is in English. You MUST answer this turn in natural English.`
       : `访客位置：${place}。客户最后一条消息是中文。本轮必须全程用简体中文回答，不要夹英文段落。`
-  const result = await resolveGuideReply(history, flattenKnowledge(content), envBag(), langHint)
+  const extra = escalate ? `${langHint}\n${hermesHandoffHint(lang)}` : langHint
+  const result = await resolveGuideReply(history, flattenKnowledge(content), envBag(), extra, {
+    advisor,
+    escalate,
+    lang,
+  })
   let ticketFiled = false
   if (result.ticket) {
     ticketFiled = await fileTicket(result.ticket, placeZh)
   }
-  return json({ reply: result.reply, source: result.source, ticket: ticketFiled, lang })
+  return json({
+    reply: result.reply,
+    source: result.source,
+    ticket: ticketFiled,
+    lang,
+    advisor: result.advisor,
+    hermesReady: hermesReady(envBag()),
+  })
 }
 
 export const config: Config = {

@@ -75,31 +75,54 @@ function localGuide(): Plugin {
           const contentMod = await server.ssrLoadModule("/src/cms/defaultContent.ts")
           const runtimeMod = await server.ssrLoadModule("/src/cms/guideRuntime.ts")
           const greetingMod = await server.ssrLoadModule("/src/cms/greeting.ts")
+          const hermesMod = await server.ssrLoadModule("/src/cms/hermes.ts")
           const raw = await readBody(req)
           const body = raw
-            ? (JSON.parse(raw) as { messages?: { role?: string; content?: string }[]; greet?: boolean })
+            ? (JSON.parse(raw) as {
+                messages?: { role?: string; content?: string }[]
+                greet?: boolean
+                escalate?: boolean
+                advisor?: string
+                hermes?: string
+              })
             : {}
+          if (body.hermes === "status") {
+            res.statusCode = 200
+            res.setHeader("Content-Type", "application/json")
+            res.end(JSON.stringify({ ready: hermesMod.hermesReady(env) }))
+            return
+          }
           if (body.greet === true) {
             const accept = String(req.headers["accept-language"] || "")
             const lang = accept.toLowerCase().startsWith("zh") ? "zh" : accept ? "en" : "zh"
             const reply = lang === "en" ? greetingMod.buildGreetingEn(null) : greetingMod.buildGreeting(null)
             res.statusCode = 200
             res.setHeader("Content-Type", "application/json")
-            res.end(JSON.stringify({ reply, source: "greeting", lang }))
+            res.end(JSON.stringify({ reply, source: "greeting", lang, hermesReady: hermesMod.hermesReady(env) }))
             return
           }
           const messages = Array.isArray(body.messages) ? body.messages : []
+          const escalate = body.escalate === true
+          const advisor = body.advisor === "hermes" || escalate ? "hermes" : "lin"
+          if (!escalate && !messages.some((item) => item.role === "user")) {
+            res.statusCode = 400
+            res.setHeader("Content-Type", "application/json")
+            res.end(JSON.stringify({ error: "empty" }))
+            return
+          }
           const lastUser = [...messages].reverse().find((item) => item.role === "user")
           const turnLang = greetingMod.replyLang("zh", lastUser?.content)
           const langHint =
             turnLang === "en"
               ? "The customer's latest message is in English. You MUST answer this turn in natural English."
               : "客户最后一条消息是中文。本轮必须全程用简体中文回答，不要夹英文段落。"
+          const extra = escalate ? `${langHint}\n${hermesMod.hermesHandoffHint(turnLang)}` : langHint
           const result = await runtimeMod.resolveGuideReply(
             messages,
             knowledgeMod.flattenKnowledge(contentMod.defaultContent),
             env,
-            langHint,
+            extra,
+            { advisor, escalate, lang: turnLang },
           )
           let ticketFiled = false
           if (result.ticket) {
@@ -118,7 +141,16 @@ function localGuide(): Plugin {
           }
           res.statusCode = 200
           res.setHeader("Content-Type", "application/json")
-          res.end(JSON.stringify({ reply: result.reply, source: result.source, ticket: ticketFiled, lang: turnLang }))
+          res.end(
+            JSON.stringify({
+              reply: result.reply,
+              source: result.source,
+              ticket: ticketFiled,
+              lang: turnLang,
+              advisor: result.advisor,
+              hermesReady: hermesMod.hermesReady(env),
+            }),
+          )
         } catch {
           res.statusCode = 500
           res.setHeader("Content-Type", "application/json")

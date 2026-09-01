@@ -1,6 +1,7 @@
 import { defaultContent } from "../src/cms/defaultContent"
-import { buildGreeting, chinesePlace } from "../src/cms/greeting"
+import { buildGreeting, chinesePlace, replyLang, visitorLang } from "../src/cms/greeting"
 import { resolveGuideReply } from "../src/cms/guideRuntime"
+import { hermesHandoffHint, hermesReady, type AdvisorId } from "../src/cms/hermes"
 import { flattenKnowledge } from "../src/cms/knowledge"
 import type { GuideMessage } from "../src/cms/guidePrompt"
 
@@ -25,6 +26,9 @@ function envBag() {
     ASH_AI_BASE_URL: process.env.ASH_AI_BASE_URL || "",
     ASH_AI_API_KEY: process.env.ASH_AI_API_KEY || "",
     ASH_AI_MODEL: process.env.ASH_AI_MODEL || "",
+    HERMES_API_BASE: process.env.HERMES_API_BASE || "",
+    HERMES_API_KEY: process.env.HERMES_API_KEY || "",
+    HERMES_MODEL: process.env.HERMES_MODEL || "",
   }
 }
 
@@ -46,21 +50,46 @@ export default async (req: Request) => {
   if (req.method === "OPTIONS") return json({ ok: true })
   if (req.method !== "POST") return json({ error: "method" }, 405)
 
-  let body: { messages?: unknown; greet?: unknown } = {}
+  let body: { messages?: unknown; greet?: unknown; escalate?: unknown; advisor?: unknown; hermes?: unknown } = {}
   try {
-    body = (await req.json()) as { messages?: unknown; greet?: unknown }
+    body = (await req.json()) as {
+      messages?: unknown
+      greet?: unknown
+      escalate?: unknown
+      advisor?: unknown
+      hermes?: unknown
+    }
   } catch {
     return json({ error: "bad-json" }, 400)
   }
 
+  const env = envBag()
+  if (body.hermes === "status") {
+    return json({ ready: hermesReady(env) })
+  }
+
   if (body.greet === true) {
     const place = chinesePlace(req.headers.get("x-vercel-ip-country"), req.headers.get("x-vercel-ip-country-region"))
-    return json({ reply: buildGreeting(place), source: "greeting" })
+    return json({ reply: buildGreeting(place), source: "greeting", hermesReady: hermesReady(env) })
   }
 
   const history = asMessages(body.messages)
-  if (!history.some((item) => item.role === "user")) return json({ error: "empty" }, 400)
+  const escalate = body.escalate === true
+  const advisor: AdvisorId = body.advisor === "hermes" || escalate ? "hermes" : "lin"
+  if (!escalate && !history.some((item) => item.role === "user")) return json({ error: "empty" }, 400)
 
-  const result = await resolveGuideReply(history, flattenKnowledge(defaultContent), envBag())
-  return json({ reply: result.reply, source: result.source })
+  const lastUser = [...history].reverse().find((item) => item.role === "user")
+  const lang = replyLang(visitorLang(req.headers.get("x-vercel-ip-country")), lastUser?.content)
+  const extra = escalate ? hermesHandoffHint(lang) : undefined
+  const result = await resolveGuideReply(history, flattenKnowledge(defaultContent), env, extra, {
+    advisor,
+    escalate,
+    lang,
+  })
+  return json({
+    reply: result.reply,
+    source: result.source,
+    advisor: result.advisor,
+    hermesReady: hermesReady(env),
+  })
 }

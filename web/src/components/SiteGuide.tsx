@@ -3,27 +3,37 @@ import { useSiteContent } from "../cms/ContentContext"
 import { CHUNK_GAP_MS, splitReplyIntoChunks, typingDelayFor } from "../cms/chunks"
 import { buildGreeting, buildGreetingEn, detectMessageLang, type VisitorLang } from "../cms/greeting"
 import { GUIDE_STARTERS, GUIDE_STARTERS_EN } from "../cms/guidePrompt"
+import type { AdvisorId } from "../cms/hermes"
+import { hermesUnavailableReply } from "../cms/hermes"
 import { flattenKnowledge, localGuideAnswer } from "../cms/knowledge"
 import { withBase } from "../lib/asset"
 
 type ChatRole = "user" | "assistant"
 type ChatTurn = { role: ChatRole; content: string }
-type Stage = "idle" | "connecting" | "live"
+type Stage = "idle" | "connecting" | "escalating" | "live"
 
 const UI_TEXT = {
   zh: {
     title: "在线咨询",
     connecting: "正在为您接通产品顾问…",
+    escalating: "正在为您接通高级顾问 Hermes…",
     online: "产品顾问 · 在线",
+    onlineHermes: "高级顾问 Hermes · 在线",
     connectingLog: "正在接入",
+    escalatingLog: "正在接入高级顾问",
+    escalate: "转高级顾问",
     placeholder: "描述你的问题…",
     starters: GUIDE_STARTERS,
   },
   en: {
     title: "Live chat",
     connecting: "Connecting you to an advisor…",
+    escalating: "Connecting you to senior advisor Hermes…",
     online: "Product advisor · Online",
+    onlineHermes: "Senior advisor Hermes · Online",
     connectingLog: "Connecting",
+    escalatingLog: "Connecting Hermes",
+    escalate: "Senior advisor",
     placeholder: "Type your message…",
     starters: GUIDE_STARTERS_EN,
   },
@@ -76,6 +86,7 @@ export function SiteGuide() {
   const [open, setOpen] = useState(false)
   const [closing, setClosing] = useState(false)
   const [stage, setStage] = useState<Stage>("idle")
+  const [advisor, setAdvisor] = useState<AdvisorId>("lin")
   const [lang, setLang] = useState<VisitorLang>("zh")
   const [input, setInput] = useState("")
   const [typing, setTyping] = useState(false)
@@ -90,6 +101,7 @@ export function SiteGuide() {
   const busyRef = useRef(false)
   const dirtyRef = useRef(false)
   const greetedRef = useRef(false)
+  const advisorRef = useRef<AdvisorId>("lin")
 
   const sleep = (ms: number) =>
     new Promise<void>((resolve) => {
@@ -129,17 +141,23 @@ export function SiteGuide() {
     }
   }
 
-  const fetchReply = async (history: ChatTurn[]) => {
+  const fetchReply = async (history: ChatTurn[], extra?: { escalate?: boolean }) => {
     try {
       const response = await fetch(guideEndpoint(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: history.map((item) => ({ role: item.role, content: item.content })),
+          advisor: extra?.escalate ? "hermes" : advisorRef.current,
+          escalate: extra?.escalate === true,
         }),
       })
-      const payload = (await response.json()) as { reply?: string; lang?: string }
+      const payload = (await response.json()) as { reply?: string; lang?: string; advisor?: string }
       if (payload.lang === "en" || payload.lang === "zh") setLang(payload.lang)
+      if (payload.advisor === "hermes" || payload.advisor === "lin") {
+        advisorRef.current = payload.advisor
+        setAdvisor(payload.advisor)
+      }
       return payload.reply?.trim() || null
     } catch {
       return null
@@ -178,6 +196,42 @@ export function SiteGuide() {
     setInput("")
     inputRef.current?.focus()
     void processRounds()
+  }
+
+  const escalate = () => {
+    if (advisorRef.current === "hermes" || stage !== "live") return
+    advisorRef.current = "hermes"
+    setAdvisor("hermes")
+    setStage("escalating")
+    inputRef.current?.focus()
+    void (async () => {
+      while (busyRef.current && mounted.current) await sleep(80)
+      if (!mounted.current) return
+      busyRef.current = true
+      try {
+        setTyping(true)
+        const reply = await fetchReply(turnsRef.current, { escalate: true })
+        if (!mounted.current) return
+        setStage("live")
+        await deliverReply(reply ?? hermesUnavailableReply(lang))
+        while (dirtyRef.current && mounted.current) {
+          dirtyRef.current = false
+          const history = turnsRef.current
+          const lastUser = [...history].reverse().find((item) => item.role === "user")
+          if (!lastUser) break
+          setTyping(true)
+          const next = await fetchReply(history)
+          if (!mounted.current) return
+          await deliverReply(next ?? localGuideAnswer(lastUser.content, flattenKnowledge(content)))
+        }
+      } finally {
+        busyRef.current = false
+        if (mounted.current) {
+          setTyping(false)
+          setStage("live")
+        }
+      }
+    })()
   }
 
   const fetchGreeting = async (): Promise<{ text: string; lang: VisitorLang }> => {
@@ -292,8 +346,11 @@ export function SiteGuide() {
   }, [open])
 
   const showStarters = stage === "live" && !typing && !turns.some((item) => item.role === "user")
+  const showEscalate = stage === "live" && advisor === "lin"
   const ui = UI_TEXT[lang]
-  const statusLabel = stage === "connecting" ? ui.connecting : ui.online
+  const statusLabel =
+    stage === "connecting" ? ui.connecting : stage === "escalating" ? ui.escalating : advisor === "hermes" ? ui.onlineHermes : ui.online
+  const avatarClass = advisor === "hermes" || stage === "escalating" ? "site-guide__avatar site-guide__avatar--hermes" : "site-guide__avatar"
 
   return (
     <div className={`site-guide${open ? " is-open" : ""}${closing ? " is-closing" : ""}`}>
@@ -306,10 +363,10 @@ export function SiteGuide() {
           <header className="site-guide__head">
             <span className="site-guide__handle" aria-hidden="true" />
             <div className="site-guide__identity">
-              <span className="site-guide__avatar" aria-hidden="true" />
+              <span className={avatarClass} aria-hidden="true" />
               <div>
                 <p className="site-guide__title">{ui.title}</p>
-                <p className={`site-guide__status${stage === "connecting" ? " is-connecting" : ""}`}>
+                <p className={`site-guide__status${stage === "connecting" || stage === "escalating" ? " is-connecting" : ""}`}>
                   <span className="site-guide__live" aria-hidden="true" />
                   {statusLabel}
                 </p>
@@ -328,13 +385,15 @@ export function SiteGuide() {
             ) : null}
             {turns.map((turn, index) => (
               <article key={`${turn.role}-${index}`} className={`site-guide__row site-guide__row--${turn.role}`}>
-                {turn.role === "assistant" ? <span className="site-guide__avatar site-guide__avatar--sm" aria-hidden="true" /> : null}
+                {turn.role === "assistant" ? (
+                  <span className={`${avatarClass} site-guide__avatar--sm`} aria-hidden="true" />
+                ) : null}
                 <p className={`site-guide__bubble site-guide__bubble--${turn.role}`}>{turn.content}</p>
               </article>
             ))}
             {typing ? (
               <article className="site-guide__row site-guide__row--assistant" aria-live="polite">
-                <span className="site-guide__avatar site-guide__avatar--sm" aria-hidden="true" />
+                <span className={`${avatarClass} site-guide__avatar--sm`} aria-hidden="true" />
                 <p className="site-guide__bubble site-guide__bubble--assistant site-guide__typing">
                   <span />
                   <span />
@@ -353,6 +412,13 @@ export function SiteGuide() {
               </div>
             ) : null}
           </div>
+          {showEscalate ? (
+            <div className="site-guide__handoff">
+              <button type="button" className="site-guide__escalate" onClick={escalate}>
+                {ui.escalate}
+              </button>
+            </div>
+          ) : null}
           <form
             className="site-guide__form"
             onSubmit={(event) => {

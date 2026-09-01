@@ -109,15 +109,21 @@ function isHostAuthError(error: unknown) {
   return /invalid api key|authorized_error|401/i.test(error.message)
 }
 
-export async function completeChatCompletions(env: ChatCompletionsEnv, messages: GuideMessage[]) {
-  const bases = alternateMinimaxBases(env.baseUrl)
+export async function completeChatCompletions(
+  env: ChatCompletionsEnv,
+  messages: GuideMessage[],
+  options?: { hosts?: "minimax-alt" | "exact" },
+) {
+  const bases = options?.hosts === "exact" ? [env.baseUrl.replace(/\/$/, "")] : alternateMinimaxBases(env.baseUrl)
   let lastError: unknown
   for (const baseUrl of bases) {
     try {
       return await completeOnce({ ...env, baseUrl }, messages)
     } catch (error) {
       lastError = error
-      if (!isHostAuthError(error) || bases.indexOf(baseUrl) === bases.length - 1) throw error
+      if (options?.hosts === "exact" || !isHostAuthError(error) || bases.indexOf(baseUrl) === bases.length - 1) {
+        throw error
+      }
     }
   }
   throw lastError instanceof Error ? lastError : new Error("minimax failed")

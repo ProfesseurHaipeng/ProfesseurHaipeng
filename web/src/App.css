@@ -1686,6 +1686,12 @@ h3 {
   margin-top: 0.15rem;
 }
 
+.site-guide__avatar--hermes {
+  background:
+    radial-gradient(circle at 30% 28%, #fff8e8 0 18%, transparent 19%),
+    linear-gradient(160deg, #5c3d1e, #1c1208);
+}
+
 .site-guide__title {
   margin: 0;
   font-size: 0.95rem;
@@ -1869,6 +1875,33 @@ h3 {
 
 .site-guide__hints button:active {
   transform: scale(0.95);
+}
+
+.site-guide__handoff {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0 0.75rem 0.45rem;
+}
+
+.site-guide__escalate {
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: #fff;
+  color: #0d0d0d;
+  border-radius: 999px;
+  padding: 0.42rem 0.85rem;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.site-guide__escalate:hover {
+  background: #f4f4f4;
+  border-color: rgba(0, 0, 0, 0.28);
+}
+
+.site-guide__escalate:active {
+  transform: scale(0.96);
 }
 
 .site-guide__form {
@@ -2135,7 +2168,8 @@ h3 {
   .nav-cta:hover,
   .chip-row a:hover,
   .site-guide__toggle:hover,
-  .site-guide__hints button:hover {
+  .site-guide__hints button:hover,
+  .site-guide__escalate:hover {
     transform: none;
     box-shadow: none;
   }
@@ -2465,6 +2499,14 @@ h3 {
 
   .site-guide__head {
     padding: 1.05rem 0.75rem 0.75rem 1rem;
+  }
+
+  .site-guide__handoff {
+    padding: 0 0.7rem 0.4rem;
+  }
+
+  .site-guide__escalate {
+    min-height: 2.4rem;
   }
 
   .site-guide__form {
