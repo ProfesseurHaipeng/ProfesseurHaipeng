@@ -41,6 +41,12 @@ a:hover {
   color: var(--ember);
 }
 
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
 :focus-visible {
   outline: 1px solid var(--ember);
   outline-offset: 3px;

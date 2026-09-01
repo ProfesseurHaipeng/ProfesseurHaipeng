@@ -24,6 +24,7 @@ export function MediaFrame({
         alt={image.alt}
         loading="lazy"
         onLoad={() => setReady(true)}
+        onError={() => setReady(true)}
       />
       {caption ? <figcaption>{caption}</figcaption> : null}
     </figure>

@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from "react-router-dom"
 import { DocumentMeta } from "./DocumentMeta"
 import { PreviewBanner } from "./PreviewBanner"
+import { ScrollReveal } from "./ScrollReveal"
 import { ScrollToTop } from "./ScrollToTop"
 import { SiteFooter } from "./SiteFooter"
 import { SiteGuide } from "./SiteGuide"
@@ -15,6 +16,7 @@ export function SiteLayout() {
         跳到正文
       </a>
       <ScrollToTop />
+      <ScrollReveal />
       <DocumentMeta />
       <PreviewBanner />
       <SiteHeader />
