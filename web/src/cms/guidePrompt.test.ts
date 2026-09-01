@@ -73,6 +73,11 @@ describe("guide system prompt", () => {
     expect(prompt).toContain("Hermes")
   })
 
+  it("collects email only after the customer agrees", () => {
+    expect(prompt).toContain("邮箱必须先征得同意")
+    expect(prompt).toContain("未同意前不要主动要邮箱")
+  })
+
   it("puts the system prompt first and keeps the latest turns", () => {
     const messages = buildGuideMessages(
       [
