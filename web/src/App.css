@@ -512,7 +512,7 @@ h3 {
 .callout {
   background: var(--lavender);
   border-radius: var(--radius);
-  padding: 1.35rem 1.4rem 1.45rem;
+  padding: 1.35rem 1.4rem 1.45rem 1.55rem;
   display: grid;
   gap: 0.75rem;
 }
@@ -740,7 +740,7 @@ h3 {
 .compare__cols > div {
   background: var(--lavender);
   border-radius: var(--radius);
-  padding: 1.2rem 1.25rem;
+  padding: 1.2rem 1.25rem 1.2rem 1.4rem;
 }
 
 .cta__grid {
@@ -815,7 +815,7 @@ h3 {
   background: var(--lavender);
   border: 0;
   border-radius: var(--radius);
-  padding: 1.25rem 1.2rem 1.3rem 1.25rem;
+  padding: 1.25rem 1.2rem 1.3rem 1.6rem;
   display: grid;
   gap: 0.5rem;
   transition: transform var(--dur-med) var(--ease-out), box-shadow var(--dur-med) var(--ease-out);
@@ -867,22 +867,20 @@ h3 {
 .solution-card .split-panel__copy {
   background: var(--lavender);
   border-radius: var(--radius);
-  padding: 1.25rem 1.35rem 1.4rem;
+  padding: 1.25rem 1.35rem 1.4rem 1.55rem;
   width: 100%;
 }
 
 .tile-grid .tile:nth-child(odd),
 .mineral-grid .mineral:nth-child(odd),
-.case-grid .case-card:nth-child(odd),
 .layer-cards li:nth-child(odd) {
   padding-right: 1.2rem;
 }
 
 .tile-grid .tile:nth-child(even),
 .mineral-grid .mineral:nth-child(even),
-.case-grid .case-card:nth-child(even),
 .layer-cards li:nth-child(even) {
-  padding-left: 1.25rem;
+  padding-left: 1.6rem;
   border-left: 0;
 }
 
@@ -1986,12 +1984,10 @@ h3 {
   .tile-grid .tile:nth-child(even),
   .mineral-grid .mineral:nth-child(odd),
   .mineral-grid .mineral:nth-child(even),
-  .case-grid .case-card:nth-child(odd),
-  .case-grid .case-card:nth-child(even),
   .layer-cards li:nth-child(odd),
   .layer-cards li:nth-child(even) {
-    padding-left: 0;
-    padding-right: 0;
+    padding-left: 1.6rem;
+    padding-right: 1.15rem;
     border-left: 0;
   }
 
@@ -2335,12 +2331,19 @@ h3 {
   }
 
   .tile,
-  .mineral,
+  .mineral {
+    padding: 1.15rem 1.1rem 1.2rem 1.6rem;
+  }
+
   .layer-cards li,
   .contact-card,
   .assay,
-  .field-card {
-    padding: 1.1rem 1.05rem 1.15rem;
+  .field-card,
+  .callout,
+  .compare__cols > div,
+  .note-card,
+  .solution-card .split-panel__copy {
+    padding: 1.15rem 1.1rem 1.2rem 1.4rem;
   }
 
   .cta {
