@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react"
 import { useSiteContent } from "../cms/ContentContext"
-import { GUIDE_GREETING, GUIDE_STARTERS } from "../cms/guidePrompt"
+import { CHUNK_GAP_MS, splitReplyIntoChunks, typingDelayFor } from "../cms/chunks"
+import { buildGreeting } from "../cms/greeting"
+import { GUIDE_STARTERS } from "../cms/guidePrompt"
 import { flattenKnowledge, localGuideAnswer } from "../cms/knowledge"
 import { withBase } from "../lib/asset"
 
 type ChatRole = "user" | "assistant"
 type ChatTurn = { role: ChatRole; content: string }
+type Stage = "idle" | "connecting" | "live"
 
 function guideEndpoint() {
   const remote = import.meta.env.VITE_GUIDE_URL
@@ -47,26 +50,148 @@ function IconSend() {
 }
 
 const CLOSE_MS = 220
+const CONNECT_MIN_MS = 1100
 
 export function SiteGuide() {
   const { content } = useSiteContent()
   const [open, setOpen] = useState(false)
   const [closing, setClosing] = useState(false)
+  const [stage, setStage] = useState<Stage>("idle")
   const [input, setInput] = useState("")
-  const [pending, setPending] = useState(false)
-  const [turns, setTurns] = useState<ChatTurn[]>([
-    {
-      role: "assistant",
-      content: GUIDE_GREETING,
-    },
-  ])
+  const [typing, setTyping] = useState(false)
+  const [turns, setTurns] = useState<ChatTurn[]>([])
+
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const closeTimer = useRef(0)
+  const timers = useRef<Set<number>>(new Set())
+  const mounted = useRef(true)
+  const turnsRef = useRef<ChatTurn[]>([])
+  const busyRef = useRef(false)
+  const dirtyRef = useRef(false)
+  const greetedRef = useRef(false)
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      const id = window.setTimeout(() => {
+        timers.current.delete(id)
+        resolve()
+      }, ms)
+      timers.current.add(id)
+    })
+
+  useEffect(
+    () => () => {
+      mounted.current = false
+      window.clearTimeout(closeTimer.current)
+      for (const id of timers.current) window.clearTimeout(id)
+    },
+    [],
+  )
+
+  const appendTurn = (turn: ChatTurn) => {
+    turnsRef.current = [...turnsRef.current, turn]
+    setTurns(turnsRef.current)
+  }
+
+  const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
+
+  const deliverReply = async (reply: string) => {
+    const chunks = splitReplyIntoChunks(reply)
+    for (const chunk of chunks) {
+      if (!mounted.current) return
+      setTyping(true)
+      await sleep(reduceMotion() ? 60 : typingDelayFor(chunk))
+      if (!mounted.current) return
+      appendTurn({ role: "assistant", content: chunk })
+      setTyping(false)
+      await sleep(reduceMotion() ? 30 : CHUNK_GAP_MS)
+    }
+  }
+
+  const fetchReply = async (history: ChatTurn[]) => {
+    try {
+      const response = await fetch(guideEndpoint(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: history.map((item) => ({ role: item.role, content: item.content })),
+        }),
+      })
+      const payload = (await response.json()) as { reply?: string }
+      return payload.reply?.trim() || null
+    } catch {
+      return null
+    }
+  }
+
+  const processRounds = async () => {
+    if (busyRef.current) {
+      dirtyRef.current = true
+      return
+    }
+    busyRef.current = true
+    try {
+      do {
+        dirtyRef.current = false
+        const history = turnsRef.current
+        const lastUser = [...history].reverse().find((item) => item.role === "user")
+        if (!lastUser) break
+        setTyping(true)
+        const reply = await fetchReply(history)
+        if (!mounted.current) return
+        await deliverReply(reply ?? localGuideAnswer(lastUser.content, flattenKnowledge(content)))
+      } while (dirtyRef.current && mounted.current)
+    } finally {
+      busyRef.current = false
+      if (mounted.current) setTyping(false)
+    }
+  }
+
+  const send = (text: string) => {
+    const question = text.trim()
+    if (!question) return
+    appendTurn({ role: "user", content: question })
+    setInput("")
+    inputRef.current?.focus()
+    void processRounds()
+  }
+
+  const fetchGreeting = async () => {
+    try {
+      const response = await fetch(guideEndpoint(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ greet: true }),
+      })
+      const payload = (await response.json()) as { reply?: string }
+      return payload.reply?.trim() || buildGreeting(null)
+    } catch {
+      return buildGreeting(null)
+    }
+  }
+
+  // First open: play the "connecting you to an advisor" sequence, then greet.
+  useEffect(() => {
+    if (!open || greetedRef.current) return
+    greetedRef.current = true
+    setStage("connecting")
+    void (async () => {
+      const startedAt = Date.now()
+      const greeting = await fetchGreeting()
+      const minWait = reduceMotion() ? 120 : CONNECT_MIN_MS
+      const elapsed = Date.now() - startedAt
+      if (elapsed < minWait) await sleep(minWait - elapsed)
+      if (!mounted.current) return
+      setStage("live")
+      await deliverReply(greeting)
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   const close = () => {
     if (closing) return
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (reduceMotion()) {
       setOpen(false)
       return
     }
@@ -77,11 +202,9 @@ export function SiteGuide() {
     }, CLOSE_MS)
   }
 
-  useEffect(() => () => window.clearTimeout(closeTimer.current), [])
-
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" })
-  }, [turns, open, pending])
+  }, [turns, open, typing, stage])
 
   useEffect(() => {
     if (!open) return
@@ -89,58 +212,29 @@ export function SiteGuide() {
       if (event.key === "Escape") close()
     }
     window.addEventListener("keydown", onKey)
-    const id = window.setTimeout(() => inputRef.current?.focus(), 80)
+    const id = window.setTimeout(() => inputRef.current?.focus(), 120)
     return () => {
       window.removeEventListener("keydown", onKey)
       window.clearTimeout(id)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const send = async (text: string) => {
-    const question = text.trim()
-    if (!question || pending) return
-    const nextTurns: ChatTurn[] = [...turns, { role: "user", content: question }]
-    setTurns(nextTurns)
-    setInput("")
-    setPending(true)
-    const localReply = () => localGuideAnswer(question, flattenKnowledge(content))
-    try {
-      const response = await fetch(guideEndpoint(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: nextTurns.map((item) => ({ role: item.role, content: item.content })),
-        }),
-      })
-      const payload = (await response.json()) as { reply?: string }
-      setTurns([
-        ...nextTurns,
-        {
-          role: "assistant",
-          content: payload.reply?.trim() || localReply(),
-        },
-      ])
-    } catch {
-      setTurns([...nextTurns, { role: "assistant", content: localReply() }])
-    } finally {
-      setPending(false)
-    }
-  }
-
-  const showStarters = turns.length <= 1 && !pending
+  const showStarters = stage === "live" && !typing && !turns.some((item) => item.role === "user")
+  const statusLabel = stage === "connecting" ? "正在为您接通产品顾问…" : "产品顾问 · 在线"
 
   return (
     <div className={`site-guide ${open && !closing ? "is-open" : ""}`}>
       {open ? (
-        <section className={`site-guide__panel${closing ? " is-closing" : ""}`} aria-label="站点工单导览">
+        <section className={`site-guide__panel${closing ? " is-closing" : ""}`} aria-label="在线咨询">
           <header className="site-guide__head">
             <div className="site-guide__identity">
               <span className="site-guide__avatar" aria-hidden="true" />
               <div>
-                <p className="site-guide__title">问本站</p>
-                <p className="site-guide__status">
+                <p className="site-guide__title">在线咨询</p>
+                <p className={`site-guide__status${stage === "connecting" ? " is-connecting" : ""}`}>
                   <span className="site-guide__live" aria-hidden="true" />
-                  工单导览 · 在线
+                  {statusLabel}
                 </p>
               </div>
             </div>
@@ -149,27 +243,32 @@ export function SiteGuide() {
             </button>
           </header>
           <div className="site-guide__log" ref={scroller}>
+            {stage === "connecting" ? (
+              <p className="site-guide__connect" aria-live="polite">
+                正在接入<span className="site-guide__connect-dots"><span /><span /><span /></span>
+              </p>
+            ) : null}
             {turns.map((turn, index) => (
               <article key={`${turn.role}-${index}`} className={`site-guide__row site-guide__row--${turn.role}`}>
                 {turn.role === "assistant" ? <span className="site-guide__avatar site-guide__avatar--sm" aria-hidden="true" /> : null}
                 <p className={`site-guide__bubble site-guide__bubble--${turn.role}`}>{turn.content}</p>
               </article>
             ))}
-            {pending ? (
+            {typing ? (
               <article className="site-guide__row site-guide__row--assistant" aria-live="polite">
                 <span className="site-guide__avatar site-guide__avatar--sm" aria-hidden="true" />
                 <p className="site-guide__bubble site-guide__bubble--assistant site-guide__typing">
                   <span />
                   <span />
                   <span />
-                  <span className="sr-only">正在回复</span>
+                  <span className="sr-only">正在输入</span>
                 </p>
               </article>
             ) : null}
             {showStarters ? (
               <div className="site-guide__hints">
                 {GUIDE_STARTERS.map((item) => (
-                  <button key={item} type="button" disabled={pending} onClick={() => void send(item)}>
+                  <button key={item} type="button" onClick={() => send(item)}>
                     {item}
                   </button>
                 ))}
@@ -180,7 +279,7 @@ export function SiteGuide() {
             className="site-guide__form"
             onSubmit={(event) => {
               event.preventDefault()
-              void send(input)
+              send(input)
             }}
           >
             <label className="sr-only" htmlFor="site-guide-input">
@@ -195,7 +294,7 @@ export function SiteGuide() {
               maxLength={500}
               autoComplete="off"
             />
-            <button className="site-guide__send" type="submit" disabled={pending || !input.trim()} aria-label="发送">
+            <button className="site-guide__send" type="submit" disabled={!input.trim()} aria-label="发送">
               <IconSend />
             </button>
           </form>
@@ -205,7 +304,7 @@ export function SiteGuide() {
         type="button"
         className="site-guide__toggle"
         aria-expanded={open}
-        aria-label={open ? "收起工单窗口" : "打开问 AI 工单"}
+        aria-label={open ? "收起咨询窗口" : "打开在线咨询"}
         onClick={() => {
           if (open) close()
           else setOpen(true)
@@ -214,7 +313,7 @@ export function SiteGuide() {
         <span className="site-guide__toggle-icon" aria-hidden="true">
           {open ? <IconClose /> : <IconChat />}
         </span>
-        <span>{open ? "收起" : "问 AI"}</span>
+        <span>{open ? "收起" : "在线咨询"}</span>
       </button>
     </div>
   )

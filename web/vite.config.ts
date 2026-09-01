@@ -34,8 +34,17 @@ function localGuide(): Plugin {
           const knowledgeMod = await server.ssrLoadModule("/src/cms/knowledge.ts")
           const contentMod = await server.ssrLoadModule("/src/cms/defaultContent.ts")
           const runtimeMod = await server.ssrLoadModule("/src/cms/guideRuntime.ts")
+          const greetingMod = await server.ssrLoadModule("/src/cms/greeting.ts")
           const raw = await readBody(req)
-          const body = raw ? (JSON.parse(raw) as { messages?: { role?: string; content?: string }[] }) : {}
+          const body = raw
+            ? (JSON.parse(raw) as { messages?: { role?: string; content?: string }[]; greet?: boolean })
+            : {}
+          if (body.greet === true) {
+            res.statusCode = 200
+            res.setHeader("Content-Type", "application/json")
+            res.end(JSON.stringify({ reply: greetingMod.buildGreeting(null), source: "greeting" }))
+            return
+          }
           const messages = Array.isArray(body.messages) ? body.messages : []
           const result = await runtimeMod.resolveGuideReply(
             messages,

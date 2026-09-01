@@ -1,4 +1,5 @@
 import { defaultContent } from "./web/src/cms/defaultContent"
+import { buildGreeting, chinesePlace } from "./web/src/cms/greeting"
 import { resolveGuideReply } from "./web/src/cms/guideRuntime"
 import { flattenKnowledge } from "./web/src/cms/knowledge"
 import type { GuideMessage } from "./web/src/cms/guidePrompt"
@@ -45,11 +46,16 @@ export default {
     if (url.pathname === "/api/guide" || url.pathname.endsWith("/api/guide")) {
       if (request.method === "OPTIONS") return json({ ok: true })
       if (request.method !== "POST") return json({ error: "method" }, 405)
-      let body: { messages?: unknown } = {}
+      let body: { messages?: unknown; greet?: unknown } = {}
       try {
-        body = (await request.json()) as { messages?: unknown }
+        body = (await request.json()) as { messages?: unknown; greet?: unknown }
       } catch {
         return json({ error: "bad-json" }, 400)
+      }
+      if (body.greet === true) {
+        const cf = (request as Request & { cf?: { country?: string; region?: string } }).cf
+        const place = chinesePlace(cf?.country, cf?.region)
+        return json({ reply: buildGreeting(place), source: "greeting" })
       }
       const history = asMessages(body.messages)
       if (!history.some((item) => item.role === "user")) return json({ error: "empty" }, 400)

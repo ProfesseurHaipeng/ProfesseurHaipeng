@@ -1,4 +1,5 @@
 import { defaultContent } from "../src/cms/defaultContent"
+import { buildGreeting, chinesePlace } from "../src/cms/greeting"
 import { resolveGuideReply } from "../src/cms/guideRuntime"
 import { flattenKnowledge } from "../src/cms/knowledge"
 import type { GuideMessage } from "../src/cms/guidePrompt"
@@ -45,11 +46,16 @@ export default async (req: Request) => {
   if (req.method === "OPTIONS") return json({ ok: true })
   if (req.method !== "POST") return json({ error: "method" }, 405)
 
-  let body: { messages?: unknown } = {}
+  let body: { messages?: unknown; greet?: unknown } = {}
   try {
-    body = (await req.json()) as { messages?: unknown }
+    body = (await req.json()) as { messages?: unknown; greet?: unknown }
   } catch {
     return json({ error: "bad-json" }, 400)
+  }
+
+  if (body.greet === true) {
+    const place = chinesePlace(req.headers.get("x-vercel-ip-country"), req.headers.get("x-vercel-ip-country-region"))
+    return json({ reply: buildGreeting(place), source: "greeting" })
   }
 
   const history = asMessages(body.messages)
