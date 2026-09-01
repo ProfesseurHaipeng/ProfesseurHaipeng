@@ -16,7 +16,18 @@ export function minimaxEnvFrom(source: Record<string, string | undefined>): Chat
   return { apiKey, baseUrl, model, groupId }
 }
 
-export async function completeChatCompletions(env: ChatCompletionsEnv, messages: GuideMessage[]) {
+const MINIMAX_HOSTS = ["https://api.minimax.io/v1", "https://api.minimaxi.com/v1"] as const
+
+export function stripModelThink(text: string) {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim()
+}
+
+function alternateMinimaxBases(preferred: string) {
+  const ordered = [preferred.replace(/\/$/, ""), ...MINIMAX_HOSTS]
+  return [...new Set(ordered)]
+}
+
+async function completeOnce(env: ChatCompletionsEnv, messages: GuideMessage[]) {
   const endpoint = new URL(`${env.baseUrl}/chat/completions`)
   if (env.groupId) endpoint.searchParams.set("GroupId", env.groupId)
 
@@ -35,25 +46,47 @@ export async function completeChatCompletions(env: ChatCompletionsEnv, messages:
   })
 
   const payload = (await response.json()) as {
-    error?: { message?: string }
+    error?: { message?: string; type?: string }
     base_resp?: { status_code?: number; status_msg?: string }
     choices?: { message?: { content?: string | { text?: string }[] } }[]
   }
 
   if (!response.ok) {
-    throw new Error(payload.error?.message || `minimax ${response.status}`)
+    const error = new Error(payload.error?.message || `minimax ${response.status}`)
+    ;(error as Error & { status?: number }).status = response.status
+    throw error
   }
   if (payload.base_resp && payload.base_resp.status_code && payload.base_resp.status_code !== 0) {
     throw new Error(payload.base_resp.status_msg || "minimax rejected")
   }
 
   const content = payload.choices?.[0]?.message?.content
-  if (typeof content === "string") return content.trim()
+  if (typeof content === "string") return stripModelThink(content)
   if (Array.isArray(content)) {
-    return content
-      .map((part) => (typeof part === "string" ? part : part.text || ""))
-      .join("")
-      .trim()
+    return stripModelThink(
+      content.map((part) => (typeof part === "string" ? part : part.text || "")).join(""),
+    )
   }
   return ""
+}
+
+function isHostAuthError(error: unknown) {
+  if (!(error instanceof Error)) return false
+  const status = (error as Error & { status?: number }).status
+  if (status === 401 || status === 403) return true
+  return /invalid api key|authorized_error|401/i.test(error.message)
+}
+
+export async function completeChatCompletions(env: ChatCompletionsEnv, messages: GuideMessage[]) {
+  const bases = alternateMinimaxBases(env.baseUrl)
+  let lastError: unknown
+  for (const baseUrl of bases) {
+    try {
+      return await completeOnce({ ...env, baseUrl }, messages)
+    } catch (error) {
+      lastError = error
+      if (!isHostAuthError(error) || bases.indexOf(baseUrl) === bases.length - 1) throw error
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("minimax failed")
 }

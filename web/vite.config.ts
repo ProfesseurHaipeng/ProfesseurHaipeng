@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import react from "@vitejs/plugin-react"
-import { defineConfig, type Plugin, type ViteDevServer } from "vite"
+import { defineConfig, loadEnv, type Plugin, type ViteDevServer } from "vite"
 
 function readBody(req: IncomingMessage) {
   return new Promise<string>((resolve, reject) => {
@@ -14,6 +14,10 @@ function readBody(req: IncomingMessage) {
 
 function localGuide(): Plugin {
   const attach = (server: ViteDevServer) => {
+    const env = {
+      ...process.env,
+      ...loadEnv(server.config.mode, server.config.envDir || process.cwd(), ""),
+    }
     server.middlewares.use("/api/guide", (req: IncomingMessage, res: ServerResponse, next: () => void) => {
       void (async () => {
         if (req.method === "OPTIONS") {
@@ -36,7 +40,7 @@ function localGuide(): Plugin {
           const result = await runtimeMod.resolveGuideReply(
             messages,
             knowledgeMod.flattenKnowledge(contentMod.defaultContent),
-            process.env,
+            env,
           )
           res.statusCode = 200
           res.setHeader("Content-Type", "application/json")

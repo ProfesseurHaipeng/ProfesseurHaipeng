@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { defaultContent } from "./defaultContent"
 import { buildGuideMessages, buildGuideSystemPrompt, GUIDE_GREETING } from "./guidePrompt"
 import { flattenKnowledge } from "./knowledge"
-import { minimaxEnvFrom } from "./chatCompletions"
+import { minimaxEnvFrom, stripModelThink } from "./chatCompletions"
 
 describe("guide system prompt", () => {
   const prompt = buildGuideSystemPrompt(flattenKnowledge(defaultContent))
@@ -48,5 +48,11 @@ describe("minimax env", () => {
     const env = minimaxEnvFrom({ MINIMAX_API_KEY: "sk-test" })
     expect(env?.baseUrl).toBe("https://api.minimax.io/v1")
     expect(env?.model).toBe("MiniMax-Text-01")
+  })
+})
+
+describe("stripModelThink", () => {
+  it("drops MiniMax thinking traces before showing a reply", () => {
+    expect(stripModelThink("<think>内部推理</think>\n水稻可以施用。")).toBe("水稻可以施用。")
   })
 })
