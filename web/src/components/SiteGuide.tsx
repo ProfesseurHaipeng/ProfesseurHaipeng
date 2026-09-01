@@ -345,7 +345,7 @@ export function SiteGuide() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const showStarters = stage === "live" && !typing && !turns.some((item) => item.role === "user")
+  const showStarters = stage === "live" && advisor === "lin" && !typing && !turns.some((item) => item.role === "user")
   const showEscalate = stage === "live" && advisor === "lin"
   const ui = UI_TEXT[lang]
   const statusLabel =
