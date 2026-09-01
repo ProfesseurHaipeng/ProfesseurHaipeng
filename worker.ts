@@ -1,5 +1,5 @@
 import { defaultContent } from "./web/src/cms/defaultContent"
-import { buildGreeting, chinesePlace } from "./web/src/cms/greeting"
+import { buildGreeting, buildGreetingEn, chinesePlace, englishPlace, visitorLang } from "./web/src/cms/greeting"
 import { resolveGuideReply } from "./web/src/cms/guideRuntime"
 import { flattenKnowledge } from "./web/src/cms/knowledge"
 import type { GuideMessage } from "./web/src/cms/guidePrompt"
@@ -54,8 +54,10 @@ export default {
       }
       if (body.greet === true) {
         const cf = (request as Request & { cf?: { country?: string; region?: string } }).cf
-        const place = chinesePlace(cf?.country, cf?.region)
-        return json({ reply: buildGreeting(place), source: "greeting" })
+        const lang = visitorLang(cf?.country)
+        const reply =
+          lang === "en" ? buildGreetingEn(englishPlace(cf?.country)) : buildGreeting(chinesePlace(cf?.country, cf?.region))
+        return json({ reply, source: "greeting", lang })
       }
       const history = asMessages(body.messages)
       if (!history.some((item) => item.role === "user")) return json({ error: "empty" }, 400)

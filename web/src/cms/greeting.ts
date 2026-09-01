@@ -66,3 +66,35 @@ export function buildGreeting(place: string | null): string {
 
 您这边主要关注哪类作物或者哪个区域？我按您的情况直接讲重点。`
 }
+
+export type VisitorLang = "zh" | "en"
+
+/** Mainland, HK, Macao, and Taiwan default to Chinese; everywhere else English. */
+export function visitorLang(countryCode?: string | null): VisitorLang {
+  const code = (countryCode || "").trim().toUpperCase()
+  if (!code) return "zh"
+  return code === "CN" || code === "HK" || code === "MO" || code === "TW" ? "zh" : "en"
+}
+
+export function englishPlace(countryCode?: string | null): string | null {
+  const code = (countryCode || "").trim().toUpperCase()
+  if (!code) return null
+  try {
+    const name = new Intl.DisplayNames(["en"], { type: "region" }).of(code)
+    if (name && name !== code) return name
+  } catch {
+    /* runtimes without region names */
+  }
+  return null
+}
+
+export function buildGreetingEn(place: string | null): string {
+  const opener = place
+    ? `Hi, welcome. I can see you're visiting from ${place}. I'm Lin, the product advisor here.`
+    : "Hi, welcome. I'm Lin, the product advisor here."
+  return `${opener}
+
+Quick intro: we turn natural volcanic ash from Mount Pinatubo in the Philippines into verifiable soil-improvement and eco-agriculture inputs, working with agri groups, fertilizer makers, and large-scale growers.
+
+What brings you here? Tell me your crop or region and I'll get straight to what matters for you.`
+}

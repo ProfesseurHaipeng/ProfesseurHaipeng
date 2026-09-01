@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { splitReplyIntoChunks, typingDelayFor } from "./chunks"
-import { buildGreeting, chinesePlace } from "./greeting"
+import { buildGreeting, buildGreetingEn, chinesePlace, englishPlace, visitorLang } from "./greeting"
 
 describe("splitReplyIntoChunks", () => {
   it("sends paragraphs as separate bubbles", () => {
@@ -48,5 +48,22 @@ describe("greeting", () => {
     const greeting = buildGreeting(null)
     expect(greeting).toContain("皮纳图博火山灰")
     expect(greeting).not.toContain("访问")
+  })
+
+  it("routes Chinese regions to zh and everyone else to en", () => {
+    expect(visitorLang("CN")).toBe("zh")
+    expect(visitorLang("HK")).toBe("zh")
+    expect(visitorLang("TW")).toBe("zh")
+    expect(visitorLang("US")).toBe("en")
+    expect(visitorLang("PH")).toBe("en")
+    expect(visitorLang(null)).toBe("zh")
+  })
+
+  it("greets overseas visitors in English with their country", () => {
+    expect(englishPlace("US")).toBe("United States")
+    const greeting = buildGreetingEn("United States")
+    expect(greeting).toContain("visiting from United States")
+    expect(greeting).toContain("Pinatubo")
+    expect(splitReplyIntoChunks(greeting).length).toBe(3)
   })
 })

@@ -1,6 +1,6 @@
 import type { Config, Context } from "@netlify/functions"
 import { defaultContent } from "../../src/cms/defaultContent"
-import { buildGreeting, chinesePlace } from "../../src/cms/greeting"
+import { buildGreeting, buildGreetingEn, chinesePlace, englishPlace, visitorLang } from "../../src/cms/greeting"
 import { resolveGuideReply } from "../../src/cms/guideRuntime"
 import { flattenKnowledge } from "../../src/cms/knowledge"
 import { newLeadId, type Lead } from "../../src/cms/leads"
@@ -102,21 +102,31 @@ export default async (req: Request, context: Context) => {
 
   if (body.greet === true) {
     const geo = context.geo
-    const place = chinesePlace(geo?.country?.code, geo?.subdivision?.name)
-    return json({ reply: buildGreeting(place), source: "greeting" })
+    const lang = visitorLang(geo?.country?.code)
+    const reply =
+      lang === "en"
+        ? buildGreetingEn(englishPlace(geo?.country?.code))
+        : buildGreeting(chinesePlace(geo?.country?.code, geo?.subdivision?.name))
+    return json({ reply, source: "greeting", lang })
   }
 
   const history = asMessages(body.messages)
   if (!history.some((item) => item.role === "user")) return json({ error: "empty" }, 400)
 
   const content = await publishedContent()
-  const result = await resolveGuideReply(history, flattenKnowledge(content), envBag())
+  const geo = context.geo
+  const lang = visitorLang(geo?.country?.code)
+  const placeZh = chinesePlace(geo?.country?.code, geo?.subdivision?.name)
+  const langHint =
+    lang === "en"
+      ? `Visitor location: ${englishPlace(geo?.country?.code) || "overseas"}. Overseas visitor — reply in natural English unless the customer writes in Chinese.`
+      : `访客位置：${placeZh || "国内"}。中国访客，默认用简体中文回复；客户换语言时跟着换。`
+  const result = await resolveGuideReply(history, flattenKnowledge(content), envBag(), langHint)
   let ticketFiled = false
   if (result.ticket) {
-    const geo = context.geo
-    ticketFiled = await fileTicket(result.ticket, chinesePlace(geo?.country?.code, geo?.subdivision?.name))
+    ticketFiled = await fileTicket(result.ticket, placeZh)
   }
-  return json({ reply: result.reply, source: result.source, ticket: ticketFiled })
+  return json({ reply: result.reply, source: result.source, ticket: ticketFiled, lang })
 }
 
 export const config: Config = {

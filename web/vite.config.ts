@@ -82,7 +82,7 @@ function localGuide(): Plugin {
           if (body.greet === true) {
             res.statusCode = 200
             res.setHeader("Content-Type", "application/json")
-            res.end(JSON.stringify({ reply: greetingMod.buildGreeting(null), source: "greeting" }))
+            res.end(JSON.stringify({ reply: greetingMod.buildGreeting(null), source: "greeting", lang: "zh" }))
             return
           }
           const messages = Array.isArray(body.messages) ? body.messages : []

@@ -1,14 +1,33 @@
 import { useEffect, useRef, useState } from "react"
 import { useSiteContent } from "../cms/ContentContext"
 import { CHUNK_GAP_MS, splitReplyIntoChunks, typingDelayFor } from "../cms/chunks"
-import { buildGreeting } from "../cms/greeting"
-import { GUIDE_STARTERS } from "../cms/guidePrompt"
+import { buildGreeting, type VisitorLang } from "../cms/greeting"
+import { GUIDE_STARTERS, GUIDE_STARTERS_EN } from "../cms/guidePrompt"
 import { flattenKnowledge, localGuideAnswer } from "../cms/knowledge"
 import { withBase } from "../lib/asset"
 
 type ChatRole = "user" | "assistant"
 type ChatTurn = { role: ChatRole; content: string }
 type Stage = "idle" | "connecting" | "live"
+
+const UI_TEXT = {
+  zh: {
+    title: "在线咨询",
+    connecting: "正在为您接通产品顾问…",
+    online: "产品顾问 · 在线",
+    connectingLog: "正在接入",
+    placeholder: "描述你的问题…",
+    starters: GUIDE_STARTERS,
+  },
+  en: {
+    title: "Live chat",
+    connecting: "Connecting you to an advisor…",
+    online: "Product advisor · Online",
+    connectingLog: "Connecting",
+    placeholder: "Type your message…",
+    starters: GUIDE_STARTERS_EN,
+  },
+} as const
 
 function guideEndpoint() {
   const remote = import.meta.env.VITE_GUIDE_URL
@@ -57,6 +76,7 @@ export function SiteGuide() {
   const [open, setOpen] = useState(false)
   const [closing, setClosing] = useState(false)
   const [stage, setStage] = useState<Stage>("idle")
+  const [lang, setLang] = useState<VisitorLang>("zh")
   const [input, setInput] = useState("")
   const [typing, setTyping] = useState(false)
   const [turns, setTurns] = useState<ChatTurn[]>([])
@@ -157,17 +177,20 @@ export function SiteGuide() {
     void processRounds()
   }
 
-  const fetchGreeting = async () => {
+  const fetchGreeting = async (): Promise<{ text: string; lang: VisitorLang }> => {
     try {
       const response = await fetch(guideEndpoint(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ greet: true }),
       })
-      const payload = (await response.json()) as { reply?: string }
-      return payload.reply?.trim() || buildGreeting(null)
+      const payload = (await response.json()) as { reply?: string; lang?: string }
+      return {
+        text: payload.reply?.trim() || buildGreeting(null),
+        lang: payload.lang === "en" ? "en" : "zh",
+      }
     } catch {
-      return buildGreeting(null)
+      return { text: buildGreeting(null), lang: "zh" }
     }
   }
 
@@ -183,8 +206,9 @@ export function SiteGuide() {
       const elapsed = Date.now() - startedAt
       if (elapsed < minWait) await sleep(minWait - elapsed)
       if (!mounted.current) return
+      setLang(greeting.lang)
       setStage("live")
-      await deliverReply(greeting)
+      await deliverReply(greeting.text)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -221,7 +245,8 @@ export function SiteGuide() {
   }, [open])
 
   const showStarters = stage === "live" && !typing && !turns.some((item) => item.role === "user")
-  const statusLabel = stage === "connecting" ? "正在为您接通产品顾问…" : "产品顾问 · 在线"
+  const ui = UI_TEXT[lang]
+  const statusLabel = stage === "connecting" ? ui.connecting : ui.online
 
   return (
     <div className={`site-guide ${open && !closing ? "is-open" : ""}`}>
@@ -231,7 +256,7 @@ export function SiteGuide() {
             <div className="site-guide__identity">
               <span className="site-guide__avatar" aria-hidden="true" />
               <div>
-                <p className="site-guide__title">在线咨询</p>
+                <p className="site-guide__title">{ui.title}</p>
                 <p className={`site-guide__status${stage === "connecting" ? " is-connecting" : ""}`}>
                   <span className="site-guide__live" aria-hidden="true" />
                   {statusLabel}
@@ -245,7 +270,8 @@ export function SiteGuide() {
           <div className="site-guide__log" ref={scroller}>
             {stage === "connecting" ? (
               <p className="site-guide__connect" aria-live="polite">
-                正在接入<span className="site-guide__connect-dots"><span /><span /><span /></span>
+                {ui.connectingLog}
+                <span className="site-guide__connect-dots"><span /><span /><span /></span>
               </p>
             ) : null}
             {turns.map((turn, index) => (
@@ -267,7 +293,7 @@ export function SiteGuide() {
             ) : null}
             {showStarters ? (
               <div className="site-guide__hints">
-                {GUIDE_STARTERS.map((item) => (
+                {ui.starters.map((item) => (
                   <button key={item} type="button" onClick={() => send(item)}>
                     {item}
                   </button>
@@ -290,7 +316,7 @@ export function SiteGuide() {
               ref={inputRef}
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="描述你的问题…"
+              placeholder={ui.placeholder}
               maxLength={500}
               autoComplete="off"
             />

@@ -15,6 +15,7 @@ export async function resolveGuideReply(
   history: GuideMessage[],
   knowledge: string,
   env: GuideEnvBag,
+  extraSystem?: string,
 ): Promise<GuideResult> {
   // Ticket markers are a model-only protocol; never accept them from users.
   const cleanedHistory = history.map((item) =>
@@ -22,7 +23,7 @@ export async function resolveGuideReply(
   )
   const lastUser = [...cleanedHistory].reverse().find((item) => item.role === "user")
   const fallback = lastUser ? localGuideAnswer(lastUser.content, knowledge) : "请先问一个具体问题。"
-  const messages = buildGuideMessages(cleanedHistory, knowledge)
+  const messages = buildGuideMessages(cleanedHistory, knowledge, extraSystem)
 
   const minimax = minimaxEnvFrom(env)
   if (minimax) {

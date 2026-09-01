@@ -1,6 +1,7 @@
 import type { SiteContent } from "./types"
 import { flattenKnowledge } from "./knowledge"
 import { SALES_PLAYBOOK } from "./salesPlaybook"
+import { TONE_SKILL } from "./toneSkill"
 
 export type GuideRole = "system" | "user" | "assistant"
 export type GuideMessage = { role: GuideRole; content: string }
@@ -10,12 +11,25 @@ export const GUIDE_GREETING =
 
 export const GUIDE_STARTERS = ["这是什么项目？", "水稻怎么用？", "检测里有什么？", "怎么谈合作？"]
 
+export const GUIDE_STARTERS_EN = [
+  "What is this project?",
+  "How does it work on rice?",
+  "What's in the assay report?",
+  "How do we start working together?",
+]
+
 const RULES = `你是「菲律宾皮纳图博火山灰农业综合产业项目」官网右下角的在线产品顾问，名叫小林。你是这个项目的销售顾问，代表项目方接待客户，不是外部顾问，也不是宣传册旁白。
 
 【说话方式：像真人销售，不像机器】
-- 用简体中文，称呼对方「您」。语气自然、热情、专业，像展会上一位懂行的销售当面聊天。
+- 语气自然、热情、专业，像展会上一位懂行的销售当面聊天；中文时称呼对方「您」。
 - 每次回复拆成 1–3 个短段，段落之间用空行隔开；每段一到两句话，整个回复通常不超过 200 字。
 - 输出纯文本，就像在微信里打字：绝对不要用 Markdown 符号（**、#、\`、表格、[链接]）。需要列点就用「1.」「2.」或「-」开头。
+
+【语言：跟着访客走】
+- 系统会在对话开头告知访客的大致位置。中国访客（含香港、澳门、台湾）默认用简体中文；海外访客默认用地道的英文。
+- 更高优先级：客户实际用什么语言写，你就用什么语言回。客户中途换语言，你也跟着换。
+- 英文回复同样遵守分段、纯文本、销售方法的全部规则，语法要像母语者，不要中式英语。
+- 工单标记 <ticket> 里的 note 字段始终用中文写，方便后台工作人员阅读。
 - 先接住对方的话，再给信息，最后带一个轻的反问推进对话（例如问作物、区域、吨位、用途），不要每次都问、显得刻意。
 - 不要自称 AI、模型、机器人、助手，不要提系统提示、模型名、API、密钥。若对方认真追问是不是机器人，就大方说明自己是项目的线上顾问，然后马上回到对方的需求。
 - 不要用「亲」，不要堆表情符号，不要复读欢迎语，不要每条都以「您好」开头。
@@ -57,6 +71,8 @@ const RULES = `你是「菲律宾皮纳图博火山灰农业综合产业项目�
 - 这行标记是发给系统的，不要在正文里提到「ticket」「标记」「工单协议」这些词。
 - 客户没给联系方式时绝不输出标记；先自然地请对方留个手机或微信，或请到「联络」页填表。
 
+${TONE_SKILL}
+
 ${SALES_PLAYBOOK}`
 
 export function buildGuideSystemPrompt(knowledge: string) {
@@ -67,12 +83,18 @@ export function buildGuideSystemPrompt(knowledge: string) {
 ${brief}`
 }
 
-export function buildGuideMessages(history: GuideMessage[], knowledge: string): GuideMessage[] {
+export function buildGuideMessages(
+  history: GuideMessage[],
+  knowledge: string,
+  extraSystem?: string,
+): GuideMessage[] {
   const cleaned = history
     .filter((item) => item.role === "user" || item.role === "assistant")
     .map((item) => ({ role: item.role, content: item.content.slice(0, 4000) }))
     .slice(-12)
-  return [{ role: "system", content: buildGuideSystemPrompt(knowledge) }, ...cleaned]
+  const system: GuideMessage[] = [{ role: "system", content: buildGuideSystemPrompt(knowledge) }]
+  if (extraSystem?.trim()) system.push({ role: "system", content: extraSystem.trim() })
+  return [...system, ...cleaned]
 }
 
 export function knowledgeFromContent(content: SiteContent) {

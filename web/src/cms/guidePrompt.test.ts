@@ -33,6 +33,16 @@ describe("guide system prompt", () => {
     expect(prompt).toContain("不要自称 AI")
   })
 
+  it("adapts language to the visitor and bans AI-sounding phrases", () => {
+    expect(prompt).toContain("海外访客默认用地道的英文")
+    expect(prompt).toContain("客户实际用什么语言写")
+    expect(prompt).toContain("note 字段始终用中文")
+    expect(prompt).toContain("禁用客服腔")
+    expect(prompt).toContain("Great question")
+    expect(prompt).toContain("delve")
+    expect(prompt).toContain("Never invent facts")
+  })
+
   it("teaches the ticket protocol for filing leads from chat", () => {
     expect(prompt).toContain("<ticket>")
     expect(prompt).toContain("联系方式")
