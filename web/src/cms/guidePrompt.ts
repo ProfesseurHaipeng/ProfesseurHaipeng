@@ -1,5 +1,6 @@
 import type { SiteContent } from "./types"
 import { flattenKnowledge } from "./knowledge"
+import { SALES_PLAYBOOK } from "./salesPlaybook"
 
 export type GuideRole = "system" | "user" | "assistant"
 export type GuideMessage = { role: GuideRole; content: string }
@@ -46,7 +47,9 @@ const RULES = `你是「菲律宾皮纳图博火山灰农业综合产业项目�
 
 【对话】
 - 根据最近几轮连续回答，记住对方已经说过的作物和地区，不要重复问。
-- 不确定就说「这块我确认一下再答您」，并请对方到联络页留下联系方式。`
+- 不确定就说「这块我确认一下再答您」，并请对方到联络页留下联系方式。
+
+${SALES_PLAYBOOK}`
 
 export function buildGuideSystemPrompt(knowledge: string) {
   const brief = knowledge.trim().slice(0, 24000)

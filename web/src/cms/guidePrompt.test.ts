@@ -33,6 +33,18 @@ describe("guide system prompt", () => {
     expect(prompt).toContain("不要自称 AI")
   })
 
+  it("carries the sales playbook: stages, SPIN discovery, objections, advances", () => {
+    expect(prompt).toContain("先判断阶段")
+    expect(prompt).toContain("需求挖掘")
+    expect(prompt).toContain("现状")
+    expect(prompt).toContain("难点")
+    expect(prompt).toContain("回报")
+    expect(prompt).toContain("先认同，再给依据")
+    expect(prompt).toContain("已有供应商")
+    expect(prompt).toContain("不逼单")
+    expect(prompt).toContain("合格线索")
+  })
+
   it("puts the system prompt first and keeps the latest turns", () => {
     const messages = buildGuideMessages(
       [
