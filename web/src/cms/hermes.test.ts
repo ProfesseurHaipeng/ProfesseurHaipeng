@@ -38,7 +38,7 @@ describe("hermes prompt", () => {
     expect(messages[0]?.content).toContain("Hermes")
     expect(messages[0]?.content).toContain("小林")
     expect(messages[0]?.content).toContain("<ticket>")
-    expect(messages[0]?.content).not.toContain("NAS")
+    expect(messages[0]?.content).toContain("不要提 NAS")
     expect(messages.at(-1)?.content).toContain("水稻")
   })
 
