@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useState } from "react"
+import { lazy, Suspense, useEffect, useMemo, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import { PageHero } from "../components/PageHero"
 import { SplitPanel } from "../components/SplitPanel"
 import { useSiteContent } from "../cms/ContentContext"
+
+const RegionMap = lazy(() =>
+  import("../components/RegionMap").then((mod) => ({ default: mod.RegionMap })),
+)
 
 export function UsePage() {
   const { content } = useSiteContent()
@@ -129,7 +133,10 @@ export function UsePage() {
               {group.insight ? <p className="callout">{group.insight}</p> : null}
               <div className="tile-grid tile-grid--3">
                 {group.regions.map((region) => (
-                  <article key={region.id} className="tile">
+                  <article key={region.id} className="tile tile--region">
+                    <Suspense fallback={<div className="region-map region-map--loading" />}>
+                      <RegionMap region={region.name} />
+                    </Suspense>
                     <h3>{region.name}</h3>
                     <p>{region.soil}</p>
                     <p className="fine">作物：{region.crops}</p>

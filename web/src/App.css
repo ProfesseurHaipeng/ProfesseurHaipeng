@@ -1405,6 +1405,51 @@ h3 {
   border: 0;
 }
 
+.region-map {
+  margin: 0 0 0.45rem;
+}
+
+.region-map--loading {
+  aspect-ratio: 380 / 370;
+  background: #f2f3fa;
+  border-radius: 0.6rem;
+}
+
+.region-map svg {
+  display: block;
+  width: 100%;
+  background: #f7f8fc;
+  border-radius: 0.6rem;
+}
+
+.region-map figcaption {
+  margin-top: 0.4rem;
+  color: var(--faint);
+  font-size: 0.76rem;
+  letter-spacing: 0.02em;
+}
+
+.region-map__ping {
+  animation: region-ping 2.2s var(--ease-out) infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+@keyframes region-ping {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  70% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
 .location-map {
   margin: 0 0 1rem;
 }
