@@ -1,6 +1,13 @@
 import type { Config, Context } from "@netlify/functions"
 import { defaultContent } from "../../src/cms/defaultContent"
-import { buildGreeting, buildGreetingEn, chinesePlace, englishPlace, visitorLang } from "../../src/cms/greeting"
+import {
+  buildGreeting,
+  buildGreetingEn,
+  chinesePlace,
+  englishPlace,
+  replyLang,
+  visitorLang,
+} from "../../src/cms/greeting"
 import { resolveGuideReply } from "../../src/cms/guideRuntime"
 import { flattenKnowledge } from "../../src/cms/knowledge"
 import { newLeadId, type Lead } from "../../src/cms/leads"
@@ -115,12 +122,15 @@ export default async (req: Request, context: Context) => {
 
   const content = await publishedContent()
   const geo = context.geo
-  const lang = visitorLang(geo?.country?.code)
+  const geoLang = visitorLang(geo?.country?.code)
   const placeZh = chinesePlace(geo?.country?.code, geo?.subdivision?.name)
+  const lastUser = [...history].reverse().find((item) => item.role === "user")
+  const lang = replyLang(geoLang, lastUser?.content)
+  const place = lang === "en" ? englishPlace(geo?.country?.code) || "overseas" : placeZh || "国内"
   const langHint =
     lang === "en"
-      ? `Visitor location: ${englishPlace(geo?.country?.code) || "overseas"}. Overseas visitor — reply in natural English unless the customer writes in Chinese.`
-      : `访客位置：${placeZh || "国内"}。中国访客，默认用简体中文回复；客户换语言时跟着换。`
+      ? `Visitor location: ${place}. The customer's latest message is in English. You MUST answer this turn in natural English.`
+      : `访客位置：${place}。客户最后一条消息是中文。本轮必须全程用简体中文回答，不要夹英文段落。`
   const result = await resolveGuideReply(history, flattenKnowledge(content), envBag(), langHint)
   let ticketFiled = false
   if (result.ticket) {

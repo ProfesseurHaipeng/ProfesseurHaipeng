@@ -76,6 +76,19 @@ export function visitorLang(countryCode?: string | null): VisitorLang {
   return code === "CN" || code === "HK" || code === "MO" || code === "TW" ? "zh" : "en"
 }
 
+/** Language of one message: CJK anywhere wins, otherwise Latin letters mean English. */
+export function detectMessageLang(text: string): VisitorLang | null {
+  if (/[\u3400-\u9fff\uf900-\ufaff]/.test(text)) return "zh"
+  if (((text.match(/[a-z]/gi) || []).length) > 1) return "en"
+  return null
+}
+
+/** The language this turn must be answered in: the customer's own language
+ *  beats the geo default every time. */
+export function replyLang(geoLang: VisitorLang, lastUserText: string | null | undefined): VisitorLang {
+  return detectMessageLang(lastUserText || "") ?? geoLang
+}
+
 export function englishPlace(countryCode?: string | null): string | null {
   const code = (countryCode || "").trim().toUpperCase()
   if (!code) return null

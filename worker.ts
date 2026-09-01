@@ -1,5 +1,12 @@
 import { defaultContent } from "./web/src/cms/defaultContent"
-import { buildGreeting, buildGreetingEn, chinesePlace, englishPlace, visitorLang } from "./web/src/cms/greeting"
+import {
+  buildGreeting,
+  buildGreetingEn,
+  chinesePlace,
+  englishPlace,
+  replyLang,
+  visitorLang,
+} from "./web/src/cms/greeting"
 import { resolveGuideReply } from "./web/src/cms/guideRuntime"
 import { flattenKnowledge } from "./web/src/cms/knowledge"
 import type { GuideMessage } from "./web/src/cms/guidePrompt"
@@ -61,6 +68,13 @@ export default {
       }
       const history = asMessages(body.messages)
       if (!history.some((item) => item.role === "user")) return json({ error: "empty" }, 400)
+      const cf = (request as Request & { cf?: { country?: string } }).cf
+      const lastUser = [...history].reverse().find((item) => item.role === "user")
+      const turnLang = replyLang(visitorLang(cf?.country), lastUser?.content)
+      const workerHint =
+        turnLang === "en"
+          ? "The customer's latest message is in English. You MUST answer this turn in natural English."
+          : "客户最后一条消息是中文。本轮必须全程用简体中文回答。"
       const result = await resolveGuideReply(history, flattenKnowledge(defaultContent), {
         MINIMAX_API_KEY: env.MINIMAX_API_KEY,
         MINIMAX_API_BASE: env.MINIMAX_API_BASE,
@@ -69,7 +83,7 @@ export default {
         ASH_AI_BASE_URL: env.ASH_AI_BASE_URL,
         ASH_AI_API_KEY: env.ASH_AI_API_KEY,
         ASH_AI_MODEL: env.ASH_AI_MODEL,
-      })
+      }, workerHint)
       // Workers have no lead store; drop the ticket but keep the clean reply.
       return json({ reply: result.reply, source: result.source })
     }

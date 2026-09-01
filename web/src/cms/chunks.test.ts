@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest"
 import { splitReplyIntoChunks, typingDelayFor } from "./chunks"
-import { buildGreeting, buildGreetingEn, chinesePlace, englishPlace, visitorLang } from "./greeting"
+import {
+  buildGreeting,
+  buildGreetingEn,
+  chinesePlace,
+  detectMessageLang,
+  englishPlace,
+  replyLang,
+  visitorLang,
+} from "./greeting"
 
 describe("splitReplyIntoChunks", () => {
   it("sends paragraphs as separate bubbles", () => {
@@ -65,5 +73,15 @@ describe("greeting", () => {
     expect(greeting).toContain("visiting from United States")
     expect(greeting).toContain("Pinatubo")
     expect(splitReplyIntoChunks(greeting).length).toBe(3)
+  })
+
+  it("the customer's own language beats the geo default", () => {
+    expect(detectMessageLang("我们没什么产品")).toBe("zh")
+    expect(detectMessageLang("How does it work?")).toBe("en")
+    expect(detectMessageLang("50-100?")).toBeNull()
+    expect(replyLang("en", "我们没什么产品")).toBe("zh")
+    expect(replyLang("zh", "Do you ship to Manila?")).toBe("en")
+    expect(replyLang("en", "50?")).toBe("en")
+    expect(replyLang("zh", null)).toBe("zh")
   })
 })
