@@ -1085,8 +1085,19 @@
   color: #1d1d1f;
 }
 
+.hermes-apple .hermes-grok__body {
+  grid-template-columns: minmax(28rem, 40rem) minmax(0, 1fr);
+}
+
 .hermes-apple .hermes-grok__chat {
+  order: 2;
   background: #fff;
+  border-right: 0;
+  border-left: 1px solid var(--hg-line);
+}
+
+.hermes-apple .hermes-panel {
+  order: 1;
 }
 
 .hermes-apple .hermes-grok__bubble--staff p {
@@ -1372,8 +1383,8 @@
     border: 0;
     min-height: calc(100vh - 12rem);
   }
-  .hermes-grok__body--chat .hermes-grok__chat { display: grid; }
-  .hermes-grok__body--board .hermes-panel { display: grid; }
+  .hermes-grok__body--chat .hermes-grok__chat { display: grid; order: 0; }
+  .hermes-grok__body--board .hermes-panel { display: grid; order: 0; }
 }
 
 @media (max-width: 860px) {

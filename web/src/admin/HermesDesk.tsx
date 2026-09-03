@@ -195,7 +195,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   const [input, setInput] = useState("")
   const [query, setQuery] = useState("")
   const [focus, setFocus] = useState<BoardFocus>({ kind: "home" })
-  const [pane, setPane] = useState<MobilePane>("chat")
+  const [pane, setPane] = useState<MobilePane>("board")
   const [pending, setPending] = useState<PendingImage[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [folds, setFolds] = useState<Record<string, boolean>>({
