@@ -47,6 +47,42 @@ export const JOB_LABEL: Record<InquiryJobStatus, string> = {
   paused: "已暂停",
 }
 
+export const INQUIRY_RUN = [
+  { key: "collect", label: "取条件" },
+  { key: "source", label: "找来源" },
+  { key: "verify", label: "核实" },
+  { key: "draft", label: "起草稿" },
+] as const
+
+export type InquiryRunFill = "done" | "now" | "wait"
+
+export function inquiryRunIndex(status: InquiryJobStatus, targetCount: number) {
+  if (status === "drafting") return 3
+  if (status === "review") return 2
+  if (status === "searching") return 1
+  if (status === "paused") return targetCount > 0 ? 1 : 0
+  if (targetCount > 0) return 0
+  return -1
+}
+
+export function inquiryStepFill(status: InquiryJobStatus, targetCount: number, step: number): InquiryRunFill {
+  const index = inquiryRunIndex(status, targetCount)
+  if (index < 0 || step < 0) return "wait"
+  if (status === "idle") return step <= index ? "done" : "wait"
+  if (step < index) return "done"
+  if (step === index) return "now"
+  return "wait"
+}
+
+export function inquiryRunHint(status: InquiryJobStatus, targetCount: number) {
+  if (status === "paused") return "已暂停。同事再说一声再继续。"
+  if (status === "drafting") return "来源已核实，正在起草询单。"
+  if (status === "review") return "正在核实来源，只收可查证的厂商。"
+  if (status === "searching") return "正在找可查证的来源，没有来源不建档。"
+  if (targetCount > 0) return "条件已记下，还没开始找。"
+  return "先设定弊端或对口类型。"
+}
+
 export function emptyInquiryJob(): InquiryJob {
   return { status: "idle", brief: "", updatedAt: "" }
 }
@@ -219,7 +255,8 @@ export function inquiryCoachExtra(state: InquiryState) {
     "- 同事设定要找的厂商弊端或对口类型。你按这些条件找真实厂商。",
     "- 没有真实来源就不要写厂商。不要编公司名、电话、邮箱、网址。",
     "- 找到的每一条必须带 source。询单只许起草，不许群发，不许写 sent。",
-    "- 广告投放以后再做。更新寻找结果时另起一行：",
+    "- 广告投放以后再做。看板进度是：取条件 → 找来源 → 核实 → 起草稿。开始找写 searching，核实时 review，起草时 drafting。",
+    "- 更新寻找结果时另起一行：",
     '<inquiry>{"job":{"status":"review","brief":"本轮条件"},"findings":[{"org":"真实厂名","place":"地区","pain":"弊端","source":"来源","outreach":"draft","draft":"询单草稿"}]}</inquiry>',
     "",
     `【要找的弊端 / 对口类型】\n${targetLines}`,

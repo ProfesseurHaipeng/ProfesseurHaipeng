@@ -7,6 +7,9 @@ import {
   extractInquiryUpdates,
   hydrateInquiryState,
   inquiryCoachExtra,
+  inquiryRunHint,
+  inquiryRunIndex,
+  inquiryStepFill,
   sanitizeFinding,
 } from "./inquiryDesk"
 
@@ -63,5 +66,16 @@ describe("inquiry module on the desk", () => {
     expect(state.findings).toHaveLength(1)
     expect(state.findings[0]?.outreach).toBe("draft")
     expect(state.job.status).toBe("searching")
+  })
+
+  it("maps the same four-step run the board shows", () => {
+    expect(inquiryRunIndex("idle", 0)).toBe(-1)
+    expect(inquiryRunIndex("idle", 2)).toBe(0)
+    expect(inquiryStepFill("idle", 2, 0)).toBe("done")
+    expect(inquiryStepFill("searching", 2, 1)).toBe("now")
+    expect(inquiryStepFill("review", 2, 1)).toBe("done")
+    expect(inquiryStepFill("review", 2, 2)).toBe("now")
+    expect(inquiryRunHint("review", 2)).toContain("核实来源")
+    expect(inquiryRunHint("idle", 0)).toContain("先设定")
   })
 })
