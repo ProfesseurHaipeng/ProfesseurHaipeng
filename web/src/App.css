@@ -2432,68 +2432,34 @@ h3 {
   }
 
   .photo-strip {
-    display: flex;
-    grid-template-columns: none;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    scroll-padding-inline: var(--space);
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow: visible;
+    scroll-snap-type: none;
     gap: 0.7rem;
-    margin-inline: calc(var(--space) * -1);
-    padding: 0.15rem var(--space) 0.55rem;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-
-  .photo-strip::-webkit-scrollbar {
-    display: none;
+    margin-inline: 0;
+    padding: 0.15rem 0 0.55rem;
   }
 
   .photo-strip__link {
-    flex: 0 0 min(72vw, 16.5rem);
-    scroll-snap-align: start;
+    flex: none;
+    width: 100%;
+    max-width: 100%;
   }
 
   .filter-row,
-  .tabs {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    margin-inline: calc(var(--space) * -1);
-    padding-inline: var(--space);
-  }
-
-  .filter-row::-webkit-scrollbar,
-  .tabs::-webkit-scrollbar {
-    display: none;
+  .tabs,
+  .chip-row {
+    flex-wrap: wrap;
+    overflow: visible;
+    scroll-snap-type: none;
+    margin-inline: 0;
+    padding-inline: 0;
+    gap: 0.45rem;
   }
 
   .filter-row .chip,
-  .tabs .chip {
-    flex: 0 0 auto;
-    scroll-snap-align: start;
-    min-height: 2.6rem;
-  }
-
-  .tabs .chip {
-    padding: 0.75rem 0.85rem 0.75rem 0;
-    margin-right: 0.85rem;
-  }
-
-  .chip-row {
-    margin-inline: calc(var(--space) * -1);
-    padding-inline: var(--space);
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .chip-row::-webkit-scrollbar {
-    display: none;
-  }
-
+  .tabs .chip,
   .chip-row li,
   .chip-row a,
   .chip-row--static li {
@@ -2502,6 +2468,21 @@ h3 {
     min-height: 2.6rem;
     display: inline-flex;
     align-items: center;
+    max-width: 100%;
+  }
+
+  .tabs .chip {
+    padding: 0.55rem 0.85rem;
+    margin-right: 0;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 999px;
+    border-bottom: 1.5px solid var(--line-strong);
+  }
+
+  .tabs .chip--on {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
   }
 
   .note-card {
@@ -2577,8 +2558,8 @@ h3 {
   }
 
   .site-guide {
-    right: max(0.85rem, var(--safe-right));
-    bottom: max(0.85rem, var(--safe-bottom));
+    right: max(1.15rem, var(--safe-right));
+    bottom: max(1.15rem, var(--safe-bottom));
   }
 
   .site-guide.is-open {
@@ -2643,21 +2624,16 @@ h3 {
   }
 
   .site-guide__hints {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
+    flex-wrap: wrap;
+    overflow: visible;
     padding-left: 0;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .site-guide__hints::-webkit-scrollbar {
-    display: none;
   }
 
   .site-guide__hints button {
-    flex: 0 0 auto;
-    min-height: 2.4rem;
-    white-space: nowrap;
+    flex: 1 1 auto;
+    min-height: 2.6rem;
+    white-space: normal;
+    text-align: center;
   }
 
   .site-guide__toggle {
