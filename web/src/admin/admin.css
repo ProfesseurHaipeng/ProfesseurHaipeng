@@ -316,3 +316,238 @@
     flex-wrap: wrap;
   }
 }
+
+.hermes-desk {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.hermes-desk__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.hermes-desk__head h2 {
+  margin: 0 0 0.2rem;
+  font-size: 1.25rem;
+}
+
+.hermes-desk__tools {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.hermes-desk__stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.hermes-desk__stats li,
+.hermes-tag {
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.78rem;
+  background: #eceef8;
+  color: #4f5498;
+}
+
+.hermes-desk__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.hermes-desk__filters label,
+.hermes-case__edit label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: #5f5f6a;
+}
+
+.hermes-desk__filters select,
+.hermes-desk__filters input,
+.hermes-case__edit select,
+.hermes-case__edit input,
+.hermes-coach__form textarea {
+  border: 1px solid #eceef8;
+  background: #fff;
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  color: #111;
+}
+
+.hermes-desk__search {
+  flex: 1 1 12rem;
+}
+
+.hermes-desk__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(18rem, 0.9fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.hermes-desk__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.hermes-case {
+  border: 1px solid #eceef8;
+  border-radius: 0.7rem;
+  background: #fff;
+  padding: 0.85rem 1rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.hermes-case.is-human {
+  border-color: #e8d0c8;
+  background: #fffaf8;
+}
+
+.hermes-case header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.hermes-tag--human {
+  background: #fde8e2;
+  color: #8a2f1d;
+}
+
+.hermes-tag--hermes {
+  background: #fdf1de;
+  color: #8a5a17;
+}
+
+.hermes-tag--high {
+  background: #e6f6ee;
+  color: #1f6b43;
+}
+
+.hermes-tag--low {
+  background: #f3f3f5;
+  color: #6b6b74;
+}
+
+.hermes-case__note,
+.hermes-case__meta dd,
+.hermes-coach__row p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.hermes-case__meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem 0.8rem;
+}
+
+.hermes-case__meta dt {
+  font-size: 0.75rem;
+  color: #8a8a96;
+}
+
+.hermes-case__edit {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.hermes-case footer,
+.hermes-coach__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.hermes-coach {
+  border: 1px solid #eceef8;
+  border-radius: 0.7rem;
+  background: #fff;
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.65rem;
+  position: sticky;
+  top: 0.8rem;
+  min-height: 28rem;
+}
+
+.hermes-coach h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.hermes-coach__log {
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+  max-height: 22rem;
+  overflow: auto;
+}
+
+.hermes-coach__row {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.65rem;
+  background: #f6f6fa;
+}
+
+.hermes-coach__row--staff {
+  background: #111;
+  color: #fff;
+  justify-self: end;
+  max-width: 92%;
+}
+
+.hermes-coach__row time {
+  font-size: 0.72rem;
+  color: #8a8a96;
+}
+
+.hermes-coach__row--staff time {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.hermes-coach__form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+}
+
+.hermes-coach__form textarea {
+  resize: vertical;
+  min-height: 4.2rem;
+}
+
+@media (max-width: 980px) {
+  .hermes-desk__grid,
+  .hermes-case__meta,
+  .hermes-case__edit,
+  .hermes-coach__form {
+    grid-template-columns: 1fr;
+  }
+
+  .hermes-coach {
+    position: static;
+    min-height: 0;
+  }
+}

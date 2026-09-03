@@ -23,6 +23,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/hermes-desk"
+  to = "/.netlify/functions/hermes-desk"
+  status = 200
+
+[[redirects]]
   from = "/resource"
   to = "/project"
   status = 301

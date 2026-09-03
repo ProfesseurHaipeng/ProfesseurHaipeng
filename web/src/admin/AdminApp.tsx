@@ -16,6 +16,7 @@ import {
 import type { ContentModuleId, SiteContent } from "../cms/types"
 import { withBase } from "../lib/asset"
 import { ModuleEditor, moduleMeta } from "./editors"
+import { HermesDesk } from "./HermesDesk"
 import { LeadsPanel, type AdminAuth } from "./LeadsPanel"
 import "./admin.css"
 
@@ -33,7 +34,7 @@ function readStoredAuth(): AdminAuth | null {
   }
 }
 
-type AdminView = "leads" | "cms"
+type AdminView = "leads" | "hermes" | "cms"
 
 export function AdminApp() {
   const [auth, setAuth] = useState<AdminAuth | null>(() => readStoredAuth())
@@ -163,7 +164,7 @@ export function AdminApp() {
         <form onSubmit={(event) => void unlock(event)}>
           <p className="latin-kicker">Back office</p>
           <h1>网站后台</h1>
-          <p>查看前台留下的线索，管理官网文案。</p>
+          <p>查看前台线索、Hermes 工作台，管理官网文案。</p>
           <label>
             账号
             <input
@@ -208,6 +209,13 @@ export function AdminApp() {
           >
             前台线索
           </button>
+          <button
+            type="button"
+            className={view === "hermes" ? "is-active" : ""}
+            onClick={() => setView("hermes")}
+          >
+            Hermes 工作台
+          </button>
           {moduleMeta.map((item) => (
             <button
               key={item.id}
@@ -230,6 +238,8 @@ export function AdminApp() {
       <section className="admin-main">
         {view === "leads" ? (
           <LeadsPanel auth={auth} />
+        ) : view === "hermes" ? (
+          <HermesDesk auth={auth} />
         ) : (
           <>
             <header className="admin-toolbar">

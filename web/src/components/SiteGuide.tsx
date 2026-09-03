@@ -45,6 +45,19 @@ function guideEndpoint() {
   return withBase("api/guide")
 }
 
+function visitorId() {
+  const key = "ash-visitor-id"
+  try {
+    const existing = window.localStorage.getItem(key)
+    if (existing) return existing
+    const next = `vis-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    window.localStorage.setItem(key, next)
+    return next
+  } catch {
+    return ""
+  }
+}
+
 function IconClose() {
   return (
     <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
@@ -150,6 +163,7 @@ export function SiteGuide() {
           messages: history.map((item) => ({ role: item.role, content: item.content })),
           advisor: extra?.escalate ? "hermes" : advisorRef.current,
           escalate: extra?.escalate === true,
+          visitorId: visitorId(),
         }),
       })
       const payload = (await response.json()) as { reply?: string; lang?: string; advisor?: string }

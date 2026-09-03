@@ -9,7 +9,14 @@ import {
   visitorLang,
 } from "../../src/cms/greeting"
 import { resolveGuideReply } from "../../src/cms/guideRuntime"
+import { readHermesCases, writeHermesCase } from "../../src/cms/hermesBlobs"
 import { hermesHandoffHint, hermesReady, type AdvisorId } from "../../src/cms/hermes"
+import {
+  humanTakenOverReply,
+  isHumanOwned,
+  upsertFromTicket,
+  upsertFromVisit,
+} from "../../src/cms/hermesDesk"
 import { flattenKnowledge } from "../../src/cms/knowledge"
 import { newLeadId, type Lead } from "../../src/cms/leads"
 import { mergeContent } from "../../src/cms/merge"
@@ -104,7 +111,14 @@ export default async (req: Request, context: Context) => {
   if (req.method === "OPTIONS") return json({ ok: true })
   if (req.method !== "POST") return json({ error: "method" }, 405)
 
-  let body: { messages?: unknown; greet?: unknown; escalate?: unknown; advisor?: unknown; hermes?: unknown } = {}
+  let body: {
+    messages?: unknown
+    greet?: unknown
+    escalate?: unknown
+    advisor?: unknown
+    hermes?: unknown
+    visitorId?: unknown
+  } = {}
   try {
     body = (await req.json()) as {
       messages?: unknown
@@ -112,6 +126,7 @@ export default async (req: Request, context: Context) => {
       escalate?: unknown
       advisor?: unknown
       hermes?: unknown
+      visitorId?: unknown
     }
   } catch {
     return json({ error: "bad-json" }, 400)
@@ -133,8 +148,25 @@ export default async (req: Request, context: Context) => {
 
   const history = asMessages(body.messages)
   const escalate = body.escalate === true
-  const advisor: AdvisorId = body.advisor === "hermes" || escalate ? "hermes" : "lin"
+  const visitorId = typeof body.visitorId === "string" ? body.visitorId.trim().slice(0, 80) : ""
+  let advisor: AdvisorId = body.advisor === "hermes" || escalate ? "hermes" : "lin"
   if (!escalate && !history.some((item) => item.role === "user")) return json({ error: "empty" }, 400)
+
+  const deskCases = await readHermesCases()
+  if (advisor === "hermes" && isHumanOwned(deskCases, visitorId)) {
+    const geoLang = visitorLang(context.geo?.country?.code)
+    const lastUser = [...history].reverse().find((item) => item.role === "user")
+    const lang = replyLang(geoLang, lastUser?.content)
+    return json({
+      reply: humanTakenOverReply(lang),
+      source: "local",
+      ticket: false,
+      lang,
+      advisor: "hermes",
+      hermesReady: hermesReady(envBag()),
+      takenOver: true,
+    })
+  }
 
   const content = await publishedContent()
   const geo = context.geo
@@ -156,6 +188,19 @@ export default async (req: Request, context: Context) => {
   let ticketFiled = false
   if (result.ticket) {
     ticketFiled = await fileTicket(result.ticket, placeZh)
+  }
+  if (result.advisor === "hermes") {
+    const seeded = visitorId
+      ? upsertFromVisit(deskCases, visitorId, lastUser?.content || result.ticket?.note || "")
+      : { cases: deskCases, case: null }
+    const withTicket = result.ticket
+      ? upsertFromTicket(seeded.cases, result.ticket, {
+          visitorId: visitorId || undefined,
+          place: placeZh || undefined,
+          following: true,
+        })
+      : seeded
+    if (withTicket.case) await writeHermesCase(withTicket.case)
   }
   return json({
     reply: result.reply,

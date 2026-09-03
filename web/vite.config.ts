@@ -19,6 +19,7 @@ function localGuide(): Plugin {
       ...loadEnv(server.config.mode, server.config.envDir || process.cwd(), ""),
     }
     const localLeads: unknown[] = []
+    const localDesk: { cases: { id: string }[]; coach: unknown[] } = { cases: [], coach: [] }
     const staffOk = (req: IncomingMessage) => {
       const user = env.ADMIN_USER || "admin"
       const pass = env.ADMIN_PASSWORD || "ash-draft"
@@ -58,6 +59,99 @@ function localGuide(): Plugin {
         res.end(JSON.stringify({ error: "method" }))
       })()
     })
+    server.middlewares.use("/api/hermes-desk", (req: IncomingMessage, res: ServerResponse) => {
+      void (async () => {
+        res.setHeader("Content-Type", "application/json")
+        if (req.method === "OPTIONS") {
+          res.end(JSON.stringify({ ok: true }))
+          return
+        }
+        if (!staffOk(req)) {
+          res.statusCode = 401
+          res.end(JSON.stringify({ error: "unauthorized" }))
+          return
+        }
+        const deskMod = await server.ssrLoadModule("/src/cms/hermesDesk.ts")
+        const hermesMod = await server.ssrLoadModule("/src/cms/hermes.ts")
+        if (req.method === "GET") {
+          res.end(
+            JSON.stringify({
+              cases: deskMod.filterHermesCases(localDesk.cases),
+              coach: localDesk.coach,
+              hermesReady: hermesMod.hermesReady(env),
+            }),
+          )
+          return
+        }
+        if (req.method !== "POST") {
+          res.statusCode = 405
+          res.end(JSON.stringify({ error: "method" }))
+          return
+        }
+        try {
+          const raw = await readBody(req)
+          const body = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
+          const action = typeof body.action === "string" ? body.action : ""
+          const now = new Date().toISOString()
+          if (action === "sync") {
+            localDesk.cases = deskMod.importLeads(localDesk.cases, localLeads, now)
+            res.end(JSON.stringify({ cases: localDesk.cases, coach: localDesk.coach, hermesReady: hermesMod.hermesReady(env) }))
+            return
+          }
+          const id = typeof body.id === "string" ? body.id : ""
+          const current = localDesk.cases.find((item: { id?: string }) => item.id === id)
+          if (action === "takeover" || action === "resume" || action === "update") {
+            if (!current) {
+              res.statusCode = 404
+              res.end(JSON.stringify({ error: "missing" }))
+              return
+            }
+            const next =
+              action === "takeover"
+                ? deskMod.applyTakeover(current, now)
+                : action === "resume"
+                  ? deskMod.applyResume(current, now)
+                  : deskMod.patchHermesCase(current, body, now)
+            localDesk.cases = deskMod.sortHermesCases([next, ...localDesk.cases.filter((item: { id?: string }) => item.id !== next.id)])
+            res.end(JSON.stringify({ cases: localDesk.cases, case: next, hermesReady: hermesMod.hermesReady(env) }))
+            return
+          }
+          if (action === "coach") {
+            const message = typeof body.message === "string" ? body.message.trim().slice(0, 2000) : ""
+            if (!message) {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: "empty" }))
+              return
+            }
+            const staff = { id: deskMod.newCoachTurnId(), at: now, role: "staff", content: message }
+            const history = [...localDesk.coach, staff]
+            const result = await deskMod.resolveCoachReply(localDesk.cases, history, env)
+            const replyTurn = {
+              id: deskMod.newCoachTurnId(Date.now() + 1),
+              at: new Date().toISOString(),
+              role: "hermes",
+              content: result.reply,
+            }
+            localDesk.cases = result.cases
+            localDesk.coach = [...history, replyTurn]
+            res.end(
+              JSON.stringify({
+                cases: localDesk.cases,
+                coach: localDesk.coach,
+                reply: result.reply,
+                hermesReady: hermesMod.hermesReady(env),
+              }),
+            )
+            return
+          }
+          res.statusCode = 400
+          res.end(JSON.stringify({ error: "action" }))
+        } catch {
+          res.statusCode = 400
+          res.end(JSON.stringify({ error: "bad-json" }))
+        }
+      })()
+    })
     server.middlewares.use("/api/guide", (req: IncomingMessage, res: ServerResponse, next: () => void) => {
       void (async () => {
         if (req.method === "OPTIONS") {
@@ -84,6 +178,7 @@ function localGuide(): Plugin {
                 escalate?: boolean
                 advisor?: string
                 hermes?: string
+                visitorId?: string
               })
             : {}
           if (body.hermes === "status") {
@@ -103,7 +198,26 @@ function localGuide(): Plugin {
           }
           const messages = Array.isArray(body.messages) ? body.messages : []
           const escalate = body.escalate === true
+          const visitorId = typeof body.visitorId === "string" ? body.visitorId.trim() : ""
           const advisor = body.advisor === "hermes" || escalate ? "hermes" : "lin"
+          const deskMod = await server.ssrLoadModule("/src/cms/hermesDesk.ts")
+          if (advisor === "hermes" && deskMod.isHumanOwned(localDesk.cases, visitorId)) {
+            const lastUser = [...messages].reverse().find((item) => item.role === "user")
+            const turnLang = greetingMod.replyLang("zh", lastUser?.content)
+            res.statusCode = 200
+            res.setHeader("Content-Type", "application/json")
+            res.end(
+              JSON.stringify({
+                reply: deskMod.humanTakenOverReply(turnLang),
+                source: "local",
+                advisor: "hermes",
+                lang: turnLang,
+                takenOver: true,
+                hermesReady: hermesMod.hermesReady(env),
+              }),
+            )
+            return
+          }
           if (!escalate && !messages.some((item) => item.role === "user")) {
             res.statusCode = 400
             res.setHeader("Content-Type", "application/json")
@@ -138,6 +252,15 @@ function localGuide(): Plugin {
               source: "ai",
             })
             ticketFiled = true
+          }
+          if (result.advisor === "hermes") {
+            const seeded = visitorId
+              ? deskMod.upsertFromVisit(localDesk.cases, visitorId, lastUser?.content || result.ticket?.note || "")
+              : { cases: localDesk.cases, case: null }
+            const withTicket = result.ticket
+              ? deskMod.upsertFromTicket(seeded.cases, result.ticket, { visitorId: visitorId || undefined, following: true })
+              : seeded
+            localDesk.cases = withTicket.cases
           }
           res.statusCode = 200
           res.setHeader("Content-Type", "application/json")
