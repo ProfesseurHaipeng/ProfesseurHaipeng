@@ -269,8 +269,7 @@ function TaskEditor({
         </p>
       ) : null}
 
-      <div className="inq-page__grid">
-        <div className="inq-page__main">
+      <div className="inq-page__stack">
           <section className="inq-box">
             <h3 className="inq-box__title">条件</h3>
 
@@ -477,6 +476,58 @@ function TaskEditor({
             </div>
           </section>
 
+          <section className="inq-box">
+            <div className="inq-box__head">
+              <h3 className="inq-box__title">进度</h3>
+              <span>
+                {inquiry.findings.length} / {quota}
+              </span>
+            </div>
+            <p className="inq-step-note">{starting ? "正在交给 Karmenai…" : note}</p>
+            <ol className="inq-steps inq-steps--compact">
+              {INQUIRY_RUN.map((step, index) => {
+                const fill = inquiryStepFill(jobStatus, targets.length, index)
+                return (
+                  <li key={step.key} className={`is-${fill}`} title={step.label}>
+                    <i />
+                    <span>{step.label}</span>
+                  </li>
+                )
+              })}
+            </ol>
+            {inquiry.findings.length === 0 ? (
+              <p className="inq-empty">尚无。找到带真实来源的厂商后写在这里。</p>
+            ) : (
+              <ul className="inq-results">
+                {inquiry.findings.map((item) => (
+                  <li key={item.id}>
+                    <FindingCard item={item} open={open} onOpen={setOpen} onFile={() => void onFile(item.id)} onOpenTicket={onOpenTicket} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <details className="inq-more">
+            <summary>运行历史{task.runs.length ? ` · ${task.runs.length}` : ""}</summary>
+            {task.runs.length === 0 ? (
+              <p className="inq-empty">尚无运行记录</p>
+            ) : (
+              <ul className="inq-hist">
+                {task.runs
+                  .slice()
+                  .reverse()
+                  .map((item) => (
+                    <li key={item.id}>
+                      <strong>{runLabel(item.status)}</strong>
+                      <span>{clock(item.at)}</span>
+                      {item.note ? <p>{item.note}</p> : null}
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </details>
+
           <section className="inq-box inq-box--manage">
             <h3 className="inq-box__title">任务</h3>
             <div className="inq-manage">
@@ -541,65 +592,6 @@ function TaskEditor({
               </button>
             </div>
           </section>
-        </div>
-
-        <aside className="inq-page__side">
-          <section className="inq-box">
-            <h3 className="inq-box__title">进度</h3>
-            <p className="inq-step-note">{starting ? "正在交给 Karmenai…" : note}</p>
-            <ol className="inq-steps inq-steps--compact">
-              {INQUIRY_RUN.map((step, index) => {
-                const fill = inquiryStepFill(jobStatus, targets.length, index)
-                return (
-                  <li key={step.key} className={`is-${fill}`} title={step.label}>
-                    <i />
-                    <span>{step.label}</span>
-                  </li>
-                )
-              })}
-            </ol>
-          </section>
-
-          <section className="inq-box">
-            <div className="inq-box__head">
-              <h3 className="inq-box__title">结果</h3>
-              <span>
-                {inquiry.findings.length} / {quota}
-              </span>
-            </div>
-            {inquiry.findings.length === 0 ? (
-              <p className="inq-empty">尚无。找到带真实来源的厂商后写在这里。</p>
-            ) : (
-              <ul className="inq-results">
-                {inquiry.findings.map((item) => (
-                  <li key={item.id}>
-                    <FindingCard item={item} open={open} onOpen={setOpen} onFile={() => void onFile(item.id)} onOpenTicket={onOpenTicket} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <details className="inq-more">
-            <summary>运行历史{task.runs.length ? ` · ${task.runs.length}` : ""}</summary>
-            {task.runs.length === 0 ? (
-              <p className="inq-empty">尚无运行记录</p>
-            ) : (
-              <ul className="inq-hist">
-                {task.runs
-                  .slice()
-                  .reverse()
-                  .map((item) => (
-                    <li key={item.id}>
-                      <strong>{runLabel(item.status)}</strong>
-                      <span>{clock(item.at)}</span>
-                      {item.note ? <p>{item.note}</p> : null}
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </details>
-        </aside>
       </div>
     </section>
   )

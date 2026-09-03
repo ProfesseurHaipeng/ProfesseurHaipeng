@@ -1365,11 +1365,15 @@ body:has(.admin-shell--desk) #root {
 }
 
 .hermes-apple .hermes-grok__body--inquiry {
-  grid-template-columns: minmax(0, 1fr) minmax(20rem, 28rem);
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
 }
 
 .hermes-apple .hermes-grok__body--inquiry .hermes-panel {
   padding: 1rem 1.2rem 1.6rem;
+}
+
+.hermes-apple .hermes-grok__body--inquiry .hermes-mod {
+  display: none;
 }
 
 .hermes-apple .hermes-grok__chat {
@@ -1691,6 +1695,7 @@ body:has(.admin-shell--desk) #root {
   display: grid;
   gap: 0.7rem;
   min-width: 0;
+  max-width: 42rem;
 }
 
 .inq-page__head {
@@ -1699,6 +1704,8 @@ body:has(.admin-shell--desk) #root {
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.55rem 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e5ea;
 }
 
 .inq-page__back {
@@ -1759,32 +1766,16 @@ body:has(.admin-shell--desk) #root {
   font-weight: 650;
 }
 
-.inq-page__grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0.85rem;
-  align-items: start;
-}
-
-.inq-page__main,
-.inq-page__side {
+.inq-page__stack {
   display: grid;
   gap: 0.85rem;
   min-width: 0;
 }
 
-.inq-page__main {
-  max-width: 40rem;
-}
-
-@media (min-width: 1400px) {
-  .hermes-apple .inq-page__grid {
-    grid-template-columns: minmax(0, 1fr) minmax(16.5rem, 21rem);
-  }
-
-  .hermes-apple .inq-page__main {
-    max-width: none;
-  }
+.inq-box > .inq-empty,
+.inq-box > .inq-results {
+  border-top: 1px solid #ececee;
+  padding-top: 0.65rem;
 }
 
 .inq-box {
@@ -2248,7 +2239,18 @@ body:has(.admin-shell--desk) #root {
   font: inherit;
 }
 
-.inq-add button,
+.inq-add button {
+  border: 1px solid #d2d2d7;
+  border-radius: 0.7rem;
+  background: #fff;
+  color: #1d1d1f;
+  padding: 0.5rem 0.85rem;
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .inq-go {
   border: 0;
   border-radius: 0.7rem;
@@ -2762,8 +2764,9 @@ body:has(.admin-shell--desk) #root {
   }
 
   .inq-add button:disabled {
-    background: #86868b;
-    color: #fff;
+    background: #f5f5f7;
+    color: #86868b;
+    border-color: #d2d2d7;
     opacity: 1;
   }
 
@@ -3738,8 +3741,14 @@ body:has(.admin-shell--desk) #root {
     max-height: none;
   }
 
-  .inq-run-head .inq-steps {
+  .inq-run-head .inq-steps,
+  .inq-steps--compact {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+  }
+
+  .inq-steps--compact li:not(:last-child)::after {
+    display: block;
   }
 
   .inq-head__ops > button,
@@ -3748,6 +3757,8 @@ body:has(.admin-shell--desk) #root {
     min-height: 2.4rem;
   }
 
+  .inq-page,
+  .inq-page__stack,
   .inq-page__main {
     max-width: none;
   }
