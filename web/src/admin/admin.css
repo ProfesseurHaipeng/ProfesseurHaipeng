@@ -1461,6 +1461,11 @@
   .hermes-search {
     width: 100%;
     max-width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .hermes-search button {
+    width: 100%;
   }
 
   .hermes-apple .hermes-grok__status {
