@@ -394,6 +394,7 @@ describe("desk board telemetry", () => {
     expect(created.cases[0]?.category).toBe("inquiry")
     expect(created.cases[0]?.org).toBe("询单系统")
     expect(created.inquiry.tasks[0]?.caseId).toBe(created.cases[0]?.id)
+    expect(created.inquiry.tasks[0]?.quota).toBe(8)
     const started = applyInquiryTaskAction(created.inquiry, created.cases, created.ledger, { op: "start", id: created.inquiry.tasks[0]!.id }, now)
     expect(started.inquiry.job.status).toBe("searching")
     expect(started.assignMessage).toContain("土壤板结")

@@ -117,12 +117,15 @@ describe("inquiry module on the desk", () => {
     expect(created.error).toBeNull()
     expect(created.task?.name).toBe("土壤板结一轮")
     expect(created.task?.targets[0]?.label).toBe("土壤板结")
+    expect(created.task?.quota).toBe(8)
     expect(created.state.currentId).toBe(created.task?.id)
     const started = startInquiryTask(created.state, created.task!.id, now)
     expect(started.error).toBeNull()
     expect(started.state.job.status).toBe("searching")
     expect(started.task?.dueAt).toBe(taskDueAt(24, now))
     expect(buildTaskAssignMessage(started.task!)).toContain("土壤板结")
+    expect(buildTaskAssignMessage(started.task!)).toContain("最多找 8 家")
+    expect(buildTaskAssignMessage(started.task!)).toContain("没有发信口")
     const cancelled = cancelInquiryTask(started.state, created.task!.id, now)
     expect(cancelled.task?.status).toBe("cancelled")
     expect(cancelled.state.job.status).toBe("paused")
@@ -158,5 +161,22 @@ describe("inquiry module on the desk", () => {
     expect(migrated.changed).toBe(true)
     expect(migrated.state.tasks).toHaveLength(1)
     expect(migrated.state.tasks[0]?.targets[0]?.label).toBe("水稻加工厂")
+  })
+
+  it("writes quota and demand into the same assign Hermes will read", () => {
+    const created = createInquiryTask(
+      emptyInquiry(),
+      { name: "化妆品一轮", targets: ["化妆品厂家"], quota: 5, limitHours: 12 },
+      now,
+    )
+    expect(created.task?.quota).toBe(5)
+    const message = buildTaskAssignMessage(created.task!)
+    expect(message).toContain("化妆品厂家")
+    expect(message).toContain("最多找 5 家")
+    expect(message).toContain("12 小时")
+    const preview = inquiryPromptPreview(created.state)
+    expect(preview.systemExcerpt).toContain("化妆品厂家")
+    expect(preview.systemExcerpt).toContain("家数上限=5")
+    expect(preview.userMessage).toBe(message)
   })
 })

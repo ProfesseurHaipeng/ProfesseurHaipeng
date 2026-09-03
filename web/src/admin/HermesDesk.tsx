@@ -46,6 +46,10 @@ type BoardFocus =
 
 const AGENT_NAME = "Karmenai"
 
+function sameJson(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
 const STATUS_LABEL: Record<LinkView, string> = {
   connecting: "正在连接",
   connected: "正常连接",
@@ -204,6 +208,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   const [module, setModule] = useState<BoardModule>("tickets")
   const [editTicketId, setEditTicketId] = useState<string | null>(null)
   const [inquiry, setInquiry] = useState<InquiryState>(emptyInquiry)
+  const [inquiryBusy, setInquiryBusy] = useState(false)
   const [hermesReady, setHermesReady] = useState(false)
   const [pending, setPending] = useState<PendingImage[]>([])
   const [dragOver, setDragOver] = useState(false)
@@ -229,10 +234,13 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   )
 
   const apply = useCallback((payload: DeskPayload) => {
-    if (Array.isArray(payload.cases)) setCases(payload.cases.map(normalizeCase))
-    if (Array.isArray(payload.coach)) setCoach(payload.coach)
-    if (Array.isArray(payload.events)) setEvents(payload.events)
-    if (payload.inquiry) setInquiry(payload.inquiry)
+    if (Array.isArray(payload.cases)) {
+      const next = payload.cases.map(normalizeCase)
+      setCases((prev) => (sameJson(prev, next) ? prev : next))
+    }
+    if (Array.isArray(payload.coach)) setCoach((prev) => (sameJson(prev, payload.coach) ? prev : payload.coach!))
+    if (Array.isArray(payload.events)) setEvents((prev) => (sameJson(prev, payload.events) ? prev : payload.events!))
+    if (payload.inquiry) setInquiry((prev) => (sameJson(prev, payload.inquiry) ? prev : payload.inquiry!))
     if (typeof payload.hermesReady === "boolean") setHermesReady(payload.hermesReady)
     if (payload.health) {
       setStatus(payload.health.status === "connected" ? "connected" : "disconnected")
@@ -349,13 +357,19 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
     [pending],
   )
 
-  const allLive = filterHermesCases(cases, { origin: "live" }).map(normalizeCase)
+  const allLive = useMemo(() => filterHermesCases(cases, { origin: "live" }).map(normalizeCase), [cases])
   const selected = focus.kind === "ticket" ? allLive.find((item) => item.id === focus.id) || null : null
   const customerFile =
     focus.kind === "customer" ? customerArchives(allLive).find((item) => customerKey(item) === focus.key) || null : null
   const factoryFile = focus.kind === "factory" ? factoryArchives(allLive).find((item) => item.name === focus.name) || null : null
-  const customerTickets = customerFile ? ticketsForCustomer(allLive, customerKey(customerFile)) : []
-  const factoryTickets = factoryFile ? ticketsForFactory(allLive, factoryFile.name) : []
+  const customerTickets = useMemo(
+    () => (customerFile ? ticketsForCustomer(allLive, customerKey(customerFile)) : []),
+    [allLive, customerFile],
+  )
+  const factoryTickets = useMemo(
+    () => (factoryFile ? ticketsForFactory(allLive, factoryFile.name) : []),
+    [allLive, factoryFile],
+  )
   const timelineCaseId = selected?.id || customerFile?.id || factoryFile?.latest.id
   const timeline = events.filter((item) => !timelineCaseId || !item.caseId || item.caseId === timelineCaseId).slice(-12).reverse()
 
@@ -712,23 +726,27 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
           {module === "inquiry" ? (
             <InquiryPanel
               inquiry={inquiry}
-              busy={sending || loading}
+              locked={inquiryBusy}
               hermesReady={hermesReady}
               ticketNoOf={(id) => {
                 const rec = cases.find((item) => item.id === id)
                 return rec ? ticketNo(rec) : ""
               }}
               onTask={async (op, body) => {
+                const lock = op === "create" || op === "delete"
                 setError("")
+                if (lock) setInquiryBusy(true)
                 try {
                   return await post({ action: "task", op, ...(body || {}) })
                 } catch (err) {
                   setError(err instanceof Error ? err.message : "询单任务失败")
                   throw err
+                } finally {
+                  if (lock) setInquiryBusy(false)
                 }
               }}
               onStart={async (id) => {
-                setSending(true)
+                setInquiryBusy(true)
                 setError("")
                 try {
                   const payload = await post({ action: "task", op: "start", id })
@@ -739,8 +757,9 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                   }
                 } catch (err) {
                   setError(err instanceof Error ? err.message : "安排失败")
+                  throw err
                 } finally {
-                  setSending(false)
+                  setInquiryBusy(false)
                 }
               }}
               onFile={async (findingId) => {

@@ -1742,21 +1742,42 @@ body:has(.admin-shell--desk) #root {
   padding: 0.28rem 0.7rem;
   font: inherit;
   font-size: 0.78rem;
+  transition: transform 0.08s ease, background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
 .inq-tags li.is-on {
-  background: #fff;
+  background: #1d1d1f;
+  border-color: #1d1d1f;
+  color: #fff;
 }
 
 .inq-tags button {
   cursor: pointer;
 }
 
-.inq-tags li.is-on button {
+.inq-tags li button:hover {
+  border-color: #1d1d1f;
+}
+
+.inq-tags li button:active,
+.inq-add button:active,
+.inq-go:active,
+.inq-choice button:active,
+.inq-task:active,
+.inq-mini-go:active,
+.inq-toolbar > button:active {
+  transform: scale(0.96);
+}
+
+.inq-tags li.is-on > button {
   border: 0;
   background: transparent;
+  color: inherit;
+}
+
+.inq-tags li.is-on span + button {
   padding: 0 0 0 0.15rem;
-  color: #6e6e73;
+  color: #d2d2d7;
 }
 
 .inq-add {
@@ -1965,6 +1986,22 @@ body:has(.admin-shell--desk) #root {
   margin: 0;
   color: #6e6e73;
   font-size: 0.78rem;
+}
+
+.inq-flash {
+  min-height: 1.15rem;
+  margin: 0;
+  color: #0071e3;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.inq-flash.is-idle {
+  color: transparent;
+}
+
+.inq-flash.is-bad {
+  color: #c41c1c;
 }
 
 @media (max-width: 1100px) {
@@ -2781,6 +2818,14 @@ body:has(.admin-shell--desk) #root {
   font: inherit;
   font-size: 0.78rem;
   cursor: pointer;
+  transition: transform 0.08s ease, background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.inq-choice button:hover,
+.inq-go:hover,
+.inq-add button:hover,
+.inq-mini-go:hover {
+  filter: brightness(1.08);
 }
 
 .inq-choice button.is-on {

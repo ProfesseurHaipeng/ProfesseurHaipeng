@@ -50,6 +50,7 @@ export type InquiryTask = {
   status: InquiryTaskStatus
   schedule: InquirySchedule
   limitHours?: number
+  quota: number
   startedAt?: string
   dueAt?: string
   caseId?: string
@@ -103,6 +104,26 @@ export const SCHEDULE_KIND: { key: InquiryScheduleKind; label: string }[] = [
 ]
 
 export const LIMIT_HOURS = [1, 6, 12, 24, 48, 72] as const
+
+export const FIND_QUOTAS = [3, 5, 8, 12, 20] as const
+
+export const NEED_PRESETS: { group: "type" | "pain"; label: string }[] = [
+  { group: "type", label: "化妆品厂家" },
+  { group: "type", label: "农产品 / 农业" },
+  { group: "type", label: "农村合作社" },
+  { group: "type", label: "肥料 / 土壤改良厂家" },
+  { group: "type", label: "水稻加工厂" },
+  { group: "type", label: "茶叶基地" },
+  { group: "pain", label: "土壤板结" },
+  { group: "pain", label: "化肥成本高" },
+  { group: "pain", label: "有机肥短缺" },
+]
+
+export function asQuota(value: unknown, fallback = 8) {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(40, Math.max(1, Math.round(n)))
+}
 
 export function scheduleLabel(schedule: InquirySchedule) {
   const base = SCHEDULE_KIND.find((item) => item.key === schedule.kind)?.label || "只跑这一次"
@@ -303,6 +324,7 @@ function sanitizeTask(raw: unknown): InquiryTask | null {
     status: asTaskStatus(row.status),
     schedule: asSchedule(row.schedule),
     limitHours,
+    quota: asQuota(row.quota, 8),
     startedAt: clean(row.startedAt, 40) || undefined,
     dueAt: clean(row.dueAt, 40) || undefined,
     caseId: clean(row.caseId, 80) || undefined,
@@ -442,7 +464,7 @@ export function taskJobStatus(status: InquiryTaskStatus): InquiryJobStatus {
 export function inquiryPromptPreview(state: InquiryState): InquiryPromptPreview {
   const extra = inquiryCoachExtra(state)
   const lines = extra.split("\n")
-  const excerpt = lines.slice(0, 12).join("\n")
+  const excerpt = lines.slice(0, 20).join("\n")
   const task = currentInquiryTask(state)
   const targets = task?.targets.length ? task.targets : state.targets
   return {
@@ -457,9 +479,11 @@ export function inquiryPromptPreview(state: InquiryState): InquiryPromptPreview 
 }
 
 export function inquiryCoachExtra(state: InquiryState) {
-  const targetLines = state.targets.length
-    ? state.targets.map((item) => `- ${item.label}`).join("\n")
-    : "同事还没设定任何弊端或对口类型。先请他们设定，不要自己编。"
+  const currentTask = currentInquiryTask(state)
+  const wants = currentTask?.targets.length ? currentTask.targets : state.targets
+  const targetLines = wants.length
+    ? wants.map((item) => `- ${item.label}`).join("\n")
+    : "同事还没设定任何需求类型。先请他们设定，不要自己编。"
   const findLines = state.findings.length
     ? state.findings
         .slice(0, 40)
@@ -467,20 +491,30 @@ export function inquiryCoachExtra(state: InquiryState) {
         .join("\n")
     : "还没有真实找到的厂商。"
   const jobLine = `${JOB_LABEL[state.job.status]}${state.job.brief ? `。${state.job.brief}` : ""}`
-  const currentTask = currentInquiryTask(state)
   return [
     "【询单模块（同一工作台、同一 Hermes）】",
-    "- 同事设定要找的厂商弊端或对口类型。你按这些条件找真实厂商。",
+    "- 同事选定的需求类型、家数上限、限时都是硬性参数。按这些去网上找真实厂商，到数即停，到点即停。",
     "- 没有真实来源就不要写厂商。不要编公司名、电话、邮箱、网址。",
-    "- 找到的每一条必须带 source。询单只许起草，不许群发，不许写 sent。",
-    "- 广告投放以后再做。看板进度是：取条件 → 找来源 → 核实 → 起草稿。开始找写 searching，核实时 review，起草时 drafting。",
+    "- 找到的每一条必须带 source，并尽量写下官网、联系方式或邮箱。询单只许起草，不许群发，不许写 sent。本站没有发信口。",
+    "- 对口时用本站皮纳图博火山灰农业项目的真实内容，不要编项目参数。",
+    "- 看板进度是：取条件 → 找来源 → 核实 → 起草稿。开始找写 searching，核实时 review，起草时 drafting。",
     "- 更新寻找结果时另起一行：",
-    '<inquiry>{"job":{"status":"review","brief":"本轮条件"},"findings":[{"org":"真实厂名","place":"地区","pain":"弊端","source":"来源","outreach":"draft","draft":"询单草稿"}]}</inquiry>',
+    '<inquiry>{"job":{"status":"review","brief":"本轮条件"},"findings":[{"org":"真实厂名","place":"地区","pain":"弊端","source":"来源","contact":"公开联系方式","outreach":"draft","draft":"询单草稿"}]}</inquiry>',
     "",
     `【要找的弊端 / 对口类型】\n${targetLines}`,
     `【当前询单任务】${jobLine}`,
     currentTask
-      ? `【本页询单工单】名称=${currentTask.name}；节奏=${scheduleLabel(currentTask.schedule)}；限时=${currentTask.limitHours ? `${currentTask.limitHours} 小时` : "不限"}；工单=${currentTask.caseId || "尚未建档"}`
+      ? [
+          `【本轮硬性参数】这些是同事定下的，必须遵守，不够不要编。`,
+          `名称=${currentTask.name}`,
+          `需求=${currentTask.targets.map((item) => item.label).join("、") || "尚未选定"}`,
+          `家数上限=${currentTask.quota || 8}。找到这么多家带真实来源的就停；不够就如实写还差几家。`,
+          `限时=${currentTask.limitHours ? `${currentTask.limitHours} 小时` : "不限"}`,
+          `节奏=${scheduleLabel(currentTask.schedule)}`,
+          `工单=${currentTask.caseId || "尚未建档"}`,
+          "触达=找到官网、可核验来源、联系方式或邮箱后只起草询单邮件。本站没有发信口，outreach 只能写 draft，不许写 sent。",
+          "对口时按本站皮纳图博火山灰农业项目的真实内容，不要编项目参数。",
+        ].join("；")
       : "",
     `【已找到的厂商】\n${findLines}`,
   ]
@@ -504,6 +538,7 @@ export function migrateInquiryTasks(state: InquiryState, now = new Date().toISOS
     enabled: true,
     status: asTaskStatus(state.job.status),
     schedule: { kind: "once" },
+    quota: 8,
     brief: state.job.brief,
     createdAt: now,
     updatedAt: now,
@@ -617,6 +652,7 @@ export function createInquiryTask(state: InquiryState, raw: Record<string, unkno
     status: start ? "searching" : "idle",
     schedule,
     limitHours,
+    quota: asQuota(raw.quota, 8),
     startedAt: start ? now : undefined,
     dueAt: start ? taskDueAt(limitHours, now) : undefined,
     brief: fromDraft.map((item) => item.label).join("、") || instruction.slice(0, 80),
@@ -660,6 +696,7 @@ export function updateInquiryTask(state: InquiryState, raw: Record<string, unkno
         ? Math.min(168, Math.round(raw.limitHours))
         : undefined
       : hit.limitHours,
+    quota: "quota" in raw ? asQuota(raw.quota, hit.quota || 8) : hit.quota || 8,
     targets: Array.isArray(raw.targets)
       ? raw.targets.flatMap((item) => {
           const label = sanitizeTargetLabel(typeof item === "string" ? item : (item as { label?: unknown }).label)
@@ -746,13 +783,14 @@ export function deleteInquiryTask(state: InquiryState, id: string) {
 
 export function buildTaskAssignMessage(task: InquiryTask) {
   const list = task.targets.map((item) => item.label).join("、")
-  const limit = task.limitHours ? `本轮限时 ${task.limitHours} 小时。` : ""
   const extra = task.instruction ? `补充指令：${task.instruction}` : ""
   return [
-    list ? `按这些厂商弊端 / 对口类型去找真实厂商：${list}。` : "按同事写的指令去找真实厂商。",
+    list ? `按这些真实需求去找厂商：${list}。` : "按同事写的指令去找真实厂商。",
     extra,
-    "流程按 取条件 → 找来源 → 核实 → 起草稿。没有来源不要编。找到后只起草询单，不要群发。",
-    limit,
+    `本轮最多找 ${task.quota || 8} 家带真实来源的厂商，到数即停，不够不要编。`,
+    task.limitHours ? `本轮限时 ${task.limitHours} 小时，到点停止。` : "",
+    "流程按 取条件 → 找来源 → 核实 → 起草稿。没有来源不要编。",
+    "找到官网、可核验来源、联系方式或邮箱后只起草询单邮件。本站没有发信口，不要写已经发出。",
   ]
     .filter(Boolean)
     .join("")
