@@ -1364,6 +1364,14 @@ body:has(.admin-shell--desk) #root {
   overflow: hidden;
 }
 
+.hermes-apple .hermes-grok__body--inquiry {
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 28rem);
+}
+
+.hermes-apple .hermes-grok__body--inquiry .hermes-panel {
+  padding: 1rem 1.2rem 1.6rem;
+}
+
 .hermes-apple .hermes-grok__chat {
   order: 2;
   background: #fff;
@@ -1678,10 +1686,455 @@ body:has(.admin-shell--desk) #root {
   font-weight: 600;
 }
 
-.inq-board {
+.inq-board,
+.inq-page {
+  display: grid;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.inq-page__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.55rem 1rem;
+}
+
+.inq-page__back {
+  flex: 0 0 100%;
+  width: max-content;
+  border: 0;
+  background: transparent;
+  color: #0071e3;
+  padding: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.inq-page__title {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.inq-page__title h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+.inq-page__title p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0;
+  color: #6e6e73;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.inq-page__ticket {
+  border: 0;
+  background: transparent;
+  color: #0071e3;
+  padding: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.inq-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 1.35rem;
+  padding: 0 0.5rem;
+  border: 1px solid #d2d2d7;
+  border-radius: 999px;
+  background: #fff;
+  color: #424245;
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.inq-page__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.inq-page__main,
+.inq-page__side {
   display: grid;
   gap: 0.85rem;
   min-width: 0;
+}
+
+.inq-page__main {
+  max-width: 40rem;
+}
+
+@media (min-width: 1400px) {
+  .hermes-apple .inq-page__grid {
+    grid-template-columns: minmax(0, 1fr) minmax(16.5rem, 21rem);
+  }
+
+  .hermes-apple .inq-page__main {
+    max-width: none;
+  }
+}
+
+.inq-box {
+  min-width: 0;
+  background: #fff;
+  border: 1px solid #d2d2d7;
+  border-radius: 0.85rem;
+  padding: 0.95rem 1rem 1.05rem;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.inq-box__title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.inq-box__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.inq-box__head span {
+  color: #6e6e73;
+  font-size: 0.75rem;
+}
+
+.inq-box .inq-field {
+  gap: 0.4rem;
+}
+
+.inq-box__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 0.85rem;
+  padding-top: 0.2rem;
+  border-top: 1px solid #ececee;
+}
+
+.inq-box__foot .inq-go {
+  width: auto;
+  min-width: 8.5rem;
+}
+
+.inq-tokens {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.inq-tokens button {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid #d2d2d7;
+  border-radius: 999px;
+  background: #fff;
+  color: #1d1d1f;
+  padding: 0.18rem 0.55rem;
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.inq-tokens button[aria-pressed="true"] {
+  background: #1d1d1f;
+  border-color: #1d1d1f;
+  color: #fff;
+}
+
+.inq-tokens button:hover {
+  border-color: #1d1d1f;
+}
+
+.inq-tokens button:active {
+  transform: scale(0.97);
+}
+
+.inq-seg {
+  display: flex;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.15rem;
+  border: 1px solid #d2d2d7;
+  border-radius: 0.6rem;
+  background: #f5f5f7;
+  gap: 0.1rem;
+}
+
+.inq-seg button {
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: #1d1d1f;
+  padding: 0.28rem 0.55rem;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.inq-seg button.is-on {
+  background: #fff;
+  box-shadow: 0 0 0 1px #d2d2d7, 0 1px 1px rgba(0, 0, 0, 0.04);
+  font-weight: 650;
+}
+
+.inq-seg button:active {
+  transform: scale(0.97);
+}
+
+.inq-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.inq-inline select,
+.inq-inline input {
+  flex: 1 1 8rem;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid #d2d2d7;
+  border-radius: 0.6rem;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  padding: 0.45rem 0.65rem;
+  font: inherit;
+}
+
+.inq-manage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #ececee;
+}
+
+.inq-box--manage > .inq-box__title + .inq-manage {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.inq-manage strong {
+  display: block;
+  font-size: 0.82rem;
+}
+
+.inq-manage p {
+  margin: 0.15rem 0 0;
+  color: #6e6e73;
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.inq-manage > button {
+  flex: none;
+  border: 1px solid #d2d2d7;
+  border-radius: 0.55rem;
+  background: #fff;
+  color: #1d1d1f;
+  padding: 0.35rem 0.7rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.inq-manage > button.is-danger,
+.inq-manage--danger > button {
+  color: #c41c1c;
+  border-color: #f0c0c0;
+}
+
+.inq-manage > button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.inq-step-note {
+  margin: 0;
+  color: #6e6e73;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.inq-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+}
+
+.inq-head__title {
+  flex: 1;
+  min-width: 8rem;
+}
+
+.inq-head__title h2,
+.inq-board__top h2 {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.inq-head__title p {
+  margin: 0.15rem 0 0;
+  color: #6e6e73;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.inq-head__ops {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.inq-head__ops > button {
+  border: 1px solid #d2d2d7;
+  border-radius: 999px;
+  background: #fff;
+  color: #1d1d1f;
+  padding: 0.32rem 0.65rem;
+  font: inherit;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.inq-head__ops > button.is-danger {
+  color: #c41c1c;
+  border-color: #f0c0c0;
+}
+
+.inq-head__ops > button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.inq-sheet {
+  min-width: 0;
+  background: #fff;
+  border: 1px solid #d2d2d7;
+  border-radius: 0.85rem;
+  overflow: hidden;
+}
+
+.inq-row {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.75rem 0.9rem;
+  border-top: 1px solid #ececee;
+}
+
+.inq-row:first-child {
+  border-top: 0;
+}
+
+.inq-row > span,
+.inq-row--pair > div > span,
+.inq-kicker {
+  color: #6e6e73;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.inq-row input,
+.inq-row textarea,
+.inq-row select,
+.inq-row__body select,
+.inq-row__body input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d2d2d7;
+  border-radius: 0.6rem;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  padding: 0.5rem 0.7rem;
+  font: inherit;
+}
+
+.inq-row__body {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.inq-row--pair {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 720px) {
+  .inq-row--pair {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+}
+
+.inq-row--pair > div {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.inq-row--go {
+  background: #fafafa;
+}
+
+.inq-link {
+  justify-self: start;
+  border: 0;
+  background: transparent;
+  color: #0071e3;
+  padding: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.inq-more {
+  border: 1px solid #d2d2d7;
+  border-radius: 0.85rem;
+  background: #fff;
+  padding: 0.7rem 0.9rem;
+}
+
+.inq-more summary {
+  cursor: pointer;
+  color: #424245;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.inq-more .inq-hist,
+.inq-more .inq-empty {
+  margin-top: 0.55rem;
 }
 
 .inq-board__top h2 {
@@ -2010,6 +2463,7 @@ body:has(.admin-shell--desk) #root {
   .hermes-tickets,
   .hermes-detail,
   .inq-board,
+  .inq-page,
   .inq-card {
     width: 100%;
     max-width: 100%;
@@ -2287,14 +2741,24 @@ body:has(.admin-shell--desk) #root {
   }
 
   .inq-add {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .inq-add button,
-  .inq-go {
+  .inq-go,
+  .inq-box__foot .inq-go {
     width: 100%;
     min-height: 3rem;
     font-weight: 700;
+  }
+
+  .inq-add button {
+    min-height: 2.6rem;
+    font-weight: 700;
+  }
+
+  .inq-tokens button {
+    min-height: 1.85rem;
+    padding: 0.25rem 0.65rem;
   }
 
   .inq-add button:disabled {
@@ -2658,9 +3122,11 @@ body:has(.admin-shell--desk) #root {
   font-size: 0.95rem;
 }
 
-.inq-task span {
+.inq-task span,
+.inq-task em {
   color: #6e6e73;
   font-size: 0.75rem;
+  font-style: normal;
 }
 
 .inq-edit-top {
@@ -2717,9 +3183,8 @@ body:has(.admin-shell--desk) #root {
 .inq-switch {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  margin-right: auto;
-  font-size: 0.8rem;
+  gap: 0.35rem;
+  font-size: 0.74rem;
 }
 
 .inq-switch input {
@@ -3277,16 +3742,23 @@ body:has(.admin-shell--desk) #root {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .inq-toolbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    align-items: center;
-  }
-
-  .inq-toolbar > button,
+  .inq-head__ops > button,
   .inq-mini-go,
   .inq-back {
     min-height: 2.4rem;
+  }
+
+  .inq-page__main {
+    max-width: none;
+  }
+
+  .inq-manage {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .inq-row--pair {
+    grid-template-columns: 1fr;
   }
 
   .inq-hero,

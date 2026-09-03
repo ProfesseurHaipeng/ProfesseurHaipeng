@@ -97,23 +97,22 @@ export function InquiryPanel({
   }
 
   return (
-    <section className="inq-board">
-      <header className="inq-board__top">
-        <div>
+    <section className="inq-page">
+      <header className="inq-page__head">
+        <div className="inq-page__title">
           <h2>询单任务</h2>
-          <p className="inq-board__hint">选定需求、家数和限时后，Karmenai 按这些真实参数去找厂商。</p>
+          {flash ? <p className="inq-flash">{flash}</p> : <p>选定需求、家数和限时后开始。</p>}
         </div>
         {inquiry.tasks.length ? (
           <button type="button" className="inq-mini-go" disabled={locked} onClick={() => void createTask()}>
-            创建询单任务
+            创建
           </button>
         ) : null}
       </header>
-      <Flash text={flash} />
 
       {inquiry.tasks.length === 0 ? (
         <article className="inq-hero">
-          <p>先选定要找的厂家类型和家数。创建后立刻有一张本页工单，开始寻找后 Karmenai 按这些参数去找。</p>
+          <p>创建后立刻有一张本页工单。选好厂家类型和家数，再交给 Karmenai 去找。</p>
           <button type="button" className="inq-go" disabled={locked} onClick={() => void createTask()}>
             {locked ? "正在创建…" : "创建询单任务"}
           </button>
@@ -126,14 +125,10 @@ export function InquiryPanel({
                 <strong>{item.name}</strong>
                 <span>
                   {TASK_LABEL[item.status]}
-                  {item.enabled ? "" : " · 已停用"}
-                  {taskIsDue(item) ? " · 已到点" : ""}
+                  {` · ${item.quota || 8} 家`}
+                  {item.limitHours ? ` · ${item.limitHours}h` : ""}
                 </span>
-                <span>
-                  {item.targets.map((row) => row.label).join("、") || "尚未选定需求"}
-                  {` · 找 ${item.quota || 8} 家`}
-                  {item.limitHours ? ` · ${item.limitHours} 小时` : ""}
-                </span>
+                <em>{item.targets.map((row) => row.label).join("、") || "尚未选定需求"}</em>
               </button>
             </li>
           ))}
@@ -248,369 +243,365 @@ function TaskEditor({
     void persist({ targets: list.map((item) => item.label) }, "已加入")
   }
 
-  const removeChip = (label: string) => toggleNeed(label)
   const unusedCustom = targets.filter((item) => !NEED_PRESETS.some((row) => row.label === item.label))
 
   return (
-    <section className="inq-board">
-      <header className="inq-edit-top">
-        <button type="button" className="inq-back" onClick={onBack}>
-          返回
+    <section className="inq-page">
+      <header className="inq-page__head">
+        <button type="button" className="inq-page__back" onClick={onBack}>
+          任务列表
         </button>
-        <h2>询单任务</h2>
-      </header>
-      <Flash text={flash} />
-
-      <div className="inq-toolbar">
-        <label className={`inq-switch${enabled ? " is-on" : ""}`}>
-          <input
-            type="checkbox"
-            checked={enabled}
-            disabled={task.status === "cancelled"}
-            onChange={(event) => {
-              setEnabled(event.target.checked)
-              setFlash(event.target.checked ? "已启用" : "已停用")
-              void persist({ enabled: event.target.checked }, event.target.checked ? "已启用" : "已停用")
-            }}
-          />
-          <i />
-          <span>{enabled ? "已启用" : "已停用"}</span>
-        </label>
-        <button
-          type="button"
-          disabled={!canCancel}
-          onClick={() => {
-            if (confirm("取消这一轮寻找？任务和本页工单会留着。")) {
-              setFlash("正在取消…")
-              void onTask("cancel", { id: task.id })
-                .then(() => setFlash("已取消这一轮"))
-                .catch(() => setFlash("没取消成，再点一次"))
-            }
-          }}
-        >
-          取消
-        </button>
-        <button
-          type="button"
-          className="is-danger"
-          disabled={locked}
-          onClick={() => {
-            if (confirm("删除这个询单任务和本页工单？")) {
-              setFlash("正在删除…")
-              void onTask("delete", { id: task.id })
-                .then(onDeleted)
-                .catch(() => setFlash("没删掉，再点一次"))
-            }
-          }}
-        >
-          删除
-        </button>
-      </div>
-
-      <article className="inq-card">
-        <label className="inq-field">
-          <span>名称</span>
-          <input
-            value={name}
-            maxLength={80}
-            placeholder="为这轮询单命名"
-            onChange={(event) => setName(event.target.value)}
-            onBlur={() => {
-              if (name.trim() && name.trim() !== task.name) void persist({ name: name.trim() }, "名称已记下")
-            }}
-          />
-        </label>
-        <label className="inq-field">
-          <span>指令</span>
-          <textarea
-            rows={3}
-            value={instruction}
-            maxLength={2000}
-            placeholder="这轮除了下面的需求和家数，还要特别注意什么？"
-            onChange={(event) => setInstruction(event.target.value)}
-            onBlur={() => {
-              if (instruction !== task.instruction) void persist({ instruction }, "指令已记下")
-            }}
-          />
-        </label>
-      </article>
-
-      <article className="inq-card">
-        <p className="inq-card__mark">1 · 设定需求</p>
-        <h3>要找哪类厂家</h3>
-        <p className="inq-empty">点选立刻生效，会写进这轮任务和发给 Karmenai 的参数。</p>
-        <ul className="inq-tags">
-          {NEED_PRESETS.filter((item) => item.group === "type").map((item) => {
-            const on = targets.some((row) => row.label === item.label)
-            return (
-              <li key={item.label}>
-                <button type="button" aria-pressed={on} onClick={() => toggleNeed(item.label)}>
-                  {item.label}
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-        <h3>对口弊端</h3>
-        <ul className="inq-tags">
-          {NEED_PRESETS.filter((item) => item.group === "pain").map((item) => {
-            const on = targets.some((row) => row.label === item.label)
-            return (
-              <li key={item.label}>
-                <button type="button" aria-pressed={on} onClick={() => toggleNeed(item.label)}>
-                  {item.label}
-                </button>
-              </li>
-            )
-          })}
-          {unusedCustom.map((item) => (
-            <li key={item.id} className="is-on">
-              <button type="button" aria-pressed="true" onClick={() => removeChip(item.label)}>
-                {item.label} ×
+        <div className="inq-page__title">
+          <h2>{name || "询单任务"}</h2>
+          <p>
+            <span className="inq-badge">{TASK_LABEL[task.status]}</span>
+            {ticketNo ? (
+              <button type="button" className="inq-page__ticket" onClick={() => onOpenTicket(task.caseId!)}>
+                {ticketNo}
               </button>
-            </li>
-          ))}
-        </ul>
-        <form className="inq-add" onSubmit={(event) => addChip(event)}>
-          <input
-            value={chip}
-            onChange={(event) => setChip(event.target.value)}
-            placeholder="补充一条需求或弊端"
-            maxLength={80}
-          />
-          <button type="submit" disabled={!chip.trim()}>
-            加入
-          </button>
-        </form>
-      </article>
-
-      <article className="inq-card">
-        <p className="inq-card__mark">2 · 设定参数</p>
-        <h3>找多少家</h3>
-        <div className="inq-choice">
-          {FIND_QUOTAS.map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={quota === item ? "is-on" : ""}
-              aria-pressed={quota === item}
-              onClick={() => {
-                setQuota(item)
-                setFlash(`本轮找 ${item} 家`)
-                void persist({ quota: item }, `已记下：找 ${item} 家`)
-              }}
-            >
-              {item} 家
-            </button>
-          ))}
+            ) : null}
+          </p>
         </div>
-        <h3>花多少时间</h3>
-        <div className="inq-choice">
-          <button
-            type="button"
-            className={!limitHours ? "is-on" : ""}
-            aria-pressed={!limitHours}
-            onClick={() => {
-              setLimitHours(undefined)
-              setFlash("不限时")
-              void persist({ limitHours: 0 }, "已记下：不限时")
-            }}
-          >
-            不限
-          </button>
-          {LIMIT_HOURS.map((hours) => (
-            <button
-              key={hours}
-              type="button"
-              className={limitHours === hours ? "is-on" : ""}
-              aria-pressed={limitHours === hours}
-              onClick={() => {
-                setLimitHours(hours)
-                setFlash(`限时 ${hours} 小时`)
-                void persist({ limitHours: hours }, `已记下：${hours} 小时`)
-              }}
-            >
-              {hours} 小时
-            </button>
-          ))}
+      </header>
+      {flash ? (
+        <p className="inq-flash" role="status">
+          {flash}
+        </p>
+      ) : null}
+
+      <div className="inq-page__grid">
+        <div className="inq-page__main">
+          <section className="inq-box">
+            <h3 className="inq-box__title">条件</h3>
+
+            <label className="inq-field">
+              <span>名称</span>
+              <input
+                value={name}
+                maxLength={80}
+                placeholder="为这轮询单命名"
+                onChange={(event) => setName(event.target.value)}
+                onBlur={() => {
+                  if (name.trim() && name.trim() !== task.name) void persist({ name: name.trim() }, "名称已记下")
+                }}
+              />
+            </label>
+
+            <label className="inq-field">
+              <span>指令</span>
+              <textarea
+                rows={2}
+                value={instruction}
+                maxLength={2000}
+                placeholder="除需求和家数外，还要特别注意什么？"
+                onChange={(event) => setInstruction(event.target.value)}
+                onBlur={() => {
+                  if (instruction !== task.instruction) void persist({ instruction }, "指令已记下")
+                }}
+              />
+            </label>
+
+            <div className="inq-field">
+              <span>厂家类型</span>
+              <ul className="inq-tokens">
+                {NEED_PRESETS.filter((item) => item.group === "type").map((item) => {
+                  const on = targets.some((row) => row.label === item.label)
+                  return (
+                    <li key={item.label}>
+                      <button type="button" aria-pressed={on} onClick={() => toggleNeed(item.label)}>
+                        {item.label}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+
+            <div className="inq-field">
+              <span>对方痛点</span>
+              <ul className="inq-tokens">
+                {NEED_PRESETS.filter((item) => item.group === "pain").map((item) => {
+                  const on = targets.some((row) => row.label === item.label)
+                  return (
+                    <li key={item.label}>
+                      <button type="button" aria-pressed={on} onClick={() => toggleNeed(item.label)}>
+                        {item.label}
+                      </button>
+                    </li>
+                  )
+                })}
+                {unusedCustom.map((item) => (
+                  <li key={item.id}>
+                    <button type="button" aria-pressed="true" onClick={() => toggleNeed(item.label)}>
+                      {item.label} ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <form className="inq-add" onSubmit={(event) => addChip(event)}>
+                <input value={chip} onChange={(event) => setChip(event.target.value)} placeholder="补充一条" maxLength={80} />
+                <button type="submit" disabled={!chip.trim()}>
+                  加入
+                </button>
+              </form>
+            </div>
+
+            <div className="inq-field">
+              <span>找几家</span>
+              <div className="inq-seg" role="group" aria-label="找几家">
+                {FIND_QUOTAS.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={quota === item ? "is-on" : ""}
+                    aria-pressed={quota === item}
+                    onClick={() => {
+                      setQuota(item)
+                      setFlash(`找 ${item} 家`)
+                      void persist({ quota: item }, `已记下：找 ${item} 家`)
+                    }}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="inq-field">
+              <span>限时</span>
+              <div className="inq-seg" role="group" aria-label="限时">
+                <button
+                  type="button"
+                  className={!limitHours ? "is-on" : ""}
+                  aria-pressed={!limitHours}
+                  onClick={() => {
+                    setLimitHours(undefined)
+                    setFlash("不限时")
+                    void persist({ limitHours: 0 }, "已记下：不限时")
+                  }}
+                >
+                  不限
+                </button>
+                {LIMIT_HOURS.map((hours) => (
+                  <button
+                    key={hours}
+                    type="button"
+                    className={limitHours === hours ? "is-on" : ""}
+                    aria-pressed={limitHours === hours}
+                    onClick={() => {
+                      setLimitHours(hours)
+                      setFlash(`限时 ${hours} 小时`)
+                      void persist({ limitHours: hours }, `已记下：${hours} 小时`)
+                    }}
+                  >
+                    {hours}h
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="inq-field">
+              <span>节奏</span>
+              <div className="inq-inline">
+                <select
+                  value={schedule.kind}
+                  onChange={(event) => {
+                    const next: InquirySchedule = { ...schedule, kind: event.target.value as InquiryScheduleKind }
+                    setSchedule(next)
+                    const label = SCHEDULE_KIND.find((item) => item.key === next.kind)?.label || "节奏"
+                    setFlash(label)
+                    void persist({ schedule: next }, `已记下：${label}`)
+                  }}
+                >
+                  {SCHEDULE_KIND.map((item) => (
+                    <option key={item.key} value={item.key}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                {needsHour(schedule.kind) ? (
+                  <select
+                    value={schedule.hour ?? 9}
+                    onChange={(event) => {
+                      const next = { ...schedule, hour: Number(event.target.value) }
+                      setSchedule(next)
+                      void persist({ schedule: next }, "时间已记下")
+                    }}
+                  >
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <option key={hour} value={hour}>
+                        {String(hour).padStart(2, "0")}:00
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                {schedule.kind === "interval" ? (
+                  <input
+                    type="number"
+                    min={1}
+                    max={168}
+                    value={schedule.intervalHours ?? 6}
+                    onChange={(event) => {
+                      const next = {
+                        ...schedule,
+                        kind: "interval" as const,
+                        intervalHours: Math.max(1, Math.min(168, Number(event.target.value) || 6)),
+                      }
+                      setSchedule(next)
+                      void persist({ schedule: next }, "间隔已记下")
+                    }}
+                  />
+                ) : null}
+              </div>
+              {taskIsDue(task) ? <p className="inq-due">已到点，可再开始一轮。</p> : null}
+            </div>
+
+            <div className="inq-box__foot">
+              <button
+                type="button"
+                className="inq-go"
+                disabled={starting || locked || !canStart}
+                onClick={() => {
+                  setStarting(true)
+                  setFlash("正在交给 Karmenai…")
+                  void onStart()
+                    .then(() => setFlash("已交给 Karmenai"))
+                    .catch(() => setFlash("没交出去，再点一次"))
+                    .finally(() => setStarting(false))
+                }}
+              >
+                {starting ? "正在交给 Karmenai…" : "开始寻找"}
+              </button>
+              {!canStart && task.status === "cancelled" ? <p className="inq-foot">已取消的任务请另建一轮。</p> : null}
+              {!canStart && task.status !== "cancelled" ? <p className="inq-foot">先选定一种需求，或写一条指令。</p> : null}
+            </div>
+          </section>
+
+          <section className="inq-box inq-box--manage">
+            <h3 className="inq-box__title">任务</h3>
+            <div className="inq-manage">
+              <div>
+                <strong>启用</strong>
+                <p>关掉后不会按节奏再跑。</p>
+              </div>
+              <label className={`inq-switch${enabled ? " is-on" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  disabled={task.status === "cancelled"}
+                  onChange={(event) => {
+                    setEnabled(event.target.checked)
+                    setFlash(event.target.checked ? "已启用" : "已停用")
+                    void persist({ enabled: event.target.checked }, event.target.checked ? "已启用" : "已停用")
+                  }}
+                />
+                <i />
+                <span>{enabled ? "开" : "关"}</span>
+              </label>
+            </div>
+            <div className="inq-manage">
+              <div>
+                <strong>取消本轮</strong>
+                <p>寻找停下，任务和本页工单会留着。</p>
+              </div>
+              <button
+                type="button"
+                disabled={!canCancel}
+                onClick={() => {
+                  if (confirm("取消这一轮寻找？任务和本页工单会留着。")) {
+                    setFlash("正在取消…")
+                    void onTask("cancel", { id: task.id })
+                      .then(() => setFlash("已取消这一轮"))
+                      .catch(() => setFlash("没取消成，再点一次"))
+                  }
+                }}
+              >
+                取消
+              </button>
+            </div>
+            <div className="inq-manage inq-manage--danger">
+              <div>
+                <strong>删除任务</strong>
+                <p>这个询单任务和本页工单一并去掉。</p>
+              </div>
+              <button
+                type="button"
+                className="is-danger"
+                disabled={locked}
+                onClick={() => {
+                  if (confirm("删除这个询单任务和本页工单？")) {
+                    setFlash("正在删除…")
+                    void onTask("delete", { id: task.id })
+                      .then(onDeleted)
+                      .catch(() => setFlash("没删掉，再点一次"))
+                  }
+                }}
+              >
+                删除
+              </button>
+            </div>
+          </section>
         </div>
-        {task.dueAt && (task.status === "searching" || task.status === "review" || task.status === "drafting") ? (
-          <p className="inq-empty">本轮截止 {clock(task.dueAt)}</p>
-        ) : null}
-      </article>
 
-      <article className="inq-card">
-        <p className="inq-card__mark">何时再跑</p>
-        <div className="inq-choice">
-          {SCHEDULE_KIND.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={schedule.kind === item.key ? "is-on" : ""}
-              aria-pressed={schedule.kind === item.key}
-              onClick={() => {
-                const next: InquirySchedule = { ...schedule, kind: item.key }
-                setSchedule(next)
-                setFlash(`已选 ${item.label}`)
-                void persist({ schedule: next }, `已记下：${item.label}`)
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        {needsHour(schedule.kind) ? (
-          <label className="inq-field">
-            <span>几点</span>
-            <select
-              value={schedule.hour ?? 9}
-              onChange={(event) => {
-                const next = { ...schedule, hour: Number(event.target.value) }
-                setSchedule(next)
-                void persist({ schedule: next }, "时间已记下")
-              }}
-            >
-              {Array.from({ length: 24 }, (_, hour) => (
-                <option key={hour} value={hour}>
-                  {String(hour).padStart(2, "0")}:00
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        {schedule.kind === "interval" ? (
-          <label className="inq-field">
-            <span>间隔小时</span>
-            <input
-              type="number"
-              min={1}
-              max={168}
-              value={schedule.intervalHours ?? 6}
-              onChange={(event) => {
-                const next = {
-                  ...schedule,
-                  kind: "interval" as const,
-                  intervalHours: Math.max(1, Math.min(168, Number(event.target.value) || 6)),
-                }
-                setSchedule(next)
-                void persist({ schedule: next }, "间隔已记下")
-              }}
-            />
-          </label>
-        ) : null}
-        {task.nextRunAt ? <p className="inq-empty">下次：{clock(task.nextRunAt)}</p> : null}
-        {taskIsDue(task) ? <p className="inq-due">已到点。点「开始寻找」再跑一轮。</p> : null}
-      </article>
-
-      <article className="inq-card">
-        <p className="inq-card__mark">本页工单</p>
-        {task.caseId ? (
-          <div className="inq-ticket">
-            <strong>{ticketNo || "询单工单"}</strong>
-            <span>{TASK_LABEL[task.status]}</span>
-            <button type="button" onClick={() => onOpenTicket(task.caseId!)}>
-              看工单
-            </button>
-          </div>
-        ) : (
-          <p className="inq-empty">创建后会立刻留下一张属于本页的工单。</p>
-        )}
-        <p className="inq-empty">找到官网和邮箱后只起草询单。站点还没有发信口，不会假装已经发出。</p>
-      </article>
-
-      <article className="inq-card">
-        <p className="inq-card__mark">运行历史</p>
-        {task.runs.length === 0 ? (
-          <p className="inq-empty">尚无运行记录</p>
-        ) : (
-          <ul className="inq-hist">
-            {task.runs
-              .slice()
-              .reverse()
-              .map((item) => (
-                <li key={item.id}>
-                  <strong>{runLabel(item.status)}</strong>
-                  <span>{clock(item.at)}</span>
-                  {item.note ? <p>{item.note}</p> : null}
-                </li>
-              ))}
-          </ul>
-        )}
-      </article>
-
-      <button
-        type="button"
-        className="inq-go"
-        disabled={starting || locked || !canStart}
-        onClick={() => {
-          setStarting(true)
-          setFlash("正在交给 Karmenai…")
-          void onStart()
-            .then(() => setFlash("已交给 Karmenai，按你设的需求和家数去找"))
-            .catch(() => setFlash("没交出去，再点一次"))
-            .finally(() => setStarting(false))
-        }}
-      >
-        {starting ? "正在交给 Karmenai…" : "开始寻找"}
-      </button>
-      {!canStart && task.status === "cancelled" ? <p className="inq-foot">已取消的任务不能再开始，请另建一轮。</p> : null}
-      {!canStart && task.status !== "cancelled" ? <p className="inq-foot">先选定至少一种需求，或写一条指令。</p> : null}
-
-      <article className="inq-card inq-card--run">
-        <div className="inq-run-head">
-          <div>
-            <p className="inq-card__mark">进度</p>
+        <aside className="inq-page__side">
+          <section className="inq-box">
+            <h3 className="inq-box__title">进度</h3>
             <p className="inq-step-note">{starting ? "正在交给 Karmenai…" : note}</p>
-          </div>
-          <ol className="inq-steps inq-steps--compact">
-            {INQUIRY_RUN.map((step, index) => {
-              const fill = inquiryStepFill(jobStatus, targets.length, index)
-              return (
-                <li key={step.key} className={`is-${fill}`} title={step.label}>
-                  <i />
-                  <span>{step.label}</span>
-                </li>
-              )
-            })}
-          </ol>
-        </div>
-        <div className="inq-run-results">
-          <div className="inq-run-results__head">
-            <p className="inq-card__mark">结果</p>
-            <span>
-              {inquiry.findings.length ? `${inquiry.findings.length} / ${quota} 家` : `目标 ${quota} 家`}
-            </span>
-          </div>
-          {inquiry.findings.length === 0 ? (
-            <p className="inq-empty">尚无。Karmenai 找到带真实来源的厂商后会写在这里。</p>
-          ) : (
-            <ul className="inq-results">
-              {inquiry.findings.map((item) => (
-                <li key={item.id}>
-                  <FindingCard item={item} open={open} onOpen={setOpen} onFile={() => void onFile(item.id)} onOpenTicket={onOpenTicket} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </article>
-      <p className="inq-foot">厂商建档是另一张工单。询单只起草，不群发。</p>
-    </section>
-  )
-}
+            <ol className="inq-steps inq-steps--compact">
+              {INQUIRY_RUN.map((step, index) => {
+                const fill = inquiryStepFill(jobStatus, targets.length, index)
+                return (
+                  <li key={step.key} className={`is-${fill}`} title={step.label}>
+                    <i />
+                    <span>{step.label}</span>
+                  </li>
+                )
+              })}
+            </ol>
+          </section>
 
-function Flash({ text }: { text: string }) {
-  const [shown, setShown] = useState(text)
-  useEffect(() => {
-    if (!text) return
-    setShown(text)
-    const timer = window.setTimeout(() => setShown(""), 1800)
-    return () => window.clearTimeout(timer)
-  }, [text])
-  return (
-    <p className={`inq-flash${shown ? "" : " is-idle"}${shown.includes("没") ? " is-bad" : ""}`} aria-live="polite">
-      {shown || " "}
-    </p>
+          <section className="inq-box">
+            <div className="inq-box__head">
+              <h3 className="inq-box__title">结果</h3>
+              <span>
+                {inquiry.findings.length} / {quota}
+              </span>
+            </div>
+            {inquiry.findings.length === 0 ? (
+              <p className="inq-empty">尚无。找到带真实来源的厂商后写在这里。</p>
+            ) : (
+              <ul className="inq-results">
+                {inquiry.findings.map((item) => (
+                  <li key={item.id}>
+                    <FindingCard item={item} open={open} onOpen={setOpen} onFile={() => void onFile(item.id)} onOpenTicket={onOpenTicket} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <details className="inq-more">
+            <summary>运行历史{task.runs.length ? ` · ${task.runs.length}` : ""}</summary>
+            {task.runs.length === 0 ? (
+              <p className="inq-empty">尚无运行记录</p>
+            ) : (
+              <ul className="inq-hist">
+                {task.runs
+                  .slice()
+                  .reverse()
+                  .map((item) => (
+                    <li key={item.id}>
+                      <strong>{runLabel(item.status)}</strong>
+                      <span>{clock(item.at)}</span>
+                      {item.note ? <p>{item.note}</p> : null}
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </details>
+        </aside>
+      </div>
+    </section>
   )
 }
 
