@@ -225,7 +225,7 @@ function TaskEditor({
       : [...targets, { id: `tg-${label}`, label, at: new Date().toISOString() }]
     setTargets(next)
     setFlash(exists ? `已去掉「${label}」` : `已加入「${label}」`)
-    void persist({ targets: next.map((item) => item.label) }, exists ? "已去掉" : "已加入")
+    void persist({ targets: next.map((item) => item.label) }, exists ? `已去掉「${label}」` : `已加入「${label}」`)
   }
 
   const addChip = (event?: FormEvent, next = chip) => {
@@ -343,7 +343,7 @@ function TaskEditor({
           {NEED_PRESETS.filter((item) => item.group === "type").map((item) => {
             const on = targets.some((row) => row.label === item.label)
             return (
-              <li key={item.label} className={on ? "is-on" : ""}>
+              <li key={item.label}>
                 <button type="button" aria-pressed={on} onClick={() => toggleNeed(item.label)}>
                   {item.label}
                 </button>
@@ -356,7 +356,7 @@ function TaskEditor({
           {NEED_PRESETS.filter((item) => item.group === "pain").map((item) => {
             const on = targets.some((row) => row.label === item.label)
             return (
-              <li key={item.label} className={on ? "is-on" : ""}>
+              <li key={item.label}>
                 <button type="button" aria-pressed={on} onClick={() => toggleNeed(item.label)}>
                   {item.label}
                 </button>
@@ -365,9 +365,8 @@ function TaskEditor({
           })}
           {unusedCustom.map((item) => (
             <li key={item.id} className="is-on">
-              <span>{item.label}</span>
-              <button type="button" onClick={() => removeChip(item.label)} aria-label={`去掉 ${item.label}`}>
-                ×
+              <button type="button" aria-pressed="true" onClick={() => removeChip(item.label)}>
+                {item.label} ×
               </button>
             </li>
           ))}
