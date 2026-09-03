@@ -479,7 +479,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
           onClick={() => void probe()}
         >
           <i />
-          {STATUS_LABEL[status]}
+          <span className="hermes-grok__status-label">{STATUS_LABEL[status]}</span>
           {link.model && status === "connected" ? <em>{link.model}</em> : null}
           {status === "disconnected" && !link.configured ? <em>未配置网关</em> : null}
         </button>
@@ -493,7 +493,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         </div>
       </header>
 
-      {module === "tickets" ? (
+      {module === "tickets" && pane !== "chat" ? (
       <form className="hermes-search" onSubmit={runSearch}>
         <label className="sr-only" htmlFor="hermes-one-search">
           一键搜索工单号、手机、邮箱或公司

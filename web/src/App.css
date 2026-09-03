@@ -2058,6 +2058,26 @@ h3 {
   .nav-toggle {
     display: inline-flex;
     z-index: 9;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(17, 17, 17, 0.06);
+  }
+
+  .wordmark {
+    min-width: 0;
+    max-width: calc(100% - 3.4rem);
+  }
+
+  .wordmark__zh {
+    max-width: 100%;
+  }
+
+  .site-header {
+    gap: 0.6rem;
+    overflow: visible;
   }
 
   .nav-backdrop {
@@ -2210,7 +2230,7 @@ h3 {
 
   .page {
     gap: 1.8rem;
-    padding: 1.35rem 0 3.4rem;
+    padding: 1.35rem 0 calc(2.4rem + var(--fab-space));
   }
 
   .page-hero {
@@ -2257,10 +2277,19 @@ h3 {
   .hero__copy .btn-row .btn,
   .cta .btn-row .btn,
   .contact-card .btn,
-  .note-form .btn {
+  .note-form .btn,
+  .nav-cta {
     flex: 1 1 100%;
-    min-height: 3rem;
+    min-height: 3.1rem;
     width: 100%;
+    font-weight: 700;
+  }
+
+  .text-link {
+    min-height: 2.6rem;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0;
   }
 
   .block {
@@ -2311,7 +2340,7 @@ h3 {
   }
 
   .mineral-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
   .photo-strip {
@@ -2506,11 +2535,18 @@ h3 {
   }
 
   .site-guide__escalate {
-    min-height: 2.4rem;
+    min-height: 2.75rem;
+    width: 100%;
+    font-weight: 700;
   }
 
   .site-guide__form {
     margin: 0 0.7rem calc(0.7rem + var(--safe-bottom));
+  }
+
+  .site-guide__send {
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .site-guide__hints {

@@ -106,7 +106,7 @@ export function LeadsPanel({ auth }: { auth: AdminAuth }) {
               ) : (
                 <span className="admin-lead__contact">{lead.contact || "未留联系方式"}</span>
               )}
-              <button type="button" className="hermes-link" onClick={() => void attach(lead)}>
+              <button type="button" className="admin-lead__attach" onClick={() => void attach(lead)}>
                 接入工作台
               </button>
               <button type="button" className="admin-lead__delete" onClick={() => void remove(lead)}>
