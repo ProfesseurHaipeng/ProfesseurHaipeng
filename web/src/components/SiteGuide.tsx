@@ -1,0 +1,480 @@
+import { useEffect, useRef, useState } from "react"
+import { useSiteContent } from "../cms/ContentContext"
+import { CHUNK_GAP_MS, splitReplyIntoChunks, typingDelayFor } from "../cms/chunks"
+import { buildGreeting, buildGreetingEn, detectMessageLang, type VisitorLang } from "../cms/greeting"
+import { GUIDE_STARTERS, GUIDE_STARTERS_EN } from "../cms/guidePrompt"
+import type { AdvisorId } from "../cms/hermes"
+import { hermesUnavailableReply } from "../cms/hermes"
+import { flattenKnowledge, localGuideAnswer } from "../cms/knowledge"
+import { withBase } from "../lib/asset"
+
+type ChatRole = "user" | "assistant"
+type ChatTurn = { role: ChatRole; content: string }
+type Stage = "idle" | "connecting" | "escalating" | "live"
+
+const UI_TEXT = {
+  zh: {
+    title: "在线咨询",
+    connecting: "正在为您接通产品顾问…",
+    escalating: "正在为您接通高级顾问 Hermes…",
+    online: "产品顾问 · 在线",
+    onlineHermes: "高级顾问 Hermes · 在线",
+    connectingLog: "正在接入",
+    escalatingLog: "正在接入高级顾问",
+    escalate: "转高级顾问",
+    placeholder: "描述你的问题…",
+    starters: GUIDE_STARTERS,
+  },
+  en: {
+    title: "Live chat",
+    connecting: "Connecting you to an advisor…",
+    escalating: "Connecting you to senior advisor Hermes…",
+    online: "Product advisor · Online",
+    onlineHermes: "Senior advisor Hermes · Online",
+    connectingLog: "Connecting",
+    escalatingLog: "Connecting Hermes",
+    escalate: "Senior advisor",
+    placeholder: "Type your message…",
+    starters: GUIDE_STARTERS_EN,
+  },
+} as const
+
+function guideEndpoint() {
+  const remote = import.meta.env.VITE_GUIDE_URL
+  if (typeof remote === "string" && remote.trim()) return remote.trim()
+  return withBase("api/guide")
+}
+
+function visitorId() {
+  const key = "ash-visitor-id"
+  try {
+    const existing = window.localStorage.getItem(key)
+    if (existing) return existing
+    const next = `vis-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    window.localStorage.setItem(key, next)
+    return next
+  } catch {
+    return ""
+  }
+}
+
+function IconClose() {
+  return (
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+      <path
+        d="M5.3 5.3a.85.85 0 0 1 1.2 0L10 8.8l3.5-3.5a.85.85 0 1 1 1.2 1.2L11.2 10l3.5 3.5a.85.85 0 1 1-1.2 1.2L10 11.2l-3.5 3.5a.85.85 0 0 1-1.2-1.2L8.8 10 5.3 6.5a.85.85 0 0 1 0-1.2Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
+function IconChat() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path
+        d="M5 6.8A2.8 2.8 0 0 1 7.8 4h8.4A2.8 2.8 0 0 1 19 6.8v6.4A2.8 2.8 0 0 1 16.2 16H12l-4.2 3.2c-.7.54-1.8.04-1.8-.82V16A2.8 2.8 0 0 1 5 13.2V6.8Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function IconSend() {
+  return (
+    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+      <path d="M10 3.4c.34 0 .62.28.62.62v9.46l3.04-3.04a.62.62 0 1 1 .88.88l-4.1 4.1a.62.62 0 0 1-.88 0l-4.1-4.1a.62.62 0 1 1 .88-.88L9.38 13.5V4.02c0-.34.28-.62.62-.62Z" fill="currentColor" />
+    </svg>
+  )
+}
+
+const CLOSE_MS = 220
+const CONNECT_MIN_MS = 1100
+
+export function SiteGuide() {
+  const { content } = useSiteContent()
+  const [open, setOpen] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const [stage, setStage] = useState<Stage>("idle")
+  const [advisor, setAdvisor] = useState<AdvisorId>("lin")
+  const [lang, setLang] = useState<VisitorLang>("zh")
+  const [input, setInput] = useState("")
+  const [typing, setTyping] = useState(false)
+  const [turns, setTurns] = useState<ChatTurn[]>([])
+
+  const scroller = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const closeTimer = useRef(0)
+  const timers = useRef<Set<number>>(new Set())
+  const mounted = useRef(true)
+  const turnsRef = useRef<ChatTurn[]>([])
+  const busyRef = useRef(false)
+  const dirtyRef = useRef(false)
+  const greetedRef = useRef(false)
+  const advisorRef = useRef<AdvisorId>("lin")
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      const id = window.setTimeout(() => {
+        timers.current.delete(id)
+        resolve()
+      }, ms)
+      timers.current.add(id)
+    })
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      window.clearTimeout(closeTimer.current)
+      for (const id of timers.current) window.clearTimeout(id)
+    }
+  }, [])
+
+  const appendTurn = (turn: ChatTurn) => {
+    turnsRef.current = [...turnsRef.current, turn]
+    setTurns(turnsRef.current)
+  }
+
+  const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
+
+  const deliverReply = async (reply: string) => {
+    const chunks = splitReplyIntoChunks(reply)
+    for (const chunk of chunks) {
+      if (!mounted.current) return
+      setTyping(true)
+      await sleep(reduceMotion() ? 60 : typingDelayFor(chunk))
+      if (!mounted.current) return
+      appendTurn({ role: "assistant", content: chunk })
+      setTyping(false)
+      await sleep(reduceMotion() ? 30 : CHUNK_GAP_MS)
+    }
+  }
+
+  const fetchReply = async (history: ChatTurn[], extra?: { escalate?: boolean }) => {
+    try {
+      const response = await fetch(guideEndpoint(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: history.map((item) => ({ role: item.role, content: item.content })),
+          advisor: extra?.escalate ? "hermes" : advisorRef.current,
+          escalate: extra?.escalate === true,
+          visitorId: visitorId(),
+        }),
+      })
+      const payload = (await response.json()) as { reply?: string; lang?: string; advisor?: string }
+      if (payload.lang === "en" || payload.lang === "zh") setLang(payload.lang)
+      if (payload.advisor === "hermes" || payload.advisor === "lin") {
+        advisorRef.current = payload.advisor
+        setAdvisor(payload.advisor)
+      }
+      return payload.reply?.trim() || null
+    } catch {
+      return null
+    }
+  }
+
+  const processRounds = async () => {
+    if (busyRef.current) {
+      dirtyRef.current = true
+      return
+    }
+    busyRef.current = true
+    try {
+      do {
+        dirtyRef.current = false
+        const history = turnsRef.current
+        const lastUser = [...history].reverse().find((item) => item.role === "user")
+        if (!lastUser) break
+        setTyping(true)
+        const reply = await fetchReply(history)
+        if (!mounted.current) return
+        await deliverReply(reply ?? localGuideAnswer(lastUser.content, flattenKnowledge(content)))
+      } while (dirtyRef.current && mounted.current)
+    } finally {
+      busyRef.current = false
+      if (mounted.current) setTyping(false)
+    }
+  }
+
+  const send = (text: string) => {
+    const question = text.trim()
+    if (!question) return
+    const typed = detectMessageLang(question)
+    if (typed) setLang(typed)
+    appendTurn({ role: "user", content: question })
+    setInput("")
+    inputRef.current?.focus()
+    void processRounds()
+  }
+
+  const escalate = () => {
+    if (advisorRef.current === "hermes" || stage !== "live") return
+    advisorRef.current = "hermes"
+    setAdvisor("hermes")
+    setStage("escalating")
+    inputRef.current?.focus()
+    void (async () => {
+      while (busyRef.current && mounted.current) await sleep(80)
+      if (!mounted.current) return
+      busyRef.current = true
+      try {
+        setTyping(true)
+        const reply = await fetchReply(turnsRef.current, { escalate: true })
+        if (!mounted.current) return
+        setStage("live")
+        await deliverReply(reply ?? hermesUnavailableReply(lang))
+        while (dirtyRef.current && mounted.current) {
+          dirtyRef.current = false
+          const history = turnsRef.current
+          const lastUser = [...history].reverse().find((item) => item.role === "user")
+          if (!lastUser) break
+          setTyping(true)
+          const next = await fetchReply(history)
+          if (!mounted.current) return
+          await deliverReply(next ?? localGuideAnswer(lastUser.content, flattenKnowledge(content)))
+        }
+      } finally {
+        busyRef.current = false
+        if (mounted.current) {
+          setTyping(false)
+          setStage("live")
+        }
+      }
+    })()
+  }
+
+  const fetchGreeting = async (): Promise<{ text: string; lang: VisitorLang }> => {
+    try {
+      const response = await fetch(guideEndpoint(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ greet: true }),
+      })
+      const payload = (await response.json()) as { reply?: string; lang?: string }
+      return {
+        text: payload.reply?.trim() || (payload.lang === "en" ? buildGreetingEn(null) : buildGreeting(null)),
+        lang: payload.lang === "en" ? "en" : "zh",
+      }
+    } catch {
+      const navZh = /^(zh)\b/i.test(navigator.language || "")
+      return {
+        text: navZh ? buildGreeting(null) : buildGreetingEn(null),
+        lang: navZh ? "zh" : "en",
+      }
+    }
+  }
+
+  // First open: play the "connecting you to an advisor" sequence, then greet.
+  useEffect(() => {
+    if (!open || greetedRef.current) return
+    let cancelled = false
+    setStage("connecting")
+    void (async () => {
+      const startedAt = Date.now()
+      const greeting = await fetchGreeting()
+      const minWait = reduceMotion() ? 120 : CONNECT_MIN_MS
+      const elapsed = Date.now() - startedAt
+      if (elapsed < minWait) await sleep(minWait - elapsed)
+      if (cancelled || !mounted.current) return
+      greetedRef.current = true
+      setLang(greeting.lang)
+      setStage("live")
+      await deliverReply(greeting.text)
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const close = () => {
+    if (closing) return
+    if (reduceMotion()) {
+      setOpen(false)
+      return
+    }
+    setClosing(true)
+    closeTimer.current = window.setTimeout(() => {
+      setOpen(false)
+      setClosing(false)
+    }, CLOSE_MS)
+  }
+
+  useEffect(() => {
+    scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" })
+  }, [turns, open, typing, stage])
+
+  useEffect(() => {
+    const syncLock = () => {
+      const compact = window.matchMedia("(max-width: 720px)").matches
+      document.body.classList.toggle("guide-lock", open && compact)
+    }
+    syncLock()
+    window.addEventListener("resize", syncLock)
+    return () => {
+      window.removeEventListener("resize", syncLock)
+      document.body.classList.remove("guide-lock")
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const root = document.documentElement
+    const apply = () => {
+      const viewport = window.visualViewport
+      const height = viewport?.height ?? window.innerHeight
+      const offsetTop = viewport?.offsetTop ?? 0
+      root.style.setProperty("--guide-vh", `${Math.round(height)}px`)
+      root.style.setProperty("--guide-offset", `${Math.round(offsetTop)}px`)
+    }
+    apply()
+    window.visualViewport?.addEventListener("resize", apply)
+    window.visualViewport?.addEventListener("scroll", apply)
+    window.addEventListener("resize", apply)
+    return () => {
+      window.visualViewport?.removeEventListener("resize", apply)
+      window.visualViewport?.removeEventListener("scroll", apply)
+      window.removeEventListener("resize", apply)
+      root.style.removeProperty("--guide-vh")
+      root.style.removeProperty("--guide-offset")
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close()
+    }
+    window.addEventListener("keydown", onKey)
+    const id = window.setTimeout(() => inputRef.current?.focus(), 120)
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      window.clearTimeout(id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const showStarters = stage === "live" && advisor === "lin" && !typing && !turns.some((item) => item.role === "user")
+  const showEscalate = stage === "live" && advisor === "lin"
+  const ui = UI_TEXT[lang]
+  const statusLabel =
+    stage === "connecting" ? ui.connecting : stage === "escalating" ? ui.escalating : advisor === "hermes" ? ui.onlineHermes : ui.online
+  const avatarClass = advisor === "hermes" || stage === "escalating" ? "site-guide__avatar site-guide__avatar--hermes" : "site-guide__avatar"
+
+  return (
+    <div className={`site-guide${open ? " is-open" : ""}${closing ? " is-closing" : ""}`}>
+      {open ? (
+        <section
+          className={`site-guide__panel${closing ? " is-closing" : ""}`}
+          aria-label={ui.title}
+          lang={lang === "en" ? "en" : "zh-CN"}
+        >
+          <header className="site-guide__head">
+            <span className="site-guide__handle" aria-hidden="true" />
+            <div className="site-guide__identity">
+              <span className={avatarClass} aria-hidden="true" />
+              <div>
+                <p className="site-guide__title">{ui.title}</p>
+                <p className={`site-guide__status${stage === "connecting" || stage === "escalating" ? " is-connecting" : ""}`}>
+                  <span className="site-guide__live" aria-hidden="true" />
+                  {statusLabel}
+                </p>
+              </div>
+            </div>
+            <button type="button" className="site-guide__close" onClick={close} aria-label="关闭">
+              <IconClose />
+            </button>
+          </header>
+          <div className="site-guide__log" ref={scroller}>
+            {stage === "connecting" ? (
+              <p className="site-guide__connect" aria-live="polite">
+                {ui.connectingLog}
+                <span className="site-guide__connect-dots"><span /><span /><span /></span>
+              </p>
+            ) : null}
+            {turns.map((turn, index) => (
+              <article key={`${turn.role}-${index}`} className={`site-guide__row site-guide__row--${turn.role}`}>
+                {turn.role === "assistant" ? (
+                  <span className={`${avatarClass} site-guide__avatar--sm`} aria-hidden="true" />
+                ) : null}
+                <p className={`site-guide__bubble site-guide__bubble--${turn.role}`}>{turn.content}</p>
+              </article>
+            ))}
+            {typing ? (
+              <article className="site-guide__row site-guide__row--assistant" aria-live="polite">
+                <span className={`${avatarClass} site-guide__avatar--sm`} aria-hidden="true" />
+                <p className="site-guide__bubble site-guide__bubble--assistant site-guide__typing">
+                  <span />
+                  <span />
+                  <span />
+                  <span className="sr-only">正在输入</span>
+                </p>
+              </article>
+            ) : null}
+            {showStarters ? (
+              <div className="site-guide__hints">
+                {ui.starters.map((item) => (
+                  <button key={item} type="button" onClick={() => send(item)}>
+                    {item}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          {showEscalate ? (
+            <div className="site-guide__handoff">
+              <button type="button" className="site-guide__escalate" onClick={escalate}>
+                {ui.escalate}
+              </button>
+            </div>
+          ) : null}
+          <form
+            className="site-guide__form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              send(input)
+            }}
+          >
+            <label className="sr-only" htmlFor="site-guide-input">
+              提问
+            </label>
+            <input
+              id="site-guide-input"
+              ref={inputRef}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder={ui.placeholder}
+              maxLength={500}
+              autoComplete="off"
+              enterKeyHint="send"
+              autoCapitalize="sentences"
+            />
+            <button className="site-guide__send" type="submit" disabled={!input.trim()} aria-label="发送">
+              <IconSend />
+            </button>
+          </form>
+        </section>
+      ) : null}
+      <button
+        type="button"
+        className="site-guide__toggle"
+        aria-expanded={open}
+        aria-label={open ? "收起咨询窗口" : "打开在线咨询"}
+        onClick={() => {
+          if (open) close()
+          else setOpen(true)
+        }}
+      >
+        <span className="site-guide__toggle-icon" aria-hidden="true">
+          {open ? <IconClose /> : <IconChat />}
+        </span>
+        <span>{open ? "收起" : "在线咨询"}</span>
+      </button>
+    </div>
+  )
+}
