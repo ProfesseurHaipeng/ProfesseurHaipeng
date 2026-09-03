@@ -104,9 +104,32 @@ export function flattenKnowledge(content: SiteContent): string {
   return blocks.filter(Boolean).join("\n")
 }
 
+export function isProductIntroAsk(question: string) {
+  return /介绍|这是什么|什么产品|什么项目|你们卖什么|讲讲产品|说说产品|产品介绍|what is this|tell me about|introduce (the )?product/i.test(
+    question,
+  )
+}
+
+export function isOnTopicAdvisorAsk(question: string) {
+  return /产品|项目|火山灰|皮纳图博|改土|检测|供应|合作|水稻|香蕉|芒果|柑橘|茶叶|甘蔗|样品|吨|介绍|pinatubo|ash|soil|rice|product|project/i.test(
+    question,
+  )
+}
+
+export function isScopeRefusal(text: string) {
+  return /不在.{0,16}服务范围|超出.{0,10}(职责|范围)|outside the scope|not within (the )?scope|I can only assist/i.test(
+    text,
+  )
+}
+
+export function localProductIntro() {
+  return "我们做的是皮纳图博火山灰，菲律宾吕宋岛皮纳图博火山喷发后，经过三十多年自然矿化的天然矿物，用来改土和做肥料基料。\n\n弱碱性，能调南方酸化土壤，硅、钙、镁、铁这些矿物一次补上。月供应能力在 50 万吨以上，散装、吨袋、小袋都能走。\n\n您那边主要种什么、大概多少亩或多少吨？我按这个给您说用量。"
+}
+
 export function localGuideAnswer(question: string, knowledge: string): string {
   const q = question.trim()
   if (!q) return "请先问一个具体问题，例如作物、检测或怎么联络。"
+  if (isProductIntroAsk(q)) return localProductIntro()
 
   const lines = knowledge.split("\n").map((item) => item.trim()).filter(Boolean)
   const tokens = tokensFrom(q)

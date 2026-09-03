@@ -1,7 +1,7 @@
 import { completeChatCompletions, minimaxEnvFrom, type ChatCompletionsEnv } from "./chatCompletions"
 import { buildGuideMessages, type GuideMessage } from "./guidePrompt"
 import { type AdvisorId, resolveHermesReply } from "./hermes"
-import { localGuideAnswer } from "./knowledge"
+import { isOnTopicAdvisorAsk, isScopeRefusal, localGuideAnswer } from "./knowledge"
 import { extractTicket, stripTicketTags, type TicketDraft } from "./ticket"
 
 export type GuideEnvBag = Record<string, string | undefined>
@@ -39,6 +39,9 @@ export async function resolveGuideReply(
       const raw = await completeChatCompletions(minimax, messages)
       if (raw) {
         const { reply, ticket } = extractTicket(raw)
+        if (reply && isScopeRefusal(reply) && lastUser && isOnTopicAdvisorAsk(lastUser.content)) {
+          return { reply: fallback, source: "local", ticket: null, advisor: "lin" }
+        }
         if (reply) return { reply, source: "minimax", ticket, advisor: "lin" }
       }
     } catch (error) {
@@ -58,6 +61,9 @@ export async function resolveGuideReply(
       const raw = await completeChatCompletions(custom, messages)
       if (raw) {
         const { reply, ticket } = extractTicket(raw)
+        if (reply && isScopeRefusal(reply) && lastUser && isOnTopicAdvisorAsk(lastUser.content)) {
+          return { reply: fallback, source: "local", ticket: null, advisor: "lin" }
+        }
         if (reply) return { reply, source: "custom", ticket, advisor: "lin" }
       }
     } catch (error) {

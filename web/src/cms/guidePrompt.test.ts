@@ -78,6 +78,13 @@ describe("guide system prompt", () => {
     expect(prompt).toContain("未同意前不要主动要邮箱")
   })
 
+  it("treats a product intro as in-scope work, not a refusal", () => {
+    expect(prompt).toContain("介绍一下产品")
+    expect(prompt).toContain("全部在服务范围内")
+    expect(prompt).toContain("不在服务范围")
+    expect(prompt).toContain("立刻讲皮纳图博火山灰")
+  })
+
   it("puts the system prompt first and keeps the latest turns", () => {
     const messages = buildGuideMessages(
       [
