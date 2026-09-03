@@ -1403,6 +1403,11 @@
     width: 100%;
   }
 
+  .hermes-apple .hermes-tickets header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .hermes-apple .hermes-grok__status,
   .hermes-apple .hermes-grok__tools,
   .hermes-apple .hermes-tickets input {
