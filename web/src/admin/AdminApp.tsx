@@ -77,7 +77,7 @@ export function AdminApp() {
         <form onSubmit={(event) => void unlock(event)}>
           <p className="latin-kicker">Back office</p>
           <h1>网站后台</h1>
-          <p>查看前台线索，进入 Hermes 工作台。</p>
+          <p>查看前台线索，进入 karmenai 工作台。</p>
           <label>
             账号
             <input
@@ -109,7 +109,7 @@ export function AdminApp() {
   }
 
   return (
-    <div className={view === "hermes" ? "admin-shell admin-shell--hermes" : "admin-shell"}>
+    <div className="admin-shell">
       <aside className="admin-side">
         <p className="latin-kicker">Back office</p>
         <h1>网站后台</h1>
@@ -126,7 +126,7 @@ export function AdminApp() {
             className={view === "hermes" ? "is-active" : ""}
             onClick={() => setView("hermes")}
           >
-            Hermes 工作台
+            karmenai 工作台
           </button>
         </nav>
         <Link to="/">看前台</Link>
@@ -134,7 +134,7 @@ export function AdminApp() {
           退出登录
         </button>
       </aside>
-      <section className={view === "hermes" ? "admin-main admin-main--hermes" : "admin-main"}>
+      <section className={view === "hermes" ? "admin-main admin-main--desk" : "admin-main"}>
         {view === "hermes" ? <HermesDesk auth={auth} /> : <LeadsPanel auth={auth} />}
       </section>
     </div>

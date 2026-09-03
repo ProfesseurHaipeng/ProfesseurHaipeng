@@ -29,6 +29,8 @@ type LinkView = "connecting" | "connected" | "disconnected"
 type MobilePane = "chat" | "board"
 type PendingImage = { key: string; mime: string; name: string; data: string; preview: string }
 
+const AGENT_NAME = "Karmenai"
+
 const STATUS_LABEL: Record<LinkView, string> = {
   connecting: "正在连接",
   connected: "正常连接",
@@ -194,7 +196,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         body: JSON.stringify(body),
       })
       const payload = (await response.json()) as DeskPayload
-      if (!response.ok) throw new Error(payload.error === "hermes-only" ? "这项只能由 Hermes 改" : payload.error || `接口返回 ${response.status}`)
+      if (!response.ok) throw new Error(payload.error === "hermes-only" ? `这项只能由 ${AGENT_NAME} 改` : payload.error || `接口返回 ${response.status}`)
       apply(payload)
       return payload
     },
@@ -294,7 +296,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
       <div className={`hermes-scan${status === "connecting" ? " is-on" : ""}`} aria-hidden="true" />
       <header className="hermes-grok__top">
         <div className="hermes-grok__brand">
-          <strong>Hermes</strong>
+          <strong>{AGENT_NAME}</strong>
           <span>看板只读 · 同事只通过对话指挥</span>
         </div>
         <p className={`hermes-grok__status hermes-grok__status--${status}`} title={healthDetail || undefined}>
@@ -320,7 +322,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         />
         <ul className="hermes-world__stats">
           <li><b>{board.live}</b><span>真实对话</span></li>
-          <li><b>{board.following}</b><span>Hermes 跟进</span></li>
+          <li><b>{board.following}</b><span>{AGENT_NAME} 跟进</span></li>
           <li><b>{board.human}</b><span>人工跟进</span></li>
           <li><b>{board.inquiries}</b><span>询单次数</span></li>
           <li><b>{board.chatTurns}</b><span>对话轮次</span></li>
@@ -363,7 +365,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
           <div className="hermes-grok__log" ref={logRef}>
             {coach.length === 0 && !sending ? (
               <div className="hermes-grok__hello">
-                <h2>Hermes</h2>
+                <h2>{AGENT_NAME}</h2>
                 <p>进度、接管、邮件和客户行为都由我改。你只要在这里说话，也可以发图。</p>
               </div>
             ) : null}
@@ -378,7 +380,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                 ) : null}
                 <p>{turn.content}</p>
                 <time dateTime={turn.at}>
-                  {turn.role === "staff" ? "你" : "Hermes"} · {formatTime(turn.at)}
+                  {turn.role === "staff" ? "你" : AGENT_NAME} · {formatTime(turn.at)}
                 </time>
               </article>
             ))}
@@ -387,7 +389,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                 <span />
                 <span />
                 <span />
-                Hermes 正在看档案
+                {AGENT_NAME} 正在看档案
               </div>
             ) : null}
           </div>
@@ -425,7 +427,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                 +
               </button>
               <label className="sr-only" htmlFor="hermes-grok-input">
-                给 Hermes 的指令
+                给 {AGENT_NAME} 的指令
               </label>
               <textarea
                 id="hermes-grok-input"
@@ -444,7 +446,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                     void sendCoach()
                   }
                 }}
-                placeholder="给 Hermes 下指令，或拖一张图进来…"
+                placeholder={`给 ${AGENT_NAME} 下指令，或拖一张图进来…`}
                 rows={1}
                 maxLength={2000}
               />
@@ -494,7 +496,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
               <header className="hermes-panel__who">
                 <strong>{selected.name}</strong>
                 <span>
-                  {selected.owner === "human" ? "人工跟进中" : selected.following ? "Hermes 跟进中" : "尚未跟进"}
+                  {selected.owner === "human" ? "人工跟进中" : selected.following ? `${AGENT_NAME} 跟进中` : "尚未跟进"}
                   {isLiveCase(selected) ? " · 真实对话" : ""}
                 </span>
               </header>
@@ -515,7 +517,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                     {MAIL_TRACK_LABEL[selected.mailTracking || "none"]}
                   </li>
                 </ul>
-                <p className="hermes-sum">{selected.mailSummary || "还没有客户回邮摘要。Hermes 读到真邮件后再写。"}</p>
+                <p className="hermes-sum">{selected.mailSummary || `还没有客户回邮摘要。${AGENT_NAME} 读到真邮件后再写。`}</p>
               </section>
               <section>
                 <h3>客户行为</h3>
@@ -559,7 +561,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
           )}
 
           <section>
-            <h3>记忆 · Hermes 维护</h3>
+            <h3>记忆 · {AGENT_NAME} 维护</h3>
             <p className="hermes-lore">{memory.shared || "还没有共用记忆。"}</p>
             <p className="hermes-lore hermes-lore--desk">{memory.desk || "还没有仅后台笔记。"}</p>
           </section>
