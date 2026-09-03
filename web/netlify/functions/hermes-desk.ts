@@ -8,12 +8,15 @@ import {
   readHermesHealth,
   readHermesImage,
   readHermesMemory,
+  readInquiryState,
   writeHermesCase,
   writeHermesCoach,
   writeHermesHealth,
   writeHermesImage,
   writeHermesMemory,
+  writeInquiryState,
 } from "../../src/cms/hermesBlobs"
+import { applyTargetWrite } from "../../src/cms/inquiryDesk"
 import {
   attachableLeads,
   decorateDeskPayload,
@@ -36,8 +39,8 @@ import { sortLeads, type Lead } from "../../src/cms/leads"
  *
  * GET  /api/hermes-desk
  * POST /api/hermes-desk  { action }
- *   staff: health | coach (images allowed)
- *   Hermes-only via <desk> in coach: takeover, progress, mail, behavior, memory fields
+ *   staff: health | coach (images allowed) | targets
+ *   Hermes-only via <desk> / <inquiry> in coach: cases, mail, memory, findings
  */
 
 type BlobStore = {
@@ -126,6 +129,7 @@ async function payload(filter?: HermesDeskFilter) {
     link: hermesLinkInfo(env),
     hermesReady: hermesReady(env),
     attachable: publicAttachable(attachableLeads(cases, leads)),
+    inquiry: await readInquiryState(),
     filter,
   })
 }
@@ -186,6 +190,15 @@ export default async (req: Request) => {
     return json({ ...(await payload()), health })
   }
 
+  if (action === "targets") {
+    const inquiry = await readInquiryState()
+    const next = applyTargetWrite(inquiry.targets, body, now)
+    if (next.error === "empty") return json({ error: "empty" }, 400)
+    await writeInquiryState({ ...inquiry, targets: next.targets })
+    await appendHermesEvent(eventOf("update", "询单：更新要找的厂商弊端"))
+    return json(await payload())
+  }
+
   if (action === "coach") {
     const message = typeof body.message === "string" ? body.message.trim().slice(0, 2000) : ""
     const images = sanitizeCoachImages(body.images)
@@ -202,12 +215,14 @@ export default async (req: Request) => {
     }
     const history = [...(await readHermesCoach()), staff]
     const memory = (await readHermesMemory()) || emptyMemory()
+    const inquiry = await readInquiryState()
     const coachResult = await resolveCoachReply(
       cases,
       history,
       envBag(),
       memory,
       images.map(({ mime, data }) => ({ mime, data })),
+      inquiry,
     )
     const replyTurn: HermesCoachTurn = {
       id: newCoachTurnId(Date.now() + 1),
@@ -223,6 +238,9 @@ export default async (req: Request) => {
     for (const item of coachResult.cases) {
       const before = cases.find((row) => row.id === item.id)
       if (!before || JSON.stringify(before) !== JSON.stringify(item)) await writeHermesCase(item)
+    }
+    if (coachResult.inquiry && JSON.stringify(coachResult.inquiry) !== JSON.stringify(inquiry)) {
+      await writeInquiryState(coachResult.inquiry)
     }
     await appendHermesEvent(eventOf("coach", (message || "附图").slice(0, 180)))
     return json({ ...(await payload()), coach, reply: coachResult.reply })

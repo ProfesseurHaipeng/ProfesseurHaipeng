@@ -26,6 +26,7 @@ function localGuide(): Plugin {
       memory: { shared: string; desk: string; updatedAt: string }
       health: { status: "connected" | "disconnected"; checkedAt: string; model?: string; detail?: string } | null
       images: Record<string, { mime: string; name: string; data: string }>
+      inquiry: { targets: unknown[]; findings: unknown[]; job: { status: string; brief: string; updatedAt: string } }
     } = {
       cases: [],
       coach: [],
@@ -33,6 +34,7 @@ function localGuide(): Plugin {
       memory: { shared: "", desk: "", updatedAt: "" },
       health: null,
       images: {},
+      inquiry: { targets: [], findings: [], job: { status: "idle", brief: "", updatedAt: "" } },
     }
     const staffOk = (req: IncomingMessage) => {
       const user = env.ADMIN_USER || "admin"
@@ -87,6 +89,7 @@ function localGuide(): Plugin {
         }
         const deskMod = await server.ssrLoadModule("/src/cms/hermesDesk.ts")
         const hermesMod = await server.ssrLoadModule("/src/cms/hermes.ts")
+        const inquiryMod = await server.ssrLoadModule("/src/cms/inquiryDesk.ts")
         const pack = () =>
           deskMod.decorateDeskPayload({
             cases: localDesk.cases,
@@ -97,6 +100,7 @@ function localGuide(): Plugin {
             link: hermesMod.hermesLinkInfo(env),
             hermesReady: hermesMod.hermesReady(env),
             attachable: deskMod.publicAttachable(deskMod.attachableLeads(localDesk.cases, localLeads)),
+            inquiry: localDesk.inquiry,
           })
         const pushEvent = (kind: string, text: string, caseId?: string) => {
           localDesk.events = [
@@ -144,6 +148,18 @@ function localGuide(): Plugin {
             res.end(JSON.stringify({ ...pack(), health }))
             return
           }
+          if (action === "targets") {
+            const next = inquiryMod.applyTargetWrite(localDesk.inquiry.targets, body)
+            if (next.error === "empty") {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: "empty" }))
+              return
+            }
+            localDesk.inquiry = { ...localDesk.inquiry, targets: next.targets }
+            pushEvent("update", "询单：更新要找的厂商弊端")
+            res.end(JSON.stringify(pack()))
+            return
+          }
           if (action === "coach") {
             const now = new Date().toISOString()
             const message = typeof body.message === "string" ? body.message.trim().slice(0, 2000) : ""
@@ -172,6 +188,7 @@ function localGuide(): Plugin {
               env,
               localDesk.memory,
               images.map((image: { mime: string; data: string }) => ({ mime: image.mime, data: image.data })),
+              localDesk.inquiry,
             )
             const replyTurn = {
               id: deskMod.newCoachTurnId(Date.now() + 1),
@@ -181,6 +198,7 @@ function localGuide(): Plugin {
             }
             localDesk.cases = result.cases
             if (result.memory) localDesk.memory = result.memory
+            if (result.inquiry) localDesk.inquiry = result.inquiry
             localDesk.coach = [...history, replyTurn]
             pushEvent("coach", (message || "附图").slice(0, 180))
             res.end(JSON.stringify({ ...pack(), coach: localDesk.coach, reply: result.reply }))

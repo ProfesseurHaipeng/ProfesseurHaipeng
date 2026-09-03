@@ -1,5 +1,13 @@
 import { completeChatCompletions } from "./chatCompletions"
 import { hermesEnvFrom } from "./hermes"
+import {
+  applyInquiryState,
+  emptyInquiry,
+  extractInquiryUpdates,
+  inquiryCoachExtra,
+  stripInquiryTags,
+  type InquiryState,
+} from "./inquiryDesk"
 import type { Lead } from "./leads"
 
 export type HermesOwner = "hermes" | "human"
@@ -141,10 +149,10 @@ export const CHANNEL_LABEL: Record<HermesChannel, string> = {
   unset: "未知",
 }
 
-export const STAFF_ACTIONS = ["health", "coach"] as const
+export const STAFF_ACTIONS = ["health", "coach", "targets"] as const
 
 export function isStaffAction(action: string) {
-  return action === "health" || action === "coach"
+  return action === "health" || action === "coach" || action === "targets"
 }
 
 export function progressRatio(progress: HermesProgress) {
@@ -512,6 +520,7 @@ export function decorateDeskPayload(options: {
   link: HermesDeskLink
   hermesReady: boolean
   attachable: HermesAttachable[]
+  inquiry?: InquiryState
   filter?: HermesDeskFilter
 }) {
   return {
@@ -523,6 +532,7 @@ export function decorateDeskPayload(options: {
     health: options.health,
     hermesReady: options.hermesReady,
     attachable: options.attachable,
+    inquiry: options.inquiry || emptyInquiry(),
     stats: deskStats(options.cases),
     attention: attentionCases(options.cases),
     pipeline: pipelineStats(options.cases),
@@ -820,7 +830,7 @@ export function extractDeskUpdates(reply: string): {
   memory?: Partial<HermesMemory>
 } {
   const match = reply.match(DESK_RE)
-  const cleaned = stripDeskTags(reply)
+  const cleaned = stripInquiryTags(stripDeskTags(reply))
   if (!match) return { reply: cleaned, updates: [] }
   try {
     const raw = JSON.parse(match[1]) as Record<string, unknown>
@@ -892,6 +902,7 @@ const COACH_RULES = `你是皮纳图博火山灰项目的高级顾问 Hermes。�
 - mailTracking 只能是 none / on / opened / clicked。
 - factory 是工厂档案名称。每个真实客户一份客户档案，每家真实工厂一份工厂档案。没有厂名就留空，不要编。
 - ticketNo 是系统工单号。已有的不要改，也不要自己编新号。
+- 询单模块和工单模块是同一个工作台。同事设定厂商弊端后，你按条件找真实厂商；没有来源就不要写。询单只许起草，不许群发，不许写 sent。用 <inquiry> 更新寻找结果，可以和 <desk> 同时出现。
 - 没有真实邮件或对话记录时，不要编发送成功、跟单、速度和摘要。
 - 不要提 NAS、端口、网关、沙箱。`
 
@@ -929,6 +940,7 @@ export function buildCoachMessages(
   history: HermesCoachTurn[],
   extra?: string,
   memory?: HermesMemory,
+  inquiry?: InquiryState,
 ) {
   const live = cases.filter((item) => isLiveCase(item)).map(normalizeCase)
   const roster = live.length
@@ -940,7 +952,8 @@ export function buildCoachMessages(
   ]
     .filter(Boolean)
     .join("\n\n")
-  const system = `${COACH_RULES}\n\n【当前客户档案】\n${roster}${memoryBlock ? `\n\n${memoryBlock}` : ""}${extra ? `\n\n${extra}` : ""}`
+  const inquiryBlock = inquiryCoachExtra(inquiry || emptyInquiry())
+  const system = `${COACH_RULES}\n\n【当前客户档案】\n${roster}\n\n${inquiryBlock}${memoryBlock ? `\n\n${memoryBlock}` : ""}${extra ? `\n\n${extra}` : ""}`
   const turns = history.slice(-16).map((item) => ({
     role: item.role === "staff" ? ("user" as const) : ("assistant" as const),
     content: item.images?.length
@@ -960,23 +973,28 @@ export async function resolveCoachReply(
   env: Record<string, string | undefined>,
   memory?: HermesMemory,
   images?: { mime: string; data: string }[],
+  inquiry?: InquiryState,
 ) {
+  const currentInquiry = inquiry || emptyInquiry()
   const hermes = hermesEnvFrom(env)
   if (!hermes) {
-    return { reply: coachUnavailableReply(), cases, memory, source: "local" as const }
+    return { reply: coachUnavailableReply(), cases, memory, inquiry: currentInquiry, source: "local" as const }
   }
   try {
-    const raw = await completeChatCompletions(hermes, buildCoachMessages(cases, history, undefined, memory), {
+    const raw = await completeChatCompletions(hermes, buildCoachMessages(cases, history, undefined, memory, currentInquiry), {
       hosts: "exact",
       images,
     })
     if (raw) {
       const parsed = extractDeskUpdates(raw)
-      if (parsed.reply) {
+      const inquiryPatch = extractInquiryUpdates(raw)
+      const reply = stripInquiryTags(parsed.reply)
+      if (reply) {
         return {
-          reply: parsed.reply,
+          reply,
           cases: applyDeskUpdates(cases, parsed.updates),
           memory: parsed.memory && memory ? applyMemoryPatch(memory, parsed.memory) : memory,
+          inquiry: applyInquiryState(currentInquiry, inquiryPatch),
           source: "hermes" as const,
         }
       }
@@ -984,5 +1002,5 @@ export async function resolveCoachReply(
   } catch (error) {
     console.error("ash-hermes-desk coach", error)
   }
-  return { reply: coachUnavailableReply(), cases, memory, source: "local" as const }
+  return { reply: coachUnavailableReply(), cases, memory, inquiry: currentInquiry, source: "local" as const }
 }

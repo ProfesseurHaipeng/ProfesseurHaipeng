@@ -109,10 +109,20 @@ export function AdminApp() {
   }
 
   return (
-    <div className="admin-shell">
+    <div className={`admin-shell${view === "hermes" ? " admin-shell--desk" : ""}`}>
       <aside className="admin-side">
-        <p className="latin-kicker">Back office</p>
-        <h1>网站后台</h1>
+        <div className="admin-side__bar">
+          <div>
+            <p className="latin-kicker">Back office</p>
+            <h1>网站后台</h1>
+          </div>
+          <div className="admin-side__links">
+            <Link to="/">前台</Link>
+            <button type="button" className="admin-logout" onClick={logout}>
+              退出
+            </button>
+          </div>
+        </div>
         <nav>
           <button
             type="button"
@@ -129,10 +139,6 @@ export function AdminApp() {
             karmenai 工作台
           </button>
         </nav>
-        <Link to="/">看前台</Link>
-        <button type="button" className="admin-logout" onClick={logout}>
-          退出登录
-        </button>
       </aside>
       <section className={view === "hermes" ? "admin-main admin-main--desk" : "admin-main"}>
         {view === "hermes" ? <HermesDesk auth={auth} /> : <LeadsPanel auth={auth} />}

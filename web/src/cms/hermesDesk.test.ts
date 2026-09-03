@@ -7,6 +7,7 @@ import {
   boardMetrics,
   buildCoachMessages,
   caseFromLead,
+  decorateDeskPayload,
   customerArchives,
   customerKey,
   deskStats,
@@ -35,6 +36,7 @@ import {
   upsertFromVisit,
   type HermesCase,
 } from "./hermesDesk"
+import { extractInquiryUpdates } from "./inquiryDesk"
 import type { Lead } from "./leads"
 
 const now = "2026-09-03T12:00:00.000Z"
@@ -165,6 +167,43 @@ describe("desk coach protocol", () => {
     expect(messages[0]?.content).toContain("一键接管也只能由你执行")
     expect(messages[0]?.content).toContain("mailStatus")
     expect(messages[0]?.content).toContain("不要编发送成功")
+    expect(messages[0]?.content).toContain("询单模块")
+    expect(messages[0]?.content).toContain("<inquiry>")
+  })
+
+  it("keeps desk and inquiry tags on the same coach reply without mixing them", () => {
+    const raw =
+      '先跟王先生，再按土壤板结找厂。\n<desk>{"updates":[{"id":"case-1","progress":"talking"}]}</desk>\n<inquiry>{"job":{"status":"review","brief":"土壤板结"},"findings":[{"org":"绿田加工厂","source":"同事提供","outreach":"sent"}]}</inquiry>'
+    const desk = extractDeskUpdates(raw)
+    expect(desk.reply).toBe("先跟王先生，再按土壤板结找厂。")
+    expect(desk.updates[0]?.progress).toBe("talking")
+    expect(desk.reply).not.toContain("<inquiry>")
+    expect(desk.reply).not.toContain("<desk>")
+    const inquiry = extractInquiryUpdates(raw)
+    expect(inquiry.findings[0]?.org).toBe("绿田加工厂")
+    expect(inquiry.job?.status).toBe("review")
+  })
+
+  it("puts inquiry state on the same desk payload Hermes already uses", () => {
+    const packed = decorateDeskPayload({
+      cases: [],
+      coach: [],
+      events: [],
+      memory: { shared: "", desk: "", updatedAt: "" },
+      health: null,
+      link: { configured: false, model: "", host: "" },
+      hermesReady: false,
+      attachable: [],
+      inquiry: {
+        targets: [{ id: "tg-1", label: "化肥成本高", at: now }],
+        findings: [],
+        job: { status: "idle", brief: "", updatedAt: "" },
+      },
+    })
+    expect(packed.inquiry.targets[0]?.label).toBe("化肥成本高")
+    const briefed = buildCoachMessages([], [], undefined, undefined, packed.inquiry)
+    expect(briefed[0]?.content).toContain("化肥成本高")
+    expect(briefed[0]?.content).toContain("还没有真实找到的厂商")
   })
 
   it("builds a case from an AI lead as already followed", () => {
@@ -235,6 +274,7 @@ describe("desk board telemetry", () => {
   it("blocks staff from board writes and rejects junk images", () => {
     expect(isStaffAction("health")).toBe(true)
     expect(isStaffAction("coach")).toBe(true)
+    expect(isStaffAction("targets")).toBe(true)
     expect(isStaffAction("takeover")).toBe(false)
     expect(isStaffAction("update")).toBe(false)
     expect(isStaffAction("memory")).toBe(false)

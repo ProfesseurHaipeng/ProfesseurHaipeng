@@ -1,3 +1,4 @@
+import { emptyInquiry, hydrateInquiryState, type InquiryState } from "./inquiryDesk"
 import {
   emptyMemory,
   sortHermesCases,
@@ -144,6 +145,20 @@ export async function writeHermesImage(id: string, image: HermesImageBlob) {
   const blobs = await store("ash-hermes")
   if (!blobs || !id.startsWith("img-")) return false
   await blobs.setJSON(id, image)
+  return true
+}
+
+export async function readInquiryState(): Promise<InquiryState> {
+  const blobs = await store("ash-hermes")
+  if (!blobs) return emptyInquiry()
+  const raw = await blobs.get("inquiry", { type: "json" })
+  return hydrateInquiryState(raw)
+}
+
+export async function writeInquiryState(inquiry: InquiryState) {
+  const blobs = await store("ash-hermes")
+  if (!blobs) return false
+  await blobs.setJSON("inquiry", inquiry)
   return true
 }
 

@@ -29,11 +29,14 @@ import {
   type HermesEvent,
   type HermesMemory,
 } from "../cms/hermesDesk"
+import { emptyInquiry, type InquiryState } from "../cms/inquiryDesk"
 import { withBase } from "../lib/asset"
+import { InquiryPanel } from "./InquiryPanel"
 import type { AdminAuth } from "./LeadsPanel"
 
 type LinkView = "connecting" | "connected" | "disconnected"
-type MobilePane = "chat" | "board"
+type MobilePane = "chat" | "board" | "inquiry"
+type BoardModule = "tickets" | "inquiry"
 type PendingImage = { key: string; mime: string; name: string; data: string; preview: string }
 type BoardFocus =
   | { kind: "home" }
@@ -177,6 +180,7 @@ type DeskPayload = {
   link?: HermesDeskLink
   health?: HermesHealth | null
   board?: ReturnType<typeof boardMetrics>
+  inquiry?: InquiryState
   reply?: string
   error?: string
 }
@@ -197,6 +201,8 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   const [query, setQuery] = useState("")
   const [focus, setFocus] = useState<BoardFocus>({ kind: "home" })
   const [pane, setPane] = useState<MobilePane>("board")
+  const [module, setModule] = useState<BoardModule>("tickets")
+  const [inquiry, setInquiry] = useState<InquiryState>(emptyInquiry)
   const [pending, setPending] = useState<PendingImage[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [folds, setFolds] = useState<Record<string, boolean>>({
@@ -225,6 +231,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
     if (Array.isArray(payload.coach)) setCoach(payload.coach)
     if (Array.isArray(payload.events)) setEvents(payload.events)
     if (payload.memory) setMemory(payload.memory)
+    if (payload.inquiry) setInquiry(payload.inquiry)
     if (payload.link) setLink(payload.link)
     if (payload.health) {
       setStatus(payload.health.status === "connected" ? "connected" : "disconnected")
@@ -460,14 +467,19 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
           <strong>{AGENT_NAME}</strong>
           <span>工单与档案只读 · 同事只通过对话指挥</span>
         </div>
-        <p className={`hermes-grok__status hermes-grok__status--${status}`} title={healthDetail || undefined}>
+        <button
+          type="button"
+          className={`hermes-grok__status hermes-grok__status--${status}`}
+          title={healthDetail || undefined}
+          onClick={() => void probe()}
+        >
           <i />
           {STATUS_LABEL[status]}
           {link.model && status === "connected" ? <em>{link.model}</em> : null}
           {status === "disconnected" && !link.configured ? <em>未配置网关</em> : null}
-        </p>
+        </button>
         <div className="hermes-grok__tools">
-          <button type="button" className="hermes-grok__ghost" onClick={() => void probe()}>
+          <button type="button" className="hermes-grok__ghost hermes-grok__ghost--probe" onClick={() => void probe()}>
             探测连接
           </button>
           <button type="button" className="hermes-grok__ghost" onClick={() => void load()} disabled={loading}>
@@ -476,6 +488,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         </div>
       </header>
 
+      {module === "tickets" ? (
       <form className="hermes-search" onSubmit={runSearch}>
         <label className="sr-only" htmlFor="hermes-one-search">
           一键搜索工单号、手机、邮箱或公司
@@ -487,7 +500,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
           placeholder="工单号、手机、邮箱或公司"
         />
         <button type="submit">一键搜索</button>
-        <p>
+        <p className={query.trim() ? undefined : "hermes-search__hint"}>
           {query.trim()
             ? visible.length
               ? `找到 ${visible.length} 张工单 · ${customers.length} 份客户档案`
@@ -495,13 +508,31 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
             : "搜工单号、客户手机、邮箱或公司"}
         </p>
       </form>
+      ) : null}
 
       <nav className="hermes-grok__tabs" aria-label="工作台分区">
         <button type="button" className={pane === "chat" ? "is-on" : ""} onClick={() => setPane("chat")}>
           对话
         </button>
-        <button type="button" className={pane === "board" ? "is-on" : ""} onClick={() => setPane("board")}>
+        <button
+          type="button"
+          className={pane === "board" ? "is-on" : ""}
+          onClick={() => {
+            setModule("tickets")
+            setPane("board")
+          }}
+        >
           单子
+        </button>
+        <button
+          type="button"
+          className={pane === "inquiry" ? "is-on" : ""}
+          onClick={() => {
+            setModule("inquiry")
+            setPane("inquiry")
+          }}
+        >
+          询单
         </button>
       </nav>
 
@@ -525,7 +556,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
             {coach.length === 0 && !sending ? (
               <div className="hermes-grok__hello">
                 <h2>{AGENT_NAME}</h2>
-                <p>进度、接管、邮件和客户行为都由我改。你只要在这里说话，也可以发图。</p>
+                <p>进度、接管、邮件、询单寻找都由我改。你设定要找的厂商弊端，再在这里指挥。也可以发图。</p>
               </div>
             ) : null}
             {coach.map((turn) => (
@@ -629,7 +660,63 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         </section>
 
         <aside className="hermes-panel">
-          {selected ? (
+          <nav className="hermes-mod" aria-label="工作台模块">
+            <button
+              type="button"
+              className={module === "tickets" ? "is-on" : ""}
+              onClick={() => {
+                setModule("tickets")
+                if (compactBoard()) setPane("board")
+              }}
+            >
+              工单档案
+            </button>
+            <button
+              type="button"
+              className={module === "inquiry" ? "is-on" : ""}
+              onClick={() => {
+                setModule("inquiry")
+                setFocus({ kind: "home" })
+                if (compactBoard()) setPane("inquiry")
+              }}
+            >
+              询单系统
+            </button>
+          </nav>
+          {module === "inquiry" ? (
+            <InquiryPanel
+              inquiry={inquiry}
+              busy={sending || loading}
+              onAdd={async (text) => {
+                setError("")
+                try {
+                  await post({ action: "targets", add: text })
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "设定失败")
+                }
+              }}
+              onRemove={async (id) => {
+                setError("")
+                try {
+                  await post({ action: "targets", remove: id })
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "设定失败")
+                }
+              }}
+              onAssign={async (message) => {
+                setSending(true)
+                setError("")
+                if (compactBoard()) setPane("chat")
+                try {
+                  await post({ action: "coach", message })
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "安排失败")
+                } finally {
+                  setSending(false)
+                }
+              }}
+            />
+          ) : selected ? (
             <section className="hermes-detail">
               <button type="button" className="hermes-back" onClick={() => goBoard({ kind: "home" })}>
                 返回列表
