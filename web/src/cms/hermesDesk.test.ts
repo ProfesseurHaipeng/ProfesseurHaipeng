@@ -26,8 +26,11 @@ import {
   recordInquiry,
   sanitizeCoachImages,
   stageFill,
+  ticketNo,
   ticketsForCustomer,
   ticketsForFactory,
+  matchDeskSearch,
+  newTicketNo,
   upsertFromTicket,
   upsertFromVisit,
   type HermesCase,
@@ -66,7 +69,10 @@ describe("hermes desk cases", () => {
     expect(filterHermesCases(cases, { follow: "following" })).toHaveLength(1)
     expect(filterHermesCases(cases, { owner: "human" })[0]?.id).toBe("case-3")
     expect(filterHermesCases(cases, { energy: "high" })[0]?.name).toBe("王先生")
-    expect(filterHermesCases(cases, { query: "水稻" })[0]?.id).toBe("case-1")
+    expect(filterHermesCases(cases, { query: "某农业" })[0]?.id).toBe("case-1")
+    expect(filterHermesCases(cases, { query: "1380000" })[0]?.id).toBe("case-1")
+    expect(filterHermesCases(cases, { query: ticketNo(sample()) })[0]?.id).toBe("case-1")
+    expect(filterHermesCases(cases, { query: "水稻" })).toHaveLength(0)
     expect(deskStats(cases)).toMatchObject({ following: 1, idle: 1, human: 1, high: 2, low: 1 })
   })
 
@@ -91,6 +97,8 @@ describe("hermes desk cases", () => {
     expect(second.case.name).toBe("王先生")
     expect(second.case.visitorId).toBe("vis-1")
     expect(second.case.energy).toBe("unset")
+    expect(ticketNo(first.case)).toBeTruthy()
+    expect(ticketNo(second.case)).toBe(ticketNo(first.case))
     expect(first.case.inquiryCount).toBe(1)
     const again = upsertFromVisit(first.cases, "vis-1", "再问吨位", "2026-09-03T13:00:00.000Z")
     expect(again.case.inquiryCount).toBe(2)
@@ -255,5 +263,24 @@ describe("desk board telemetry", () => {
     expect(ticketsForFactory(filed, "一号厂")).toHaveLength(2)
     expect(ticketsForCustomer(filed, "v1")).toHaveLength(1)
     expect(factoryArchives([sample({ org: "", factory: "" })])).toHaveLength(0)
+  })
+
+  it("gives every ticket a number and searches number, phone, email, or company", () => {
+    const first = sample({ id: "case-old", contact: "138-0000-1111", org: "绿田农业" })
+    const second = sample({
+      id: "case-new",
+      visitorId: "v9",
+      ticketNo: newTicketNo([first], now),
+      contact: "boss@greenfield.example",
+      org: "Green Field Co",
+    })
+    expect(ticketNo(first)).toMatch(/^VA20260903-/)
+    expect(ticketNo(second)).toBe("VA20260903-001")
+    expect(matchDeskSearch(first, "VA20260903")).toBe(true)
+    expect(matchDeskSearch(first, "13800001111")).toBe(true)
+    expect(matchDeskSearch(second, "boss@greenfield.example")).toBe(true)
+    expect(matchDeskSearch(second, "Green Field")).toBe(true)
+    expect(matchDeskSearch(first, "不存在的公司")).toBe(false)
+    expect(filterHermesCases([first, second], { query: "greenfield" })[0]?.id).toBe("case-new")
   })
 })

@@ -16,6 +16,7 @@ export type HermesCase = {
   name: string
   org: string
   factory?: string
+  ticketNo?: string
   contact: string
   note: string
   place?: string
@@ -157,6 +158,43 @@ export function factoryName(item: HermesCase) {
   return (item.factory || item.org || "").replace(/\s+/g, " ").trim()
 }
 
+export function ticketNo(item: HermesCase) {
+  const stored = (item.ticketNo || "").replace(/\s+/g, "").trim()
+  if (stored) return stored
+  const day = (item.at || "").slice(0, 10).replace(/-/g, "") || "00000000"
+  const tail = (item.id || "").replace(/[^a-z0-9]/gi, "").slice(-4).toUpperCase() || "0000"
+  return `VA${day}-${tail.padStart(4, "0")}`
+}
+
+export function newTicketNo(cases: HermesCase[], at = new Date().toISOString()) {
+  const day = at.slice(0, 10).replace(/-/g, "") || "00000000"
+  const prefix = `VA${day}-`
+  let max = 0
+  for (const item of cases) {
+    const no = ticketNo(item)
+    if (!no.startsWith(prefix)) continue
+    const n = Number(no.slice(prefix.length))
+    if (Number.isFinite(n)) max = Math.max(max, n)
+  }
+  return `${prefix}${String(max + 1).padStart(3, "0")}`
+}
+
+function digits(value: string) {
+  return value.replace(/\D/g, "")
+}
+
+export function matchDeskSearch(item: HermesCase, query: string) {
+  const raw = query.replace(/\s+/g, " ").trim()
+  if (!raw) return true
+  const q = raw.toLowerCase()
+  const no = ticketNo(item).toLowerCase()
+  const org = `${item.org || ""} ${item.factory || ""}`.toLowerCase()
+  const contact = (item.contact || "").toLowerCase()
+  if (no.includes(q) || org.includes(q) || contact.includes(q)) return true
+  const phone = digits(q)
+  return phone.length >= 3 && digits(item.contact || "").includes(phone)
+}
+
 export function customerKey(item: HermesCase) {
   return item.visitorId || item.leadId || item.id
 }
@@ -250,6 +288,7 @@ export function normalizeCase(item: HermesCase): HermesCase {
   return {
     ...item,
     factory: factory || undefined,
+    ticketNo: ticketNo(item),
     mailStatus:
       item.mailStatus === "queued" || item.mailStatus === "sent" || item.mailStatus === "failed" ? item.mailStatus : "none",
     mailFollowUp: item.mailFollowUp === true,
@@ -394,9 +433,7 @@ export function filterHermesCases(cases: HermesCase[], filter: HermesDeskFilter 
     if (filter.follow === "idle" && item.following) return false
     if (filter.owner && filter.owner !== "all" && item.owner !== filter.owner) return false
     if (filter.energy && filter.energy !== "all" && item.energy !== filter.energy) return false
-    if (!query) return true
-    const hay = `${item.name} ${item.org} ${item.factory || ""} ${item.note} ${item.reaction} ${item.evaluation}`.toLowerCase()
-    return hay.includes(query)
+    return matchDeskSearch(item, query)
   })
 }
 
@@ -448,7 +485,7 @@ export function attachLead(cases: HermesCase[], leads: Lead[], leadId: string, n
   if (lead.source !== "ai") return { cases, case: null, error: "not-ai" as const }
   const hit = findHermesCase(cases, { leadId: lead.id, contact: lead.contact || lead.email })
   if (hit) return { cases, case: hit, error: "exists" as const }
-  const created = caseFromLead(lead, now)
+  const created = caseFromLead(lead, now, cases)
   return { cases: sortHermesCases([created, ...cases]), case: created, error: null }
 }
 
@@ -562,6 +599,7 @@ export function patchHermesCase(item: HermesCase, raw: Record<string, unknown>, 
   if ("name" in raw) next.name = clean(raw.name, MAX.name) || item.name
   if ("org" in raw) next.org = clean(raw.org, MAX.org)
   if ("factory" in raw) next.factory = clean(raw.factory, MAX.org) || undefined
+  if (!next.ticketNo) next.ticketNo = ticketNo(item)
   if ("contact" in raw) next.contact = clean(raw.contact, MAX.contact)
   if ("note" in raw) next.note = clean(raw.note, MAX.note)
   if ("place" in raw) next.place = clean(raw.place, MAX.place) || undefined
@@ -613,7 +651,7 @@ export function patchHermesCase(item: HermesCase, raw: Record<string, unknown>, 
   return next
 }
 
-export function caseFromLead(lead: Lead, now = new Date().toISOString()): HermesCase {
+export function caseFromLead(lead: Lead, now = new Date().toISOString(), cases: HermesCase[] = []): HermesCase {
   const contact = lead.contact || lead.email || ""
   return {
     id: newHermesCaseId(),
@@ -621,6 +659,7 @@ export function caseFromLead(lead: Lead, now = new Date().toISOString()): Hermes
     updatedAt: now,
     name: lead.name || "未留称呼",
     org: lead.org || "",
+    ticketNo: newTicketNo(cases, lead.at || now),
     contact,
     note: lead.note || "",
     place: lead.place,
@@ -670,6 +709,7 @@ export function upsertFromTicket(
         updatedAt: now,
         name: ticket.name || "AI 对话客户",
         org: ticket.org,
+        ticketNo: newTicketNo(cases, now),
         contact: ticket.contact,
         note: ticket.note,
         place: extra.place,
@@ -716,6 +756,7 @@ export function upsertFromVisit(
     updatedAt: now,
     name: "对话客户",
     org: "",
+    ticketNo: newTicketNo(cases, now),
     contact: "",
     note: note.slice(0, MAX.note),
     visitorId,
@@ -742,7 +783,7 @@ export function importLeads(cases: HermesCase[], leads: Lead[], now = new Date()
     if (lead.source !== "ai") continue
     const hit = findHermesCase(next, { leadId: lead.id, contact: lead.contact || lead.email })
     if (hit) continue
-    next = [caseFromLead(lead, now), ...next]
+    next = [caseFromLead(lead, now, next), ...next]
   }
   return sortHermesCases(next)
 }
@@ -850,6 +891,7 @@ const COACH_RULES = `你是皮纳图博火山灰项目的高级顾问 Hermes。�
 - mailStatus 只能是 none / queued / sent / failed。
 - mailTracking 只能是 none / on / opened / clicked。
 - factory 是工厂档案名称。每个真实客户一份客户档案，每家真实工厂一份工厂档案。没有厂名就留空，不要编。
+- ticketNo 是系统工单号。已有的不要改，也不要自己编新号。
 - 没有真实邮件或对话记录时，不要编发送成功、跟单、速度和摘要。
 - 不要提 NAS、端口、网关、沙箱。`
 
@@ -857,6 +899,7 @@ export function caseBrief(item: HermesCase) {
   const contact = item.contact ? "已留联系方式" : "未留联系方式"
   return [
     `id=${item.id}`,
+    `工单号=${ticketNo(item)}`,
     `称呼=${item.name}`,
     item.org ? `机构=${item.org}` : "",
     factoryName(item) ? `工厂=${factoryName(item)}` : "工厂=尚未建档",

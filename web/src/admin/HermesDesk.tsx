@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react"
 import type { HermesHealth } from "../cms/hermes"
 import {
   CHANNEL_LABEL,
@@ -19,6 +19,7 @@ import {
   isLiveCase,
   normalizeCase,
   stageFill,
+  ticketNo,
   ticketsForCustomer,
   ticketsForFactory,
   type HermesCase,
@@ -323,6 +324,22 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
     if (compact && next.kind !== "home") setPane("board")
   }
 
+  const runSearch = (event?: FormEvent) => {
+    event?.preventDefault()
+    const q = query.trim()
+    if (compactBoard()) setPane("board")
+    if (!q) {
+      goBoard({ kind: "home" })
+      return
+    }
+    const hits = filterHermesCases(cases, { origin: "live", query: q }).map(normalizeCase)
+    if (hits.length === 1) {
+      goBoard({ kind: "ticket", id: hits[0]!.id })
+      return
+    }
+    goBoard({ kind: "home" })
+  }
+
   const ticketFollow = (item: HermesCase) =>
     item.owner === "human" ? "人工跟进中" : item.following ? `${AGENT_NAME} 跟进中` : "尚未跟进"
 
@@ -376,8 +393,9 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   const ticketRow = (item: HermesCase, lines: string[], kicker?: string) => (
     <button type="button" className="hermes-ticket" onClick={() => goBoard({ kind: "ticket", id: item.id })}>
       <div className="hermes-ticket__body">
-        {kicker ? <em>{kicker}</em> : null}
+        <em>{kicker || `工单 ${ticketNo(item)}`}</em>
         <strong>{item.name}</strong>
+        <span className="hermes-ticket__no">{ticketNo(item)}</span>
         {lines.map((line) => (
           <span key={line}>{line}</span>
         ))}
@@ -391,6 +409,8 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
     <dl className="hermes-file">
       {[
         { label: "称呼", value: item.name },
+        { label: "公司", value: item.org || "尚无" },
+        { label: "联系方式", value: item.contact || "尚无" },
         { label: "地区", value: item.place || "尚无" },
         { label: "意向", value: ENERGY_LABEL[item.energy] },
         { label: "渠道", value: CHANNEL_LABEL[item.lastChannel || "unset"] },
@@ -455,6 +475,26 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
           </button>
         </div>
       </header>
+
+      <form className="hermes-search" onSubmit={runSearch}>
+        <label className="sr-only" htmlFor="hermes-one-search">
+          一键搜索工单号、手机、邮箱或公司
+        </label>
+        <input
+          id="hermes-one-search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="工单号、手机、邮箱或公司"
+        />
+        <button type="submit">一键搜索</button>
+        <p>
+          {query.trim()
+            ? visible.length
+              ? `找到 ${visible.length} 张工单 · ${customers.length} 份客户档案`
+              : "没有匹配的工单号、电话、邮箱或公司"
+            : "搜工单号、客户手机、邮箱或公司"}
+        </p>
+      </form>
 
       <nav className="hermes-grok__tabs" aria-label="工作台分区">
         <button type="button" className={pane === "chat" ? "is-on" : ""} onClick={() => setPane("chat")}>
@@ -595,7 +635,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                 返回列表
               </button>
               <header className="hermes-panel__who">
-                <em>工单</em>
+                <em>工单 {ticketNo(selected)}</em>
                 <strong>{selected.name}</strong>
                 <span>
                   {ticketFollow(selected)}
@@ -606,7 +646,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                 <StageList progress={selected.progress} paused={selected.progress === "hold"} />
               </Fold>
               <Fold title="客户档案" open={folds.customer} onToggle={() => toggleFold("customer")}>
-                {fileFacts(selected)}
+                {fileFacts(selected, [{ label: "工单号", value: ticketNo(selected) }])}
                 <button type="button" className="hermes-link" onClick={() => goBoard({ kind: "customer", key: customerKey(selected) })}>
                   打开这份客户档案
                 </button>
@@ -670,13 +710,16 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                 <StageList progress={customerFile.progress} paused={customerFile.progress === "hold"} />
               </Fold>
               <Fold title="档案信息" open={folds.customer} onToggle={() => toggleFold("customer")}>
-                {fileFacts(customerFile, [{ label: "工厂", value: factoryName(customerFile) || "尚未建档" }])}
+                {fileFacts(customerFile, [
+                  { label: "工厂", value: factoryName(customerFile) || "尚未建档" },
+                  { label: "工单", value: customerTickets.map(ticketNo).join(" · ") || "尚无" },
+                ])}
               </Fold>
               <Fold title="关联工单" open={folds.related} onToggle={() => toggleFold("related")}>
                 <ul className="hermes-tickets__list">
                   {customerTickets.map((item) => (
                     <li key={item.id}>
-                      {ticketRow(item, [`${ticketFollow(item)} · ${PROGRESS_LABEL[item.progress]}`, ticketMail(item)], "工单")}
+                      {ticketRow(item, [`${ticketFollow(item)} · ${PROGRESS_LABEL[item.progress]}`, ticketMail(item)])}
                     </li>
                   ))}
                 </ul>
@@ -734,11 +777,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                 <ul className="hermes-tickets__list">
                   {factoryTickets.map((item) => (
                     <li key={item.id}>
-                      {ticketRow(
-                        item,
-                        [`${ticketFollow(item)} · ${PROGRESS_LABEL[item.progress]}`, item.place || "地区尚无"],
-                        "工单",
-                      )}
+                      {ticketRow(item, [`${ticketFollow(item)} · ${PROGRESS_LABEL[item.progress]}`, item.place || "地区尚无"])}
                     </li>
                   ))}
                 </ul>
@@ -750,21 +789,16 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                 <header>
                   <div>
                     <h3>工单</h3>
-                    <p>{visible.length ? `${visible.length} 张` : "还没有工单"} · 每张单子各有六个环节进度</p>
+                    <p>{visible.length ? `${visible.length} 张` : "还没有工单"} · 每张都有工单号和六个环节进度</p>
                   </div>
-                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索工单或档案" />
                 </header>
                 <ul>
                   {visible.map((item) => (
                     <li key={item.id}>
-                      {ticketRow(
-                        item,
-                        [
-                          `${ticketFollow(item)} · ${PROGRESS_LABEL[item.progress]}`,
-                          `${factoryName(item) || "工厂尚未建档"} · ${ticketMail(item)}`,
-                        ],
-                        "工单",
-                      )}
+                      {ticketRow(item, [
+                        `${ticketFollow(item)} · ${PROGRESS_LABEL[item.progress]}`,
+                        `${factoryName(item) || "工厂尚未建档"} · ${ticketMail(item)}`,
+                      ])}
                     </li>
                   ))}
                 </ul>
@@ -780,7 +814,9 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                   </div>
                 </header>
                 <ul>
-                  {customers.map((item) => (
+                  {customers.map((item) => {
+                    const owned = ticketsForCustomer(allLive, customerKey(item))
+                    return (
                     <li key={customerKey(item)}>
                       <button
                         type="button"
@@ -790,15 +826,17 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                         <div className="hermes-ticket__body">
                           <em>客户档案</em>
                           <strong>{item.name}</strong>
+                          <span>{item.org || "公司尚无"}{item.contact ? ` · ${item.contact}` : ""}</span>
                           <span>
-                            {ticketFollow(item)} · {item.place || "地区尚无"}
+                            {owned.length} 张工单 · {owned.map(ticketNo).join(" · ") || "尚无工单号"}
                           </span>
                           <MiniStages progress={item.progress} />
                         </div>
                         <b aria-hidden="true">›</b>
                       </button>
                     </li>
-                  ))}
+                    )
+                  })}
                 </ul>
               </section>
               <section className="hermes-tickets">
@@ -816,7 +854,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                           <em>工厂档案</em>
                           <strong>{row.name}</strong>
                           <span>
-                            {row.count} 张关联工单 · {PROGRESS_LABEL[row.latest.progress]}
+                            {row.count} 张工单 · {row.tickets.map(ticketNo).join(" · ")}
                           </span>
                           <MiniStages progress={row.latest.progress} />
                         </div>
