@@ -15,6 +15,7 @@ export type HermesCase = {
   updatedAt: string
   name: string
   org: string
+  factory?: string
   contact: string
   note: string
   place?: string
@@ -152,6 +153,64 @@ export function progressRatio(progress: HermesProgress) {
   return index / (PROGRESS_TRACK.length - 1)
 }
 
+export function factoryName(item: HermesCase) {
+  return (item.factory || item.org || "").replace(/\s+/g, " ").trim()
+}
+
+export function customerKey(item: HermesCase) {
+  return item.visitorId || item.leadId || item.id
+}
+
+export function stageFill(progress: HermesProgress, step: HermesProgress) {
+  if (progress === "hold") {
+    const talking = PROGRESS_TRACK.indexOf("talking")
+    const at = PROGRESS_TRACK.indexOf(step)
+    if (at < 0) return 0
+    if (at < talking) return 1
+    if (step === "talking") return 0.4
+    return 0
+  }
+  const current = PROGRESS_TRACK.indexOf(progress)
+  const at = PROGRESS_TRACK.indexOf(step)
+  if (current < 0 || at < 0) return 0
+  if (at < current) return 1
+  if (at === current) return progress === "closed" ? 1 : 0.58
+  return 0
+}
+
+export function customerArchives(cases: HermesCase[]) {
+  const map = new Map<string, HermesCase>()
+  for (const item of cases.map(normalizeCase)) {
+    const key = customerKey(item)
+    const prev = map.get(key)
+    if (!prev || prev.updatedAt < item.updatedAt) map.set(key, item)
+  }
+  return sortHermesCases([...map.values()])
+}
+
+export function ticketsForCustomer(cases: HermesCase[], key: string) {
+  return sortHermesCases(cases.map(normalizeCase).filter((item) => customerKey(item) === key))
+}
+
+export function ticketsForFactory(cases: HermesCase[], name: string) {
+  return sortHermesCases(cases.map(normalizeCase).filter((item) => factoryName(item) === name))
+}
+
+export function factoryArchives(cases: HermesCase[]) {
+  const map = new Map<string, HermesCase[]>()
+  for (const item of cases.map(normalizeCase)) {
+    const name = factoryName(item)
+    if (!name) continue
+    map.set(name, [...(map.get(name) || []), item])
+  }
+  return [...map.entries()]
+    .map(([name, rows]) => {
+      const tickets = sortHermesCases(rows)
+      return { name, count: tickets.length, latest: tickets[0], tickets }
+    })
+    .sort((a, b) => (a.latest.updatedAt < b.latest.updatedAt ? 1 : a.latest.updatedAt > b.latest.updatedAt ? -1 : 0))
+}
+
 export function formatPace(minutes?: number) {
   if (minutes == null || !Number.isFinite(minutes) || minutes < 0) return ""
   if (minutes < 1) return "不到 1 分钟"
@@ -187,8 +246,10 @@ export function emptyTelemetry(): Pick<
 export function normalizeCase(item: HermesCase): HermesCase {
   const inquiry = Number(item.inquiryCount)
   const turns = Number(item.chatTurns)
+  const factory = typeof item.factory === "string" ? item.factory.replace(/\s+/g, " ").trim() : ""
   return {
     ...item,
+    factory: factory || undefined,
     mailStatus:
       item.mailStatus === "queued" || item.mailStatus === "sent" || item.mailStatus === "failed" ? item.mailStatus : "none",
     mailFollowUp: item.mailFollowUp === true,
@@ -334,7 +395,7 @@ export function filterHermesCases(cases: HermesCase[], filter: HermesDeskFilter 
     if (filter.owner && filter.owner !== "all" && item.owner !== filter.owner) return false
     if (filter.energy && filter.energy !== "all" && item.energy !== filter.energy) return false
     if (!query) return true
-    const hay = `${item.name} ${item.org} ${item.note} ${item.reaction} ${item.evaluation}`.toLowerCase()
+    const hay = `${item.name} ${item.org} ${item.factory || ""} ${item.note} ${item.reaction} ${item.evaluation}`.toLowerCase()
     return hay.includes(query)
   })
 }
@@ -500,6 +561,7 @@ export function patchHermesCase(item: HermesCase, raw: Record<string, unknown>, 
   const next: HermesCase = { ...item, updatedAt: now }
   if ("name" in raw) next.name = clean(raw.name, MAX.name) || item.name
   if ("org" in raw) next.org = clean(raw.org, MAX.org)
+  if ("factory" in raw) next.factory = clean(raw.factory, MAX.org) || undefined
   if ("contact" in raw) next.contact = clean(raw.contact, MAX.contact)
   if ("note" in raw) next.note = clean(raw.note, MAX.note)
   if ("place" in raw) next.place = clean(raw.place, MAX.place) || undefined
@@ -739,6 +801,7 @@ export function extractDeskUpdates(reply: string): {
       raw.mailSummary ||
       raw.mailTracking ||
       raw.nextAction ||
+      raw.factory ||
       "mailFollowUp" in raw ||
       "following" in raw ||
       "owner" in raw ||
@@ -786,6 +849,7 @@ const COACH_RULES = `你是皮纳图博火山灰项目的高级顾问 Hermes。�
 - energy 只能是 high / mid / low / unset。
 - mailStatus 只能是 none / queued / sent / failed。
 - mailTracking 只能是 none / on / opened / clicked。
+- factory 是工厂档案名称。每个真实客户一份客户档案，每家真实工厂一份工厂档案。没有厂名就留空，不要编。
 - 没有真实邮件或对话记录时，不要编发送成功、跟单、速度和摘要。
 - 不要提 NAS、端口、网关、沙箱。`
 
@@ -795,6 +859,7 @@ export function caseBrief(item: HermesCase) {
     `id=${item.id}`,
     `称呼=${item.name}`,
     item.org ? `机构=${item.org}` : "",
+    factoryName(item) ? `工厂=${factoryName(item)}` : "工厂=尚未建档",
     `跟进方=${item.owner === "human" ? "人工" : "Hermes"}`,
     `状态=${item.following ? "正在跟进" : "未跟进"}`,
     `进度=${PROGRESS_LABEL[item.progress]}`,

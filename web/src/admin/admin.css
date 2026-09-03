@@ -1,12 +1,12 @@
 .admin-gate,
 .admin-shell {
-  --admin-bg: #ffffff;
+  --admin-bg: #f5f5f7;
   --admin-panel: #ffffff;
-  --admin-line: #eceef8;
-  --admin-ink: #111111;
-  --admin-muted: #5f5f6a;
-  --admin-soft: #f6f6fa;
-  --admin-cyan: #4f5498;
+  --admin-line: #d2d2d7;
+  --admin-ink: #1d1d1f;
+  --admin-muted: #6e6e73;
+  --admin-soft: #f5f5f7;
+  --admin-cyan: #0071e3;
   min-height: 100vh;
   background: var(--admin-bg);
   color: var(--admin-ink);
@@ -38,7 +38,7 @@
 .admin-side {
   padding: 1.4rem 1.1rem;
   border-right: 1px solid var(--admin-line);
-  background: var(--admin-soft);
+  background: #fff;
 }
 
 .admin-side h1 {
@@ -64,8 +64,10 @@
 }
 
 .admin-side button.is-active {
-  background: var(--lavender);
-  color: var(--lavender-ink);
+  background: #f5f5f7;
+  color: var(--admin-ink);
+  border-radius: 0.7rem;
+  font-weight: 600;
 }
 
 .admin-main {
@@ -902,7 +904,9 @@
   border-radius: 0.85rem;
   padding: 0.75rem 0.8rem 0.85rem;
   display: grid;
-  gap: 0.28rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
   cursor: pointer;
 }
 
@@ -1020,11 +1024,343 @@
   color: var(--hg-muted);
 }
 
-.hermes-grok__time li {
+.hermes-grok__time li,
+.hermes-grok__time-list li {
   display: grid;
   gap: 0.1rem;
   padding: 0.35rem 0;
   border-bottom: 1px solid var(--hg-line);
+}
+
+.hermes-grok__time-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hermes-apple {
+  --hg-bg: #f5f5f7;
+  --hg-panel: #ffffff;
+  --hg-line: #d2d2d7;
+  --hg-ink: #1d1d1f;
+  --hg-muted: #6e6e73;
+  --hg-soft: #f5f5f7;
+  --hud-cyan: #0071e3;
+  --hud-gold: #6e6e73;
+  background: #f5f5f7;
+  color: #1d1d1f;
+}
+
+.hermes-apple .hermes-scan {
+  display: none;
+}
+
+.hermes-apple .hermes-grok__top {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+.hermes-apple .hermes-grok__brand {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.hermes-apple .hermes-grok__brand strong {
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+
+.hermes-apple .hermes-grok__brand span,
+.hermes-apple .hermes-grok__status em {
+  overflow-wrap: anywhere;
+}
+
+.hermes-apple h3,
+.hermes-apple .hermes-tickets h3 {
+  text-transform: none;
+  letter-spacing: -0.02em;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.hermes-apple .hermes-grok__chat {
+  background: #fff;
+}
+
+.hermes-apple .hermes-grok__bubble--staff p {
+  background: #0071e3;
+}
+
+.hermes-apple .hermes-gpt__box {
+  border-color: #d2d2d7;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.hermes-apple .hermes-gpt__box button[type="submit"] {
+  background: #1d1d1f;
+}
+
+.hermes-apple .hermes-panel {
+  background: #f5f5f7;
+  min-width: 0;
+}
+
+.hermes-apple .hermes-panel__who em,
+.hermes-apple .hermes-ticket em {
+  display: block;
+  margin: 0 0 0.2rem;
+  color: #6e6e73;
+  font-style: normal;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+}
+
+.hermes-apple .hermes-panel__who strong,
+.hermes-apple .hermes-ticket strong {
+  overflow-wrap: anywhere;
+  letter-spacing: -0.02em;
+}
+
+.hermes-apple .hermes-tickets header {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.hermes-apple .hermes-tickets header > div {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.hermes-apple .hermes-tickets header p {
+  overflow-wrap: anywhere;
+}
+
+.hermes-apple .hermes-tickets input {
+  width: auto;
+  flex: 1 1 8rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.hermes-apple .hermes-tickets ul,
+.hermes-apple .hermes-tickets__list {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.hermes-apple .hermes-ticket {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem 0.9rem;
+  border-color: #d2d2d7;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.hermes-apple .hermes-ticket:hover,
+.hermes-apple .hermes-ticket:focus-visible {
+  border-color: #0071e3;
+}
+
+.hermes-apple .hermes-ticket__body {
+  min-width: 0;
+  display: grid;
+  gap: 0.22rem;
+}
+
+.hermes-apple .hermes-ticket span {
+  overflow-wrap: anywhere;
+}
+
+.hermes-apple .hermes-ticket b {
+  color: #86868b;
+  font-weight: 400;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.hermes-mini-stages {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.22rem;
+  margin-top: 0.35rem;
+}
+
+.hermes-mini-stages span {
+  display: block;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: #e8e8ed;
+  overflow: hidden;
+}
+
+.hermes-mini-stages i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #0071e3;
+}
+
+.hermes-stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.hermes-stages li {
+  min-width: 0;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.hermes-stages li > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.hermes-stages span,
+.hermes-stages b {
+  min-width: 0;
+}
+
+.hermes-stages span {
+  overflow-wrap: anywhere;
+  color: #1d1d1f;
+  font-size: 0.82rem;
+}
+
+.hermes-stages b {
+  flex: 0 0 auto;
+  color: #6e6e73;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.hermes-stages .hermes-rail__track {
+  height: 0.28rem;
+  background: #e8e8ed;
+}
+
+.hermes-stages .hermes-rail__track i,
+.hermes-apple .hermes-meter .hermes-rail__track i {
+  animation: none;
+  background: #d2d2d7;
+}
+
+.hermes-stages .is-done .hermes-rail__track i {
+  background: #1d1d1f;
+}
+
+.hermes-stages .is-now .hermes-rail__track i,
+.hermes-apple .hermes-meter .hermes-rail__track i {
+  background: #0071e3;
+}
+
+.hermes-stages.is-paused .hermes-rail__track i {
+  background: #86868b;
+}
+
+.hermes-fold {
+  background: #fff;
+  border: 1px solid #d2d2d7;
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.hermes-fold > button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 0.95rem;
+  border: 0;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hermes-fold > button span {
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hermes-fold > button em {
+  flex: 0 0 auto;
+  color: #0071e3;
+  font-style: normal;
+  font-size: 0.78rem;
+}
+
+.hermes-fold__body {
+  padding: 0 0.95rem 0.95rem;
+  display: grid;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.hermes-file {
+  margin: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.hermes-file div {
+  display: grid;
+  grid-template-columns: 5.2rem minmax(0, 1fr);
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.hermes-file dt {
+  color: #6e6e73;
+  font-size: 0.74rem;
+}
+
+.hermes-file dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+}
+
+.hermes-link {
+  width: fit-content;
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+  color: #0071e3;
+  padding: 0;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.hermes-apple .hermes-mail li {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.hermes-apple .hermes-lore {
+  overflow-wrap: anywhere;
+}
+
+.hermes-apple .hermes-lore--desk {
+  color: #6e6e73;
 }
 
 @media (max-width: 1100px) {
@@ -1042,11 +1378,56 @@
 
 @media (max-width: 860px) {
   .admin-side nav button.is-active {
-    background: var(--lavender);
-    color: var(--lavender-ink);
+    background: #1d1d1f;
+    color: #fff;
   }
 
   .admin-main--desk {
     padding: 0;
+  }
+
+  .hermes-apple .hermes-grok__top,
+  .hermes-apple .hermes-grok__tools,
+  .hermes-apple .hermes-tickets header {
+    width: 100%;
+  }
+
+  .hermes-apple .hermes-grok__status,
+  .hermes-apple .hermes-grok__tools,
+  .hermes-apple .hermes-tickets input {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .hermes-apple .hermes-grok__status {
+    flex-wrap: wrap;
+  }
+
+  .hermes-apple .hermes-meters {
+    grid-template-columns: 1fr;
+  }
+
+  .hermes-apple .hermes-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .hermes-file div {
+    grid-template-columns: 4.6rem minmax(0, 1fr);
+  }
+
+  .hermes-apple .hermes-grok__hello h2 {
+    font-size: clamp(2rem, 12vw, 3rem);
+  }
+
+  .hermes-apple .hermes-grok__log,
+  .hermes-apple .hermes-panel,
+  .hermes-apple .hermes-gpt {
+    overflow-x: hidden;
+  }
+
+  .hermes-apple .hermes-ticket,
+  .hermes-apple .hermes-fold > button,
+  .hermes-apple .hermes-gpt__box {
+    min-width: 0;
   }
 }

@@ -7,8 +7,12 @@ import {
   boardMetrics,
   buildCoachMessages,
   caseFromLead,
+  customerArchives,
+  customerKey,
   deskStats,
   extractDeskUpdates,
+  factoryArchives,
+  factoryName,
   filterHermesCases,
   findHermesCase,
   formatInquiryRate,
@@ -21,6 +25,9 @@ import {
   publicVisitorContext,
   recordInquiry,
   sanitizeCoachImages,
+  stageFill,
+  ticketsForCustomer,
+  ticketsForFactory,
   upsertFromTicket,
   upsertFromVisit,
   type HermesCase,
@@ -226,5 +233,27 @@ describe("desk board telemetry", () => {
     expect(sanitizeCoachImages([{ mime: "image/png", name: "a.png", data: "abcd" }])).toHaveLength(1)
     expect(sanitizeCoachImages([{ mime: "application/pdf", name: "x.pdf", data: "abcd" }])).toHaveLength(0)
     expect(sanitizeCoachImages([{ mime: "image/png", name: "bad", data: "not-base64!!" }])).toHaveLength(0)
+  })
+
+  it("gives each pipeline step its own fill and files factory archives", () => {
+    expect(stageFill("talking", "new")).toBe(1)
+    expect(stageFill("talking", "talking")).toBeGreaterThan(0)
+    expect(stageFill("talking", "talking")).toBeLessThan(1)
+    expect(stageFill("talking", "closed")).toBe(0)
+    expect(factoryName(sample({ factory: "绿田加工厂", org: "某集团" }))).toBe("绿田加工厂")
+    expect(factoryName(sample({ org: "某集团" }))).toBe("某集团")
+    const filed = [
+      sample({ id: "a", visitorId: "v1", factory: "一号厂" }),
+      sample({ id: "b", visitorId: "v2", factory: "一号厂", updatedAt: "2026-09-03T13:00:00.000Z" }),
+    ]
+    expect(customerKey(filed[0]!)).toBe("v1")
+    expect(customerArchives(filed)).toHaveLength(2)
+    expect(customerArchives(filed)[0]?.id).toBe("b")
+    expect(factoryArchives(filed)).toHaveLength(1)
+    expect(factoryArchives(filed)[0]?.count).toBe(2)
+    expect(factoryArchives(filed)[0]?.tickets).toHaveLength(2)
+    expect(ticketsForFactory(filed, "一号厂")).toHaveLength(2)
+    expect(ticketsForCustomer(filed, "v1")).toHaveLength(1)
+    expect(factoryArchives([sample({ org: "", factory: "" })])).toHaveLength(0)
   })
 })

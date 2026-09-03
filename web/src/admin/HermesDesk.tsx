@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import type { HermesHealth } from "../cms/hermes"
 import {
   CHANNEL_LABEL,
@@ -8,13 +8,19 @@ import {
   PROGRESS_LABEL,
   PROGRESS_TRACK,
   boardMetrics,
+  customerArchives,
+  customerKey,
   emptyMemory,
+  factoryArchives,
+  factoryName,
   filterHermesCases,
   formatInquiryRate,
   formatPace,
   isLiveCase,
   normalizeCase,
-  progressRatio,
+  stageFill,
+  ticketsForCustomer,
+  ticketsForFactory,
   type HermesCase,
   type HermesCoachImage,
   type HermesCoachTurn,
@@ -28,6 +34,11 @@ import type { AdminAuth } from "./LeadsPanel"
 type LinkView = "connecting" | "connected" | "disconnected"
 type MobilePane = "chat" | "board"
 type PendingImage = { key: string; mime: string; name: string; data: string; preview: string }
+type BoardFocus =
+  | { kind: "home" }
+  | { kind: "ticket"; id: string }
+  | { kind: "customer"; key: string }
+  | { kind: "factory"; name: string }
 
 const AGENT_NAME = "Karmenai"
 
@@ -90,32 +101,58 @@ function AuthImage({ id, headers }: { id: string; headers: HeadersInit }) {
   return <img src={src} alt="" />
 }
 
-function ProgressRail({
-  value,
-  label,
-  paused,
+function MiniStages({ progress }: { progress: HermesCase["progress"] }) {
+  return (
+    <div className="hermes-mini-stages" aria-hidden="true">
+      {PROGRESS_TRACK.map((step) => (
+        <span key={step} title={PROGRESS_LABEL[step]}>
+          <i style={{ width: percent(stageFill(progress, step)) }} />
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function StageList({ progress, paused }: { progress: HermesCase["progress"]; paused?: boolean }) {
+  return (
+    <ol className={`hermes-stages${paused ? " is-paused" : ""}`}>
+      {PROGRESS_TRACK.map((step) => {
+        const fill = stageFill(progress, step)
+        return (
+          <li key={step} className={fill >= 1 ? "is-done" : fill > 0 ? "is-now" : ""}>
+            <div>
+              <span>{PROGRESS_LABEL[step]}</span>
+              <b>{percent(fill)}</b>
+            </div>
+            <div className="hermes-rail__track">
+              <i style={{ width: percent(fill) }} />
+            </div>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+function Fold({
+  title,
+  open,
+  onToggle,
+  children,
 }: {
-  value: number
-  label: string
-  paused?: boolean
+  title: string
+  open: boolean
+  onToggle: () => void
+  children: ReactNode
 }) {
   return (
-    <div className={`hermes-rail${paused ? " is-paused" : ""}`}>
-      <div className="hermes-rail__meta">
-        <span>{label}</span>
-        <b>{percent(value)}</b>
-      </div>
-      <div className="hermes-rail__track" aria-hidden="true">
-        <i style={{ width: percent(value) }} />
-      </div>
-      <ol>
-        {PROGRESS_TRACK.map((step) => (
-          <li key={step} className={PROGRESS_LABEL[step] === label || progressRatio(step) <= value + 0.01 ? "is-on" : ""}>
-            {PROGRESS_LABEL[step]}
-          </li>
-        ))}
-      </ol>
-    </div>
+    <section className={`hermes-fold${open ? " is-open" : ""}`}>
+      <button type="button" onClick={onToggle}>
+        <span>{title}</span>
+        <em>{open ? "收起" : "展开"}</em>
+      </button>
+      {open ? <div className="hermes-fold__body">{children}</div> : null}
+    </section>
   )
 }
 
@@ -148,7 +185,6 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   const [coach, setCoach] = useState<HermesCoachTurn[]>([])
   const [events, setEvents] = useState<HermesEvent[]>([])
   const [memory, setMemory] = useState<HermesMemory>(emptyMemory())
-  const [board, setBoard] = useState(() => boardMetrics([]))
   const [link, setLink] = useState<HermesDeskLink>({ configured: false, model: "", host: "" })
   const [status, setStatus] = useState<LinkView>("connecting")
   const [healthAt, setHealthAt] = useState("")
@@ -158,10 +194,19 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   const [sending, setSending] = useState(false)
   const [input, setInput] = useState("")
   const [query, setQuery] = useState("")
-  const [selectedId, setSelectedId] = useState("")
+  const [focus, setFocus] = useState<BoardFocus>({ kind: "home" })
   const [pane, setPane] = useState<MobilePane>("chat")
   const [pending, setPending] = useState<PendingImage[]>([])
   const [dragOver, setDragOver] = useState(false)
+  const [folds, setFolds] = useState<Record<string, boolean>>({
+    stages: true,
+    customer: true,
+    factory: true,
+    mail: true,
+    related: true,
+    behavior: false,
+    time: false,
+  })
   const logRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -179,7 +224,6 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
     if (Array.isArray(payload.coach)) setCoach(payload.coach)
     if (Array.isArray(payload.events)) setEvents(payload.events)
     if (payload.memory) setMemory(payload.memory)
-    if (payload.board) setBoard(payload.board)
     if (payload.link) setLink(payload.link)
     if (payload.health) {
       setStatus(payload.health.status === "connected" ? "connected" : "disconnected")
@@ -248,8 +292,36 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   )
 
   const visible = filterHermesCases(cases, { origin: "live", query }).map(normalizeCase)
-  const selected = cases.map(normalizeCase).find((item) => item.id === selectedId) || null
-  const timeline = events.filter((item) => !selected || !item.caseId || item.caseId === selected.id).slice(-12).reverse()
+  const allLive = filterHermesCases(cases, { origin: "live" }).map(normalizeCase)
+  const selected = focus.kind === "ticket" ? allLive.find((item) => item.id === focus.id) || null : null
+  const customerFile =
+    focus.kind === "customer" ? customerArchives(allLive).find((item) => customerKey(item) === focus.key) || null : null
+  const factoryFile = focus.kind === "factory" ? factoryArchives(allLive).find((item) => item.name === focus.name) || null : null
+  const customers = customerArchives(visible)
+  const factories = factoryArchives(visible)
+  const customerTickets = customerFile ? ticketsForCustomer(allLive, customerKey(customerFile)) : []
+  const factoryTickets = factoryFile ? ticketsForFactory(allLive, factoryFile.name) : []
+  const timelineCaseId = selected?.id || customerFile?.id || factoryFile?.latest.id
+  const timeline = events.filter((item) => !timelineCaseId || !item.caseId || item.caseId === timelineCaseId).slice(-12).reverse()
+
+  const compactBoard = () => typeof window !== "undefined" && window.matchMedia("(max-width: 860px)").matches
+  const openFolds = (extraOpen: boolean) =>
+    setFolds({
+      stages: true,
+      customer: extraOpen,
+      factory: extraOpen,
+      mail: extraOpen,
+      related: extraOpen,
+      behavior: false,
+      time: false,
+    })
+  const toggleFold = (key: string) => setFolds((current) => ({ ...current, [key]: !current[key] }))
+  const goBoard = (next: BoardFocus) => {
+    const compact = compactBoard()
+    setFocus(next)
+    openFolds(next.kind === "home" ? true : !compact)
+    if (compact && next.kind !== "home") setPane("board")
+  }
 
   const ticketFollow = (item: HermesCase) =>
     item.owner === "human" ? "人工跟进中" : item.following ? `${AGENT_NAME} 跟进中` : "尚未跟进"
@@ -291,22 +363,82 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
     }
   }
 
-  const inquiryMeter = selected?.inquiryCount ? Math.min(1, selected.inquiryCount / 8) : 0
-  const rateHint = selected ? formatInquiryRate(selected) : ""
-  const rateMeter = selected?.inquiryCount
-    ? Math.min(1, (selected.inquiryCount || 0) / Math.max(1, (Date.now() - Date.parse(selected.at)) / 86400000) / 4)
+  const profile = selected || customerFile || factoryFile?.latest || null
+  const inquiryMeter = profile?.inquiryCount ? Math.min(1, profile.inquiryCount / 8) : 0
+  const rateHint = profile ? formatInquiryRate(profile) : ""
+  const rateMeter = profile?.inquiryCount
+    ? Math.min(1, (profile.inquiryCount || 0) / Math.max(1, (Date.now() - Date.parse(profile.at)) / 86400000) / 4)
     : 0
-  const replyMeter = selected?.replyPaceMin != null ? Math.max(0.12, 1 - Math.min(selected.replyPaceMin, 240) / 240) : 0
-  const inquirePaceMeter = selected?.inquiryPaceMin != null ? Math.max(0.12, 1 - Math.min(selected.inquiryPaceMin, 7 * 24 * 60) / (7 * 24 * 60)) : 0
-  const mailReplyMeter = selected?.emailReplyHours != null ? Math.max(0.12, 1 - Math.min(selected.emailReplyHours, 72) / 72) : 0
+  const replyMeter = profile?.replyPaceMin != null ? Math.max(0.12, 1 - Math.min(profile.replyPaceMin, 240) / 240) : 0
+  const inquirePaceMeter = profile?.inquiryPaceMin != null ? Math.max(0.12, 1 - Math.min(profile.inquiryPaceMin, 7 * 24 * 60) / (7 * 24 * 60)) : 0
+  const mailReplyMeter = profile?.emailReplyHours != null ? Math.max(0.12, 1 - Math.min(profile.emailReplyHours, 72) / 72) : 0
+
+  const ticketRow = (item: HermesCase, lines: string[], kicker?: string) => (
+    <button type="button" className="hermes-ticket" onClick={() => goBoard({ kind: "ticket", id: item.id })}>
+      <div className="hermes-ticket__body">
+        {kicker ? <em>{kicker}</em> : null}
+        <strong>{item.name}</strong>
+        {lines.map((line) => (
+          <span key={line}>{line}</span>
+        ))}
+        <MiniStages progress={item.progress} />
+      </div>
+      <b aria-hidden="true">›</b>
+    </button>
+  )
+
+  const fileFacts = (item: HermesCase, extra: { label: string; value: string }[] = []) => (
+    <dl className="hermes-file">
+      {[
+        { label: "称呼", value: item.name },
+        { label: "地区", value: item.place || "尚无" },
+        { label: "意向", value: ENERGY_LABEL[item.energy] },
+        { label: "渠道", value: CHANNEL_LABEL[item.lastChannel || "unset"] },
+        { label: "线索", value: item.note || "尚无" },
+        { label: "下一步", value: item.nextAction || "尚无" },
+        ...extra,
+      ].map((row) => (
+        <div key={row.label}>
+          <dt>{row.label}</dt>
+          <dd>{row.value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+
+  const mailBlock = (item: HermesCase) => (
+    <>
+      <ul className="hermes-mail">
+        <li className={item.mailStatus !== "none" ? "is-on" : ""}>
+          {MAIL_STATUS_LABEL[item.mailStatus || "none"]}
+          {item.mailSentAt ? ` · ${formatTime(item.mailSentAt)}` : ""}
+        </li>
+        <li className={item.mailFollowUp ? "is-on" : ""}>{item.mailFollowUp ? "有跟单" : "无跟单"}</li>
+        <li className={item.mailTracking && item.mailTracking !== "none" ? "is-on" : ""}>
+          {MAIL_TRACK_LABEL[item.mailTracking || "none"]}
+        </li>
+      </ul>
+      <p className="hermes-sum">{item.mailSummary || `还没有客户回邮摘要。${AGENT_NAME} 读到真邮件后再写。`}</p>
+    </>
+  )
+
+  const behaviorBlock = (item: HermesCase) => (
+    <div className="hermes-meters">
+      <Meter label="询单次数" value={inquiryMeter} hint={item.inquiryCount ? `${item.inquiryCount} 次` : "尚无"} />
+      <Meter label="询单速度" value={rateMeter} hint={rateHint || "尚无"} />
+      <Meter label="询单间隔" value={inquirePaceMeter} hint={formatPace(item.inquiryPaceMin) || "尚无"} />
+      <Meter label="回复速度" value={replyMeter} hint={formatPace(item.replyPaceMin) || "尚无"} />
+      <Meter label="回邮用时" value={mailReplyMeter} hint={item.emailReplyHours != null ? `${item.emailReplyHours} 小时` : "尚无"} />
+    </div>
+  )
 
   return (
-    <div className="hermes-grok hermes-hud">
+    <div className="hermes-grok hermes-apple">
       <div className={`hermes-scan${status === "connecting" ? " is-on" : ""}`} aria-hidden="true" />
       <header className="hermes-grok__top">
         <div className="hermes-grok__brand">
           <strong>{AGENT_NAME}</strong>
-          <span>看板只读 · 同事只通过对话指挥</span>
+          <span>工单与档案只读 · 同事只通过对话指挥</span>
         </div>
         <p className={`hermes-grok__status hermes-grok__status--${status}`} title={healthDetail || undefined}>
           <i />
@@ -459,75 +591,60 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         <aside className="hermes-panel">
           {selected ? (
             <section className="hermes-detail">
-              <button type="button" className="hermes-back" onClick={() => setSelectedId("")}>
-                返回单子
+              <button type="button" className="hermes-back" onClick={() => goBoard({ kind: "home" })}>
+                返回列表
               </button>
               <header className="hermes-panel__who">
+                <em>工单</em>
                 <strong>{selected.name}</strong>
                 <span>
                   {ticketFollow(selected)}
                   {isLiveCase(selected) ? " · 真实对话" : ""}
                 </span>
               </header>
-              <ProgressRail
-                value={progressRatio(selected.progress)}
-                label={PROGRESS_LABEL[selected.progress]}
-                paused={selected.progress === "hold"}
-              />
-              <section>
-                <h3>邮件</h3>
-                <ul className="hermes-mail">
-                  <li className={selected.mailStatus !== "none" ? "is-on" : ""}>
-                    {MAIL_STATUS_LABEL[selected.mailStatus || "none"]}
-                    {selected.mailSentAt ? ` · ${formatTime(selected.mailSentAt)}` : ""}
-                  </li>
-                  <li className={selected.mailFollowUp ? "is-on" : ""}>{selected.mailFollowUp ? "有跟单" : "无跟单"}</li>
-                  <li className={selected.mailTracking && selected.mailTracking !== "none" ? "is-on" : ""}>
-                    {MAIL_TRACK_LABEL[selected.mailTracking || "none"]}
-                  </li>
-                </ul>
-                <p className="hermes-sum">{selected.mailSummary || `还没有客户回邮摘要。${AGENT_NAME} 读到真邮件后再写。`}</p>
-              </section>
-              <section>
-                <h3>客户行为</h3>
-                <div className="hermes-meters">
-                  <Meter label="询单次数" value={inquiryMeter} hint={selected.inquiryCount ? `${selected.inquiryCount} 次` : "尚无"} />
-                  <Meter label="询单速度" value={rateMeter} hint={rateHint || "尚无"} />
-                  <Meter label="询单间隔" value={inquirePaceMeter} hint={formatPace(selected.inquiryPaceMin) || "尚无"} />
-                  <Meter label="回复速度" value={replyMeter} hint={formatPace(selected.replyPaceMin) || "尚无"} />
-                  <Meter label="回邮用时" value={mailReplyMeter} hint={selected.emailReplyHours != null ? `${selected.emailReplyHours} 小时` : "尚无"} />
-                </div>
-              </section>
-              <dl className="hermes-facts">
-                <div>
-                  <dt>意向</dt>
-                  <dd>{ENERGY_LABEL[selected.energy]}</dd>
-                </div>
-                <div>
-                  <dt>渠道</dt>
-                  <dd>{CHANNEL_LABEL[selected.lastChannel || "unset"]}</dd>
-                </div>
-                <div>
-                  <dt>对话轮次</dt>
-                  <dd>{selected.chatTurns || "尚无"}</dd>
-                </div>
-                <div>
-                  <dt>下一步</dt>
-                  <dd>{selected.nextAction || "尚无"}</dd>
-                </div>
-                <div>
-                  <dt>线索</dt>
-                  <dd>{selected.note || "尚无"}</dd>
-                </div>
-                <div>
-                  <dt>反响 / 评价</dt>
-                  <dd>{selected.reaction || selected.evaluation || "尚无"}</dd>
-                </div>
-              </dl>
-              <section className="hermes-grok__time">
-                <h3>这条单的时间线</h3>
+              <Fold title="环节进度" open={folds.stages} onToggle={() => toggleFold("stages")}>
+                <StageList progress={selected.progress} paused={selected.progress === "hold"} />
+              </Fold>
+              <Fold title="客户档案" open={folds.customer} onToggle={() => toggleFold("customer")}>
+                {fileFacts(selected)}
+                <button type="button" className="hermes-link" onClick={() => goBoard({ kind: "customer", key: customerKey(selected) })}>
+                  打开这份客户档案
+                </button>
+              </Fold>
+              <Fold title="工厂档案" open={folds.factory} onToggle={() => toggleFold("factory")}>
+                {factoryName(selected) ? (
+                  <>
+                    <dl className="hermes-file">
+                      <div>
+                        <dt>工厂</dt>
+                        <dd>{factoryName(selected)}</dd>
+                      </div>
+                      <div>
+                        <dt>地区</dt>
+                        <dd>{selected.place || "尚无"}</dd>
+                      </div>
+                      <div>
+                        <dt>关联工单</dt>
+                        <dd>{ticketsForFactory(allLive, factoryName(selected)).length} 张</dd>
+                      </div>
+                    </dl>
+                    <button type="button" className="hermes-link" onClick={() => goBoard({ kind: "factory", name: factoryName(selected) })}>
+                      打开这份工厂档案
+                    </button>
+                  </>
+                ) : (
+                  <p className="hermes-grok__empty">这家工厂还没建档。有真实厂名后，{AGENT_NAME} 会写进来。</p>
+                )}
+              </Fold>
+              <Fold title="邮件" open={folds.mail} onToggle={() => toggleFold("mail")}>
+                {mailBlock(selected)}
+              </Fold>
+              <Fold title="客户行为" open={folds.behavior} onToggle={() => toggleFold("behavior")}>
+                {behaviorBlock(selected)}
+              </Fold>
+              <Fold title="时间线" open={folds.time} onToggle={() => toggleFold("time")}>
                 {timeline.length === 0 ? <p className="hermes-grok__empty">还没有事件。</p> : null}
-                <ol>
+                <ol className="hermes-grok__time-list">
                   {timeline.map((item) => (
                     <li key={item.id}>
                       <time dateTime={item.at}>{formatTime(item.at)}</time>
@@ -535,37 +652,181 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                     </li>
                   ))}
                 </ol>
-              </section>
+              </Fold>
+            </section>
+          ) : customerFile ? (
+            <section className="hermes-detail">
+              <button type="button" className="hermes-back" onClick={() => goBoard({ kind: "home" })}>
+                返回列表
+              </button>
+              <header className="hermes-panel__who">
+                <em>客户档案</em>
+                <strong>{customerFile.name}</strong>
+                <span>
+                  {ticketFollow(customerFile)} · {customerFile.place || "地区尚无"}
+                </span>
+              </header>
+              <Fold title="环节进度" open={folds.stages} onToggle={() => toggleFold("stages")}>
+                <StageList progress={customerFile.progress} paused={customerFile.progress === "hold"} />
+              </Fold>
+              <Fold title="档案信息" open={folds.customer} onToggle={() => toggleFold("customer")}>
+                {fileFacts(customerFile, [{ label: "工厂", value: factoryName(customerFile) || "尚未建档" }])}
+              </Fold>
+              <Fold title="关联工单" open={folds.related} onToggle={() => toggleFold("related")}>
+                <ul className="hermes-tickets__list">
+                  {customerTickets.map((item) => (
+                    <li key={item.id}>
+                      {ticketRow(item, [`${ticketFollow(item)} · ${PROGRESS_LABEL[item.progress]}`, ticketMail(item)], "工单")}
+                    </li>
+                  ))}
+                </ul>
+              </Fold>
+              {factoryName(customerFile) ? (
+                <Fold title="关联工厂" open={folds.factory} onToggle={() => toggleFold("factory")}>
+                  <button type="button" className="hermes-link" onClick={() => goBoard({ kind: "factory", name: factoryName(customerFile) })}>
+                    {factoryName(customerFile)}
+                  </button>
+                </Fold>
+              ) : null}
+              <Fold title="邮件" open={folds.mail} onToggle={() => toggleFold("mail")}>
+                {mailBlock(customerFile)}
+              </Fold>
+              <Fold title="客户行为" open={folds.behavior} onToggle={() => toggleFold("behavior")}>
+                {behaviorBlock(customerFile)}
+              </Fold>
+            </section>
+          ) : factoryFile ? (
+            <section className="hermes-detail">
+              <button type="button" className="hermes-back" onClick={() => goBoard({ kind: "home" })}>
+                返回列表
+              </button>
+              <header className="hermes-panel__who">
+                <em>工厂档案</em>
+                <strong>{factoryFile.name}</strong>
+                <span>
+                  {factoryFile.count} 张关联工单 · {PROGRESS_LABEL[factoryFile.latest.progress]}
+                </span>
+              </header>
+              <Fold title="环节进度" open={folds.stages} onToggle={() => toggleFold("stages")}>
+                <StageList progress={factoryFile.latest.progress} paused={factoryFile.latest.progress === "hold"} />
+              </Fold>
+              <Fold title="档案信息" open={folds.factory} onToggle={() => toggleFold("factory")}>
+                <dl className="hermes-file">
+                  <div>
+                    <dt>工厂</dt>
+                    <dd>{factoryFile.name}</dd>
+                  </div>
+                  <div>
+                    <dt>地区</dt>
+                    <dd>{factoryFile.latest.place || "尚无"}</dd>
+                  </div>
+                  <div>
+                    <dt>关联工单</dt>
+                    <dd>{factoryFile.count} 张</dd>
+                  </div>
+                  <div>
+                    <dt>最新客户</dt>
+                    <dd>{factoryFile.latest.name}</dd>
+                  </div>
+                </dl>
+              </Fold>
+              <Fold title="关联工单" open={folds.related} onToggle={() => toggleFold("related")}>
+                <ul className="hermes-tickets__list">
+                  {factoryTickets.map((item) => (
+                    <li key={item.id}>
+                      {ticketRow(
+                        item,
+                        [`${ticketFollow(item)} · ${PROGRESS_LABEL[item.progress]}`, item.place || "地区尚无"],
+                        "工单",
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </Fold>
             </section>
           ) : (
             <>
               <section className="hermes-tickets">
                 <header>
                   <div>
-                    <h3>单子</h3>
-                    <p>
-                      {visible.length ? `${visible.length} 张真实对话` : "还没有单子"}
-                      {board.live ? ` · 点进去看详细进度` : ""}
-                    </p>
+                    <h3>工单</h3>
+                    <p>{visible.length ? `${visible.length} 张` : "还没有工单"} · 每张单子各有六个环节进度</p>
                   </div>
-                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索" />
+                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索工单或档案" />
                 </header>
                 <ul>
                   {visible.map((item) => (
                     <li key={item.id}>
-                      <button type="button" className="hermes-ticket" onClick={() => setSelectedId(item.id)}>
-                        <strong>{item.name}</strong>
-                        <span>{ticketFollow(item)} · {PROGRESS_LABEL[item.progress]}</span>
-                        <span>{ticketMail(item)}</span>
-                        <div className="hermes-rail__track hermes-ticket__bar" aria-hidden="true">
-                          <i style={{ width: percent(progressRatio(item.progress)) }} />
-                        </div>
-                      </button>
+                      {ticketRow(
+                        item,
+                        [
+                          `${ticketFollow(item)} · ${PROGRESS_LABEL[item.progress]}`,
+                          `${factoryName(item) || "工厂尚未建档"} · ${ticketMail(item)}`,
+                        ],
+                        "工单",
+                      )}
                     </li>
                   ))}
                 </ul>
                 {!loading && visible.length === 0 ? (
-                  <p className="hermes-grok__empty">还没有前台高级顾问对话。有真实单子后，这里会先看到跟进和进度，点进去才看详情。</p>
+                  <p className="hermes-grok__empty">还没有真实对话，也就还没有客户档案和工厂档案。有了之后，每个客户、每家工厂各有一份。</p>
+                ) : null}
+              </section>
+              <section className="hermes-tickets">
+                <header>
+                  <div>
+                    <h3>客户档案</h3>
+                    <p>{customers.length ? `${customers.length} 份 · 每位客户单独一份` : "尚无"}</p>
+                  </div>
+                </header>
+                <ul>
+                  {customers.map((item) => (
+                    <li key={customerKey(item)}>
+                      <button
+                        type="button"
+                        className="hermes-ticket"
+                        onClick={() => goBoard({ kind: "customer", key: customerKey(item) })}
+                      >
+                        <div className="hermes-ticket__body">
+                          <em>客户档案</em>
+                          <strong>{item.name}</strong>
+                          <span>
+                            {ticketFollow(item)} · {item.place || "地区尚无"}
+                          </span>
+                          <MiniStages progress={item.progress} />
+                        </div>
+                        <b aria-hidden="true">›</b>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+              <section className="hermes-tickets">
+                <header>
+                  <div>
+                    <h3>工厂档案</h3>
+                    <p>{factories.length ? `${factories.length} 份 · 每家工厂单独一份` : "尚无"}</p>
+                  </div>
+                </header>
+                <ul>
+                  {factories.map((row) => (
+                    <li key={row.name}>
+                      <button type="button" className="hermes-ticket" onClick={() => goBoard({ kind: "factory", name: row.name })}>
+                        <div className="hermes-ticket__body">
+                          <em>工厂档案</em>
+                          <strong>{row.name}</strong>
+                          <span>
+                            {row.count} 张关联工单 · {PROGRESS_LABEL[row.latest.progress]}
+                          </span>
+                          <MiniStages progress={row.latest.progress} />
+                        </div>
+                        <b aria-hidden="true">›</b>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {!loading && visible.length > 0 && factories.length === 0 ? (
+                  <p className="hermes-grok__empty">已有客户工单，工厂名还没写下，所以工厂档案先空着。</p>
                 ) : null}
               </section>
               <section>
