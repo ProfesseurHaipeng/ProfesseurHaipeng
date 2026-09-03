@@ -263,6 +263,34 @@ export function extractInquiryUpdates(reply: string): {
   }
 }
 
+export function buildInquiryAssignMessage(targets: InquiryTarget[]) {
+  const list = targets.map((item) => item.label).join("、")
+  return list
+    ? `按这些厂商弊端 / 对口类型去找真实厂商：${list}。流程按 取条件 → 找来源 → 核实 → 起草稿。没有来源不要编。找到后只起草询单，不要群发。`
+    : "先记下：同事还没设定弊端。请提醒他们先设定要找的厂商类型，不要编造厂商。"
+}
+
+export type InquiryPromptPreview = {
+  userMessage: string
+  systemExcerpt: string
+  targetCount: number
+  findingCount: number
+  jobLabel: string
+}
+
+export function inquiryPromptPreview(state: InquiryState): InquiryPromptPreview {
+  const extra = inquiryCoachExtra(state)
+  const lines = extra.split("\n")
+  const excerpt = lines.slice(0, 12).join("\n")
+  return {
+    userMessage: buildInquiryAssignMessage(state.targets),
+    systemExcerpt: excerpt + (lines.length > 12 ? "\n…" : ""),
+    targetCount: state.targets.length,
+    findingCount: state.findings.length,
+    jobLabel: `${JOB_LABEL[state.job.status]}${state.job.brief ? ` · ${state.job.brief}` : ""}`,
+  }
+}
+
 export function inquiryCoachExtra(state: InquiryState) {
   const targetLines = state.targets.length
     ? state.targets.map((item) => `- ${item.label}`).join("\n")

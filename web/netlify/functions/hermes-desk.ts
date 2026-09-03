@@ -18,6 +18,9 @@ import {
 } from "../../src/cms/hermesBlobs"
 import { applyStaffJob, applyTargetWrite } from "../../src/cms/inquiryDesk"
 import {
+  applyStaffCaseUpdate,
+  applyStaffCasesBatch,
+  applyStaffCasesDelete,
   attachLead,
   attachableLeads,
   decorateDeskPayload,
@@ -42,7 +45,7 @@ import { sortLeads, type Lead } from "../../src/cms/leads"
  *
  * GET  /api/hermes-desk
  * POST /api/hermes-desk  { action }
- *   staff: health | coach | targets | job | file | attach | import
+ *   staff: health | coach | targets | job | file | attach | import | cases | coach-clear
  *   Hermes-only via <desk> / <inquiry> in coach: progress, mail notes, memory, findings
  */
 
@@ -245,6 +248,47 @@ export default async (req: Request) => {
   if (action === "import") {
     const { cases: next } = await syncLeadCases()
     await appendHermesEvent(eventOf("update", `接入前台线索 ${Math.max(0, next.length - cases.length)} 条`))
+    return json(await payload())
+  }
+
+  if (action === "cases") {
+    const op = typeof body.op === "string" ? body.op : ""
+    if (op === "delete") {
+      const ids = Array.isArray(body.ids) ? body.ids.filter((item): item is string => typeof item === "string") : []
+      const result = applyStaffCasesDelete(cases, ids, now)
+      if (result.error) return json({ error: result.error }, 400)
+      for (const id of ids) {
+        const hit = cases.find((item) => item.id === id)
+        if (hit) await writeHermesCase({ ...hit, gone: true, updatedAt: now })
+      }
+      await appendHermesEvent(eventOf("update", `删除 ${result.count} 张工单`))
+      return json(await payload())
+    }
+    if (op === "update") {
+      const id = typeof body.id === "string" ? body.id : ""
+      const patch = body.patch && typeof body.patch === "object" ? (body.patch as Record<string, unknown>) : body
+      const result = applyStaffCaseUpdate(cases, id, patch, now)
+      if (result.error === "empty") return json({ error: "empty" }, 400)
+      if (result.error === "missing") return json({ error: "missing" }, 404)
+      if (result.case) await writeHermesCase(result.case)
+      await appendHermesEvent(eventOf("update", `编辑工单 ${result.case?.name || id}`, result.case?.id))
+      return json(await payload())
+    }
+    if (op === "batch") {
+      const ids = Array.isArray(body.ids) ? body.ids.filter((item): item is string => typeof item === "string") : []
+      const patch = body.patch && typeof body.patch === "object" ? (body.patch as Record<string, unknown>) : {}
+      const result = applyStaffCasesBatch(cases, ids, patch, now)
+      if (result.error) return json({ error: result.error }, 400)
+      for (const item of result.cases.filter((row) => ids.includes(row.id))) await writeHermesCase(item)
+      await appendHermesEvent(eventOf("update", `批量编辑 ${result.count} 张工单`))
+      return json(await payload())
+    }
+    return json({ error: "op" }, 400)
+  }
+
+  if (action === "coach-clear") {
+    await writeHermesCoach([])
+    await appendHermesEvent(eventOf("update", "清空工作台对话"))
     return json(await payload())
   }
 

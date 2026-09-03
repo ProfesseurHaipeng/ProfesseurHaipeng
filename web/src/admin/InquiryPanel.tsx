@@ -1,6 +1,10 @@
 import { useState, type FormEvent } from "react"
 import {
   INQUIRY_RUN,
+  JOB_LABEL,
+  OUTREACH_LABEL,
+  buildInquiryAssignMessage,
+  inquiryPromptPreview,
   inquiryRunHint,
   inquiryStepFill,
   type InquiryFinding,
@@ -29,7 +33,9 @@ export function InquiryPanel({
   onOpenTicket: (caseId: string) => void
 }) {
   const [label, setLabel] = useState("")
+  const [showPrompt, setShowPrompt] = useState(false)
   const [open, setOpen] = useState<{ id: string; kind: "source" | "draft" } | null>(null)
+  const preview = inquiryPromptPreview(inquiry)
   const add = async (event?: FormEvent, next = label) => {
     event?.preventDefault()
     const text = next.trim()
@@ -39,32 +45,30 @@ export function InquiryPanel({
   }
   const assign = () => {
     if (busy) return
-    const list = inquiry.targets.map((item) => item.label).join("、")
-    void onAssign(
-      list
-        ? `按这些厂商弊端 / 对口类型去找真实厂商：${list}。流程按 取条件 → 找来源 → 核实 → 起草稿。没有来源不要编。找到后只起草询单，不要群发。`
-        : "先记下：同事还没设定弊端。请提醒他们先设定要找的厂商类型，不要编造厂商。",
-    )
+    void onAssign(buildInquiryAssignMessage(inquiry.targets))
   }
   const unusedSuggest = SUGGEST.filter((item) => !inquiry.targets.some((row) => row.label === item))
   const hint = inquiryRunHint(inquiry.job.status, inquiry.targets.length)
   const note =
     inquiry.job.status === "searching" && !hermesReady
-      ? "任务已记下。网关接通后才会找来源，没有来源不建档。"
+      ? "任务已记下。网关接通后 Karmenai 才会找来源，没有来源不建档。"
       : inquiry.job.brief
-        ? `${hint} ${inquiry.job.brief}`
+        ? `${hint} · ${inquiry.job.brief}`
         : hint
 
   return (
     <section className="inq-board">
       <header className="inq-board__top">
-        <h2>Karmenai · 询单系统</h2>
+        <div>
+          <h2>询单设定</h2>
+          <p className="inq-board__hint">条件会写入 Karmenai 的系统提示；点「开始寻找」后还会发一条明确指令到对话。</p>
+        </div>
+        <span className="inq-board__status">{preview.jobLabel}</span>
       </header>
 
       <article className="inq-card">
-        <p className="inq-card__mark">A) 条件设定</p>
-        <h3>设定要找的厂商弊端</h3>
-        <p>写清楚弊端或对口类型。Karmenai 按这个去找，没有真实来源不会建档。</p>
+        <p className="inq-card__mark">A · 要找什么</p>
+        <h3>厂商弊端 / 对口类型</h3>
         {inquiry.targets.length || unusedSuggest.length ? (
           <ul className="inq-tags">
             {inquiry.targets.map((item) => (
@@ -83,7 +87,9 @@ export function InquiryPanel({
               </li>
             ))}
           </ul>
-        ) : null}
+        ) : (
+          <p className="inq-empty">还没有条件。加入后 Karmenai 每次对话都会读到。</p>
+        )}
         <form className="inq-add" onSubmit={(event) => void add(event)}>
           <input
             value={label}
@@ -95,63 +101,65 @@ export function InquiryPanel({
             加入
           </button>
         </form>
-        <button type="button" className="inq-go" disabled={busy} onClick={assign}>
-          让 Karmenai 按这些条件去找
+
+        {preview.targetCount > 0 ? (
+          <div className="inq-prompt">
+            <button type="button" className="inq-prompt__toggle" onClick={() => setShowPrompt((v) => !v)}>
+              {showPrompt ? "收起" : "查看"}发给 Karmenai 的内容
+            </button>
+            {showPrompt ? (
+              <>
+                <p className="inq-prompt__label">点击「开始寻找」时发送的指令</p>
+                <pre className="inq-prompt__box">{preview.userMessage}</pre>
+                <p className="inq-prompt__label">每次对话附带的系统上下文（节选）</p>
+                <pre className="inq-prompt__box inq-prompt__box--sys">{preview.systemExcerpt}</pre>
+              </>
+            ) : (
+              <p className="inq-prompt__summary">
+                已设定 {preview.targetCount} 条条件
+                {preview.findingCount ? ` · 找到 ${preview.findingCount} 家` : ""}
+              </p>
+            )}
+          </div>
+        ) : null}
+
+        <button type="button" className="inq-go" disabled={busy || !preview.targetCount} onClick={assign}>
+          开始寻找
         </button>
+        {!preview.targetCount ? <p className="inq-foot">先加入至少一条条件，再开始寻找。</p> : null}
       </article>
 
-      <article className="inq-card">
-        <p className="inq-card__mark">B) 运行中</p>
-        <ol className="inq-steps">
-          {INQUIRY_RUN.map((step, index) => {
-            const fill = inquiryStepFill(inquiry.job.status, inquiry.targets.length, index)
-            return (
-              <li key={step.key} className={`is-${fill}`}>
-                <i />
-                <span>{step.label}</span>
-              </li>
-            )
-          })}
-        </ol>
-        <p className="inq-step-note">{busy ? "正在把任务写入工作台。" : note}</p>
-      </article>
+      <article className="inq-card inq-card--run">
+        <div className="inq-run-head">
+          <div>
+            <p className="inq-card__mark">B · 进度</p>
+            <p className="inq-step-note">{busy ? "正在写入工作台…" : note}</p>
+          </div>
+          <ol className="inq-steps inq-steps--compact">
+            {INQUIRY_RUN.map((step, index) => {
+              const fill = inquiryStepFill(inquiry.job.status, inquiry.targets.length, index)
+              return (
+                <li key={step.key} className={`is-${fill}`} title={step.label}>
+                  <i />
+                  <span>{step.label}</span>
+                </li>
+              )
+            })}
+          </ol>
+        </div>
 
-      <article className="inq-card">
-        <p className="inq-card__mark">C) 结果行</p>
-        {inquiry.findings.length === 0 ? (
-          <p className="inq-empty">尚无。有真实来源后，每家厂会出现在这里，并带询单草稿。</p>
-        ) : (
-          <>
-            <div className="inq-table-wrap">
-              <table className="inq-table">
-                <thead>
-                  <tr>
-                    <th>厂商</th>
-                    <th>对口类型</th>
-                    <th>来源</th>
-                    <th>询单草稿</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inquiry.findings.map((item) => (
-                    <FindingRow
-                      key={item.id}
-                      item={item}
-                      open={open}
-                      busy={busy}
-                      onOpen={setOpen}
-                      onFile={() => void onFile(item.id)}
-                      onOpenTicket={onOpenTicket}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <ul className="inq-cards">
+        <div className="inq-run-results">
+          <div className="inq-run-results__head">
+            <p className="inq-card__mark">C · 结果</p>
+            <span>{inquiry.findings.length ? `${inquiry.findings.length} 家` : JOB_LABEL[inquiry.job.status]}</span>
+          </div>
+          {inquiry.findings.length === 0 ? (
+            <p className="inq-empty">尚无。Karmenai 找到带真实来源的厂商后会写在这里。</p>
+          ) : (
+            <ul className="inq-results">
               {inquiry.findings.map((item) => (
                 <li key={item.id}>
-                  <FindingMini
+                  <FindingCard
                     item={item}
                     open={open}
                     busy={busy}
@@ -162,19 +170,45 @@ export function InquiryPanel({
                 </li>
               ))}
             </ul>
-          </>
-        )}
+          )}
+        </div>
       </article>
 
-      <p className="inq-foot">建档会写入工单档案。站点没有发信接口，所以没有群发。</p>
+      <p className="inq-foot">建档会写入工单档案。站点没有发信接口，询单只起草、不群发。</p>
     </section>
   )
 }
 
-function shortText(value: string | undefined, empty = "尚无") {
-  const text = (value || "").replace(/\s+/g, " ").trim()
-  if (!text) return empty
-  return text.length > 24 ? `${text.slice(0, 24)}…` : text
+function FindingCard({
+  item,
+  open,
+  busy,
+  onOpen,
+  onFile,
+  onOpenTicket,
+}: {
+  item: InquiryFinding
+  open: { id: string; kind: "source" | "draft" } | null
+  busy?: boolean
+  onOpen: (next: { id: string; kind: "source" | "draft" } | null) => void
+  onFile: () => void
+  onOpenTicket: (caseId: string) => void
+}) {
+  const shown = open?.id === item.id ? open.kind : null
+  return (
+    <article className="inq-result">
+      <header>
+        <strong>{item.org}</strong>
+        <span className="inq-result__outreach">{OUTREACH_LABEL[item.outreach]}</span>
+      </header>
+      <p>{item.pain || "对口类型尚无"}</p>
+      <p className="inq-result__meta">
+        来源：{item.source || "尚无"} · 草稿：{item.draft ? "有" : "尚无"}
+      </p>
+      <FindingOps item={item} shown={shown} busy={busy} onOpen={onOpen} onFile={onFile} onOpenTicket={onOpenTicket} />
+      {shown ? <p className="inq-result__detail">{shown === "source" ? item.source || "来源尚无" : item.draft || "草稿尚无"}</p> : null}
+    </article>
+  )
 }
 
 function FindingOps({
@@ -210,67 +244,5 @@ function FindingOps({
         </button>
       )}
     </span>
-  )
-}
-
-function FindingRow({
-  item,
-  open,
-  busy,
-  onOpen,
-  onFile,
-  onOpenTicket,
-}: {
-  item: InquiryFinding
-  open: { id: string; kind: "source" | "draft" } | null
-  busy?: boolean
-  onOpen: (next: { id: string; kind: "source" | "draft" } | null) => void
-  onFile: () => void
-  onOpenTicket: (caseId: string) => void
-}) {
-  const shown = open?.id === item.id ? open.kind : null
-  return (
-    <>
-      <tr>
-        <td>{item.org}</td>
-        <td>{item.pain || "尚无"}</td>
-        <td>{shortText(item.source)}</td>
-        <td>{shortText(item.draft)}</td>
-        <td>
-          <FindingOps item={item} shown={shown} busy={busy} onOpen={onOpen} onFile={onFile} onOpenTicket={onOpenTicket} />
-        </td>
-      </tr>
-      {shown ? (
-        <tr className="inq-table__detail">
-          <td colSpan={5}>{shown === "source" ? item.source || "来源尚无" : item.draft || "草稿尚无"}</td>
-        </tr>
-      ) : null}
-    </>
-  )
-}
-
-function FindingMini({
-  item,
-  open,
-  busy,
-  onOpen,
-  onFile,
-  onOpenTicket,
-}: {
-  item: InquiryFinding
-  open: { id: string; kind: "source" | "draft" } | null
-  busy?: boolean
-  onOpen: (next: { id: string; kind: "source" | "draft" } | null) => void
-  onFile: () => void
-  onOpenTicket: (caseId: string) => void
-}) {
-  const shown = open?.id === item.id ? open.kind : null
-  return (
-    <article className="inq-mini">
-      <strong>{item.org}</strong>
-      <span>{item.pain || "对口类型尚无"}</span>
-      <FindingOps item={item} shown={shown} busy={busy} onOpen={onOpen} onFile={onFile} onOpenTicket={onOpenTicket} />
-      {shown ? <p>{shown === "source" ? item.source || "来源尚无" : item.draft || "草稿尚无"}</p> : null}
-    </article>
   )
 }

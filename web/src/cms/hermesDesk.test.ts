@@ -3,6 +3,9 @@ import {
   applyMemoryPatch,
   applyResume,
   applyTakeover,
+  applyStaffCaseUpdate,
+  applyStaffCasesBatch,
+  applyStaffCasesDelete,
   attachLead,
   fileFinding,
   boardMetrics,
@@ -347,5 +350,22 @@ describe("desk board telemetry", () => {
     expect(matchDeskSearch(second, "Green Field")).toBe(true)
     expect(matchDeskSearch(first, "不存在的公司")).toBe(false)
     expect(filterHermesCases([first, second], { query: "greenfield" })[0]?.id).toBe("case-new")
+  })
+
+  it("lets staff edit, batch edit, and delete tickets", () => {
+    const first = sample({ id: "case-a", name: "测试甲" })
+    const second = sample({ id: "case-b", name: "测试乙", progress: "new" })
+    const edited = applyStaffCaseUpdate([first, second], "case-a", { name: "陈经理", progress: "talking" }, now)
+    expect(edited.error).toBeNull()
+    expect(edited.case?.name).toBe("陈经理")
+    expect(edited.cases[0]?.progress).toBe("talking")
+    const batched = applyStaffCasesBatch(edited.cases, ["case-a", "case-b"], { progress: "hold" }, now)
+    expect(batched.count).toBe(2)
+    expect(batched.cases.every((item) => item.progress === "hold")).toBe(true)
+    const deleted = applyStaffCasesDelete(batched.cases, ["case-a"], now)
+    expect(deleted.count).toBe(1)
+    expect(deleted.cases.some((item) => item.id === "case-a")).toBe(false)
+    expect(isStaffAction("cases")).toBe(true)
+    expect(isStaffAction("coach-clear")).toBe(true)
   })
 })

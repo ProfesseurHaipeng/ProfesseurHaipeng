@@ -7,7 +7,8 @@ import {
   emptyInquiry,
   extractInquiryUpdates,
   hydrateInquiryState,
-  inquiryCoachExtra,
+  buildInquiryAssignMessage,
+  inquiryPromptPreview,
   inquiryRunHint,
   inquiryRunIndex,
   inquiryStepFill,
@@ -44,14 +45,25 @@ describe("inquiry module on the desk", () => {
     expect(next.findings).toHaveLength(1)
   })
 
+  it("builds the same assign message the panel sends to coach", () => {
+    const targets = [{ id: "tg-1", label: "土壤板结", at: now }]
+    const message = buildInquiryAssignMessage(targets)
+    expect(message).toContain("土壤板结")
+    expect(message).toContain("取条件")
+    const preview = inquiryPromptPreview({ ...emptyInquiry(), targets })
+    expect(preview.userMessage).toBe(message)
+    expect(preview.systemExcerpt).toContain("土壤板结")
+    expect(preview.targetCount).toBe(1)
+  })
+
   it("briefs the same Hermes with current targets and empty findings", () => {
-    const extra = inquiryCoachExtra({
+    const preview = inquiryPromptPreview({
       ...emptyInquiry(),
       targets: [{ id: "tg-1", label: "化肥成本高", at: now }],
     })
-    expect(extra).toContain("化肥成本高")
-    expect(extra).toContain("还没有真实找到的厂商")
-    expect(extra).toContain("<inquiry>")
+    expect(preview.systemExcerpt).toContain("化肥成本高")
+    expect(preview.systemExcerpt).toContain("<inquiry>")
+    expect(preview.findingCount).toBe(0)
   })
 
   it("hydrates stored inquiry and refuses invented or already-sent rows", () => {

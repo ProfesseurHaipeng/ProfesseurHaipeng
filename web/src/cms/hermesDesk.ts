@@ -156,7 +156,23 @@ export const CHANNEL_LABEL: Record<HermesChannel, string> = {
   unset: "未知",
 }
 
-export const STAFF_ACTIONS = ["health", "coach", "targets", "job", "file", "attach", "import"] as const
+export const STAFF_ACTIONS = ["health", "coach", "targets", "job", "file", "attach", "import", "cases", "coach-clear"] as const
+
+export const STAFF_CASE_FIELDS = [
+  "name",
+  "org",
+  "factory",
+  "contact",
+  "note",
+  "place",
+  "progress",
+  "owner",
+  "following",
+  "energy",
+  "nextAction",
+] as const
+
+export type StaffCasePatch = Partial<Pick<HermesCase, (typeof STAFF_CASE_FIELDS)[number]>>
 
 export function isStaffAction(action: string) {
   return (
@@ -166,8 +182,57 @@ export function isStaffAction(action: string) {
     action === "job" ||
     action === "file" ||
     action === "attach" ||
-    action === "import"
+    action === "import" ||
+    action === "cases" ||
+    action === "coach-clear"
   )
+}
+
+function staffCasePatch(raw: Record<string, unknown>): StaffCasePatch {
+  const patch: StaffCasePatch = {}
+  for (const key of STAFF_CASE_FIELDS) {
+    if (key in raw) (patch as Record<string, unknown>)[key] = raw[key]
+  }
+  return patch
+}
+
+export function applyStaffCaseUpdate(cases: HermesCase[], id: string, raw: Record<string, unknown>, now = new Date().toISOString()) {
+  const patch = staffCasePatch(raw)
+  if (!id || !Object.keys(patch).length) return { cases, error: "empty" as const }
+  const hit = cases.find((item) => item.id === id && !item.gone)
+  if (!hit) return { cases, error: "missing" as const }
+  const next = patchHermesCase(hit, patch, now)
+  return { cases: sortHermesCases([next, ...cases.filter((item) => item.id !== id)]), case: next, error: null }
+}
+
+export function applyStaffCasesBatch(
+  cases: HermesCase[],
+  ids: string[],
+  raw: Record<string, unknown>,
+  now = new Date().toISOString(),
+) {
+  const patch = staffCasePatch(raw)
+  const wanted = new Set(ids.filter((item) => item.startsWith("case-")))
+  if (!wanted.size || !Object.keys(patch).length) return { cases, count: 0, error: "empty" as const }
+  let count = 0
+  const next = cases.map((item) => {
+    if (!wanted.has(item.id) || item.gone) return item
+    count += 1
+    return patchHermesCase(item, patch, now)
+  })
+  return { cases: sortHermesCases(next), count, error: null }
+}
+
+export function applyStaffCasesDelete(cases: HermesCase[], ids: string[], now = new Date().toISOString()) {
+  const wanted = new Set(ids.filter((item) => item.startsWith("case-")))
+  if (!wanted.size) return { cases, count: 0, error: "empty" as const }
+  let count = 0
+  const next = cases.map((item) => {
+    if (!wanted.has(item.id) || item.gone) return item
+    count += 1
+    return { ...item, gone: true, updatedAt: now }
+  })
+  return { cases: sortHermesCases(next.filter((item) => !item.gone)), count, error: null }
 }
 
 export function progressRatio(progress: HermesProgress) {
@@ -954,8 +1019,8 @@ const COACH_RULES = `你是皮纳图博火山灰项目的高级顾问 Hermes。�
 - 不要编造客户。档案列表没有的人，就说还没有这场对话。
 
 【控制权】
-- 同事只能通过这个对话框给你下指令。进度、接管、邮件状态、跟单、跟踪、行为数据、记忆，全部由你改，不要让同事在界面上改。
-- 同事说接管 / 交回 / 改进度 / 记邮件 / 改记忆，你用 <desk> 更新。一键接管也只能由你执行。
+- 同事能通过工单列表改称呼、公司、联系方式、进度等基础字段；接管、邮件状态、跟单、跟踪、行为数据、记忆仍由你改。
+- 同事说接管 / 交回 / 记邮件 / 改记忆，你用 <desk> 更新。一键接管也只能由你执行。
 
 【你能做的】
 - 根据同事的意图，说明你会怎么跟进哪些客户、话术怎么改、谁先谁后。

@@ -10,7 +10,6 @@ import {
   boardMetrics,
   customerArchives,
   customerKey,
-  emptyMemory,
   factoryArchives,
   factoryName,
   filterHermesCases,
@@ -25,13 +24,14 @@ import {
   type HermesCase,
   type HermesCoachImage,
   type HermesCoachTurn,
-  type HermesDeskLink,
   type HermesEvent,
   type HermesMemory,
+  type StaffCasePatch,
 } from "../cms/hermesDesk"
 import { emptyInquiry, type InquiryState } from "../cms/inquiryDesk"
 import { withBase } from "../lib/asset"
 import { InquiryPanel } from "./InquiryPanel"
+import { TicketsPanel } from "./TicketsPanel"
 import type { AdminAuth } from "./LeadsPanel"
 
 type LinkView = "connecting" | "connected" | "disconnected"
@@ -177,7 +177,6 @@ type DeskPayload = {
   coach?: HermesCoachTurn[]
   events?: HermesEvent[]
   memory?: HermesMemory
-  link?: HermesDeskLink
   health?: HermesHealth | null
   hermesReady?: boolean
   attachable?: { id: string; name: string; org: string; note: string; at: string }[]
@@ -191,10 +190,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   const [cases, setCases] = useState<HermesCase[]>([])
   const [coach, setCoach] = useState<HermesCoachTurn[]>([])
   const [events, setEvents] = useState<HermesEvent[]>([])
-  const [memory, setMemory] = useState<HermesMemory>(emptyMemory())
-  const [link, setLink] = useState<HermesDeskLink>({ configured: false, model: "", host: "" })
   const [status, setStatus] = useState<LinkView>("connecting")
-  const [healthAt, setHealthAt] = useState("")
   const [healthDetail, setHealthDetail] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -204,6 +200,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   const [focus, setFocus] = useState<BoardFocus>({ kind: "home" })
   const [pane, setPane] = useState<MobilePane>("board")
   const [module, setModule] = useState<BoardModule>("tickets")
+  const [editTicketId, setEditTicketId] = useState<string | null>(null)
   const [inquiry, setInquiry] = useState<InquiryState>(emptyInquiry)
   const [hermesReady, setHermesReady] = useState(false)
   const [pending, setPending] = useState<PendingImage[]>([])
@@ -233,13 +230,10 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
     if (Array.isArray(payload.cases)) setCases(payload.cases.map(normalizeCase))
     if (Array.isArray(payload.coach)) setCoach(payload.coach)
     if (Array.isArray(payload.events)) setEvents(payload.events)
-    if (payload.memory) setMemory(payload.memory)
     if (payload.inquiry) setInquiry(payload.inquiry)
-    if (payload.link) setLink(payload.link)
     if (typeof payload.hermesReady === "boolean") setHermesReady(payload.hermesReady)
     if (payload.health) {
       setStatus(payload.health.status === "connected" ? "connected" : "disconnected")
-      setHealthAt(payload.health.checkedAt || "")
       setHealthDetail(payload.health.detail || "")
     }
   }, [])
@@ -288,9 +282,59 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   }, [load, probe])
 
   useEffect(() => {
-    const timer = window.setInterval(() => void probe(), 20000)
+    const timer = window.setInterval(() => {
+      if (status !== "connected") void probe()
+    }, 60000)
     return () => window.clearInterval(timer)
-  }, [probe])
+  }, [probe, status])
+
+  const deleteCases = useCallback(
+    async (ids: string[]) => {
+      setError("")
+      try {
+        await post({ action: "cases", op: "delete", ids })
+        if (focus.kind === "ticket" && ids.includes(focus.id)) setFocus({ kind: "home" })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "删除失败")
+      }
+    },
+    [focus, post],
+  )
+
+  const updateCase = useCallback(
+    async (id: string, patch: StaffCasePatch) => {
+      setError("")
+      try {
+        await post({ action: "cases", op: "update", id, patch })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "保存失败")
+      }
+    },
+    [post],
+  )
+
+  const batchUpdateCases = useCallback(
+    async (ids: string[], patch: StaffCasePatch) => {
+      setError("")
+      try {
+        await post({ action: "cases", op: "batch", ids, patch })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "批量编辑失败")
+      }
+    },
+    [post],
+  )
+
+  const clearCoach = useCallback(async () => {
+    if (!coach.length) return
+    if (!window.confirm("清空工作台对话记录？工单和询单设定不会删。")) return
+    setError("")
+    try {
+      await post({ action: "coach-clear" })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "清空失败")
+    }
+  }, [coach.length, post])
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight })
@@ -303,14 +347,11 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
     [pending],
   )
 
-  const visible = filterHermesCases(cases, { origin: "live", query }).map(normalizeCase)
   const allLive = filterHermesCases(cases, { origin: "live" }).map(normalizeCase)
   const selected = focus.kind === "ticket" ? allLive.find((item) => item.id === focus.id) || null : null
   const customerFile =
     focus.kind === "customer" ? customerArchives(allLive).find((item) => customerKey(item) === focus.key) || null : null
   const factoryFile = focus.kind === "factory" ? factoryArchives(allLive).find((item) => item.name === focus.name) || null : null
-  const customers = customerArchives(visible)
-  const factories = factoryArchives(visible)
   const customerTickets = customerFile ? ticketsForCustomer(allLive, customerKey(customerFile)) : []
   const factoryTickets = factoryFile ? ticketsForFactory(allLive, factoryFile.name) : []
   const timelineCaseId = selected?.id || customerFile?.id || factoryFile?.latest.id
@@ -466,54 +507,26 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
 
   return (
     <div className="hermes-grok hermes-apple">
-      <div className={`hermes-scan${status === "connecting" ? " is-on" : ""}`} aria-hidden="true" />
       <header className="hermes-grok__top">
         <div className="hermes-grok__brand">
           <strong>{AGENT_NAME}</strong>
-          <span>工单与档案只读 · 同事只通过对话指挥</span>
+          <span>对话指挥 · 工单可编辑 · 询单条件会写入提示词</span>
         </div>
         <button
           type="button"
           className={`hermes-grok__status hermes-grok__status--${status}`}
-          title={healthDetail || undefined}
+          title={healthDetail || STATUS_LABEL[status]}
           onClick={() => void probe()}
         >
           <i />
           <span className="hermes-grok__status-label">{STATUS_LABEL[status]}</span>
-          {link.model && status === "connected" ? <em>{link.model}</em> : null}
-          {status === "disconnected" && !link.configured ? <em>未配置网关</em> : null}
         </button>
         <div className="hermes-grok__tools">
-          <button type="button" className="hermes-grok__ghost hermes-grok__ghost--probe" onClick={() => void probe()}>
-            探测连接
-          </button>
           <button type="button" className="hermes-grok__ghost" onClick={() => void load()} disabled={loading}>
             {loading ? "读取中" : "刷新"}
           </button>
         </div>
       </header>
-
-      {module === "tickets" && pane !== "chat" ? (
-      <form className="hermes-search" onSubmit={runSearch}>
-        <label className="sr-only" htmlFor="hermes-one-search">
-          一键搜索工单号、手机、邮箱或公司
-        </label>
-        <input
-          id="hermes-one-search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="工单号、手机、邮箱或公司"
-        />
-        <button type="submit">一键搜索</button>
-        <p className={query.trim() ? undefined : "hermes-search__hint"}>
-          {query.trim()
-            ? visible.length
-              ? `找到 ${visible.length} 张工单 · ${customers.length} 份客户档案`
-              : "没有匹配的工单号、电话、邮箱或公司"
-            : "搜工单号、客户手机、邮箱或公司"}
-        </p>
-      </form>
-      ) : null}
 
       <nav className="hermes-grok__tabs" aria-label="工作台分区">
         <button type="button" className={pane === "chat" ? "is-on" : ""} onClick={() => setPane("chat")}>
@@ -561,7 +574,14 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
             {coach.length === 0 && !sending ? (
               <div className="hermes-grok__hello">
                 <h2>{AGENT_NAME}</h2>
-                <p>进度、接管、邮件、询单寻找都由我改。你设定要找的厂商弊端，再在这里指挥。也可以发图。</p>
+                <p>在这里下指令。询单条件会自动写进系统提示；复杂进度仍由 Karmenai 在对话里改。</p>
+              </div>
+            ) : null}
+            {coach.length > 0 ? (
+              <div className="hermes-grok__chat-tools">
+                <button type="button" className="hermes-grok__ghost" onClick={() => void clearCoach()}>
+                  清空对话
+                </button>
               </div>
             ) : null}
             {coach.map((turn) => (
@@ -660,34 +680,10 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                 event.target.value = ""
               }}
             />
-            {healthAt ? <p className="hermes-grok__probe">上次探测 {formatTime(healthAt)}</p> : null}
           </form>
         </section>
 
         <aside className="hermes-panel">
-          <nav className="hermes-mod" aria-label="工作台模块">
-            <button
-              type="button"
-              className={module === "tickets" ? "is-on" : ""}
-              onClick={() => {
-                setModule("tickets")
-                if (compactBoard()) setPane("board")
-              }}
-            >
-              工单档案
-            </button>
-            <button
-              type="button"
-              className={module === "inquiry" ? "is-on" : ""}
-              onClick={() => {
-                setModule("inquiry")
-                setFocus({ kind: "home" })
-                if (compactBoard()) setPane("inquiry")
-              }}
-            >
-              询单系统
-            </button>
-          </nav>
           {module === "inquiry" ? (
             <InquiryPanel
               inquiry={inquiry}
@@ -742,9 +738,19 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
             />
           ) : selected ? (
             <section className="hermes-detail">
-              <button type="button" className="hermes-back" onClick={() => goBoard({ kind: "home" })}>
-                返回列表
-              </button>
+              <div className="hermes-detail__bar">
+                <button type="button" className="hermes-back" onClick={() => goBoard({ kind: "home" })}>
+                  返回列表
+                </button>
+                <span className="hermes-detail__ops">
+                  <button type="button" onClick={() => setEditTicketId(selected.id)}>
+                    编辑
+                  </button>
+                  <button type="button" className="is-danger" onClick={() => void deleteCases([selected.id])}>
+                    删除
+                  </button>
+                </span>
+              </div>
               <header className="hermes-panel__who">
                 <em>工单 {ticketNo(selected)}</em>
                 <strong>{selected.name}</strong>
@@ -895,98 +901,129 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
               </Fold>
             </section>
           ) : (
-            <>
-              <section className="hermes-tickets">
-                <header>
-                  <div>
-                    <h3>工单</h3>
-                    <p>{visible.length ? `${visible.length} 张` : "还没有工单"} · 每张都有工单号和六个环节进度</p>
-                  </div>
-                </header>
-                <ul>
-                  {visible.map((item) => (
-                    <li key={item.id}>
-                      {ticketRow(item, [
-                        `${ticketFollow(item)} · ${PROGRESS_LABEL[item.progress]}`,
-                        `${factoryName(item) || "工厂尚未建档"} · ${ticketMail(item)}`,
-                      ])}
-                    </li>
-                  ))}
-                </ul>
-                {!loading && visible.length === 0 ? (
-                  <p className="hermes-grok__empty">还没有真实对话，也就还没有客户档案和工厂档案。有了之后，每个客户、每家工厂各有一份。</p>
-                ) : null}
-              </section>
-              <section className="hermes-tickets">
-                <header>
-                  <div>
-                    <h3>客户档案</h3>
-                    <p>{customers.length ? `${customers.length} 份 · 每位客户单独一份` : "尚无"}</p>
-                  </div>
-                </header>
-                <ul>
-                  {customers.map((item) => {
-                    const owned = ticketsForCustomer(allLive, customerKey(item))
-                    return (
-                    <li key={customerKey(item)}>
-                      <button
-                        type="button"
-                        className="hermes-ticket"
-                        onClick={() => goBoard({ kind: "customer", key: customerKey(item) })}
-                      >
-                        <div className="hermes-ticket__body">
-                          <em>客户档案</em>
-                          <strong>{item.name}</strong>
-                          <span>{item.org || "公司尚无"}{item.contact ? ` · ${item.contact}` : ""}</span>
-                          <span>
-                            {owned.length} 张工单 · {owned.map(ticketNo).join(" · ") || "尚无工单号"}
-                          </span>
-                          <MiniStages progress={item.progress} />
-                        </div>
-                        <b aria-hidden="true">›</b>
-                      </button>
-                    </li>
-                    )
-                  })}
-                </ul>
-              </section>
-              <section className="hermes-tickets">
-                <header>
-                  <div>
-                    <h3>工厂档案</h3>
-                    <p>{factories.length ? `${factories.length} 份 · 每家工厂单独一份` : "尚无"}</p>
-                  </div>
-                </header>
-                <ul>
-                  {factories.map((row) => (
-                    <li key={row.name}>
-                      <button type="button" className="hermes-ticket" onClick={() => goBoard({ kind: "factory", name: row.name })}>
-                        <div className="hermes-ticket__body">
-                          <em>工厂档案</em>
-                          <strong>{row.name}</strong>
-                          <span>
-                            {row.count} 张工单 · {row.tickets.map(ticketNo).join(" · ")}
-                          </span>
-                          <MiniStages progress={row.latest.progress} />
-                        </div>
-                        <b aria-hidden="true">›</b>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                {!loading && visible.length > 0 && factories.length === 0 ? (
-                  <p className="hermes-grok__empty">已有客户工单，工厂名还没写下，所以工厂档案先空着。</p>
-                ) : null}
-              </section>
-              <section>
-                <h3>记忆 · {AGENT_NAME} 维护</h3>
-                <p className="hermes-lore">{memory.shared || "还没有共用记忆。"}</p>
-                <p className="hermes-lore hermes-lore--desk">{memory.desk || "还没有仅后台笔记。"}</p>
-              </section>
-            </>
+            <TicketsPanel
+              cases={cases}
+              loading={loading}
+              query={query}
+              onQueryChange={setQuery}
+              onSearch={runSearch}
+              focusId={focus.kind === "ticket" ? focus.id : undefined}
+              onOpenTicket={(id) => goBoard({ kind: "ticket", id })}
+              onOpenCustomer={(key) => goBoard({ kind: "customer", key })}
+              onOpenFactory={(name) => goBoard({ kind: "factory", name })}
+              onUpdate={updateCase}
+              onDelete={deleteCases}
+              onBatchUpdate={batchUpdateCases}
+            />
           )}
+          {editTicketId && selected && editTicketId === selected.id ? (
+            <TicketEditOverlay
+              item={selected}
+              onClose={() => setEditTicketId(null)}
+              onSave={async (patch) => {
+                await updateCase(selected.id, patch)
+                setEditTicketId(null)
+              }}
+            />
+          ) : null}
         </aside>
       </div>
+    </div>
+  )
+}
+
+function TicketEditOverlay({
+  item,
+  onClose,
+  onSave,
+}: {
+  item: HermesCase
+  onClose: () => void
+  onSave: (patch: StaffCasePatch) => Promise<void>
+}) {
+  const [name, setName] = useState(item.name)
+  const [org, setOrg] = useState(item.org)
+  const [factory, setFactory] = useState(item.factory || "")
+  const [contact, setContact] = useState(item.contact)
+  const [place, setPlace] = useState(item.place || "")
+  const [note, setNote] = useState(item.note)
+  const [progress, setProgress] = useState(item.progress)
+  const [nextAction, setNextAction] = useState(item.nextAction || "")
+  const [saving, setSaving] = useState(false)
+
+  return (
+    <div className="desk-edit" role="dialog" aria-modal="true">
+      <form
+        className="desk-edit__card"
+        onSubmit={(event) => {
+          event.preventDefault()
+          setSaving(true)
+          void onSave({
+            name: name.trim(),
+            org: org.trim(),
+            factory: factory.trim() || undefined,
+            contact: contact.trim(),
+            place: place.trim() || undefined,
+            note: note.trim(),
+            progress,
+            nextAction: nextAction.trim() || undefined,
+          }).finally(() => setSaving(false))
+        }}
+      >
+        <header>
+          <h3>编辑 {ticketNo(item)}</h3>
+          <button type="button" className="desk-edit__close" onClick={onClose}>
+            ×
+          </button>
+        </header>
+        <label>
+          称呼
+          <input value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label>
+          公司
+          <input value={org} onChange={(e) => setOrg(e.target.value)} />
+        </label>
+        <label>
+          工厂
+          <input value={factory} onChange={(e) => setFactory(e.target.value)} />
+        </label>
+        <label>
+          联系方式
+          <input value={contact} onChange={(e) => setContact(e.target.value)} />
+        </label>
+        <label>
+          地区
+          <input value={place} onChange={(e) => setPlace(e.target.value)} />
+        </label>
+        <label>
+          进度
+          <select value={progress} onChange={(e) => setProgress(e.target.value as HermesCase["progress"])}>
+            {PROGRESS_TRACK.map((step) => (
+              <option key={step} value={step}>
+                {PROGRESS_LABEL[step]}
+              </option>
+            ))}
+            <option value="hold">{PROGRESS_LABEL.hold}</option>
+          </select>
+        </label>
+        <label>
+          线索
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
+        </label>
+        <label>
+          下一步
+          <input value={nextAction} onChange={(e) => setNextAction(e.target.value)} />
+        </label>
+        <footer>
+          <button type="button" className="is-ghost" onClick={onClose}>
+            取消
+          </button>
+          <button type="submit" disabled={saving}>
+            {saving ? "保存中…" : "保存"}
+          </button>
+        </footer>
+      </form>
     </div>
   )
 }

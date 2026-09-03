@@ -229,6 +229,64 @@ function localGuide(): Plugin {
             res.end(JSON.stringify(pack()))
             return
           }
+          if (action === "cases") {
+            const op = typeof body.op === "string" ? body.op : ""
+            if (op === "delete") {
+              const ids = Array.isArray(body.ids) ? body.ids.filter((item): item is string => typeof item === "string") : []
+              const result = deskMod.applyStaffCasesDelete(localDesk.cases, ids)
+              if (result.error) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ error: result.error }))
+                return
+              }
+              localDesk.cases = result.cases
+              pushEvent("update", `删除 ${result.count} 张工单`)
+              res.end(JSON.stringify(pack()))
+              return
+            }
+            if (op === "update") {
+              const id = typeof body.id === "string" ? body.id : ""
+              const patch = body.patch && typeof body.patch === "object" ? body.patch : body
+              const result = deskMod.applyStaffCaseUpdate(localDesk.cases, id, patch as Record<string, unknown>)
+              if (result.error === "empty") {
+                res.statusCode = 400
+                res.end(JSON.stringify({ error: "empty" }))
+                return
+              }
+              if (result.error === "missing") {
+                res.statusCode = 404
+                res.end(JSON.stringify({ error: "missing" }))
+                return
+              }
+              localDesk.cases = result.cases
+              pushEvent("update", `编辑工单 ${result.case?.name || id}`, result.case?.id)
+              res.end(JSON.stringify(pack()))
+              return
+            }
+            if (op === "batch") {
+              const ids = Array.isArray(body.ids) ? body.ids.filter((item): item is string => typeof item === "string") : []
+              const patch = body.patch && typeof body.patch === "object" ? body.patch : {}
+              const result = deskMod.applyStaffCasesBatch(localDesk.cases, ids, patch as Record<string, unknown>)
+              if (result.error) {
+                res.statusCode = 400
+                res.end(JSON.stringify({ error: result.error }))
+                return
+              }
+              localDesk.cases = result.cases
+              pushEvent("update", `批量编辑 ${result.count} 张工单`)
+              res.end(JSON.stringify(pack()))
+              return
+            }
+            res.statusCode = 400
+            res.end(JSON.stringify({ error: "op" }))
+            return
+          }
+          if (action === "coach-clear") {
+            localDesk.coach = []
+            pushEvent("update", "清空工作台对话")
+            res.end(JSON.stringify(pack()))
+            return
+          }
           if (action === "coach") {
             const now = new Date().toISOString()
             const message = typeof body.message === "string" ? body.message.trim().slice(0, 2000) : ""
