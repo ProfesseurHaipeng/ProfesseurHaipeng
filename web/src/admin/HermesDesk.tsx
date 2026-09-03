@@ -248,8 +248,17 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   )
 
   const visible = filterHermesCases(cases, { origin: "live", query }).map(normalizeCase)
-  const selected = cases.map(normalizeCase).find((item) => item.id === selectedId) || visible[0] || null
+  const selected = cases.map(normalizeCase).find((item) => item.id === selectedId) || null
   const timeline = events.filter((item) => !selected || !item.caseId || item.caseId === selected.id).slice(-12).reverse()
+
+  const ticketFollow = (item: HermesCase) =>
+    item.owner === "human" ? "人工跟进中" : item.following ? `${AGENT_NAME} 跟进中` : "尚未跟进"
+
+  const ticketMail = (item: HermesCase) => {
+    const status = MAIL_STATUS_LABEL[item.mailStatus || "none"]
+    const follow = item.mailFollowUp ? "有跟单" : "无跟单"
+    return `${status} · ${follow}`
+  }
 
   const addFiles = async (files: FileList | File[]) => {
     const next: PendingImage[] = []
@@ -315,34 +324,12 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         </div>
       </header>
 
-      <section className="hermes-world" aria-label="总进度">
-        <ProgressRail
-          value={board.worldProgress}
-          label={visible.length ? "全部真实对话进度" : "等待真实对话"}
-        />
-        <ul className="hermes-world__stats">
-          <li><b>{board.live}</b><span>真实对话</span></li>
-          <li><b>{board.following}</b><span>{AGENT_NAME} 跟进</span></li>
-          <li><b>{board.human}</b><span>人工跟进</span></li>
-          <li><b>{board.inquiries}</b><span>询单次数</span></li>
-          <li><b>{board.chatTurns}</b><span>对话轮次</span></li>
-          <li><b>{board.mailSent}</b><span>邮件已发</span></li>
-          <li><b>{board.mailFailed}</b><span>发送失败</span></li>
-          <li><b>{board.mailFollow}</b><span>有跟单</span></li>
-          <li><b>{board.mailTracked}</b><span>有跟踪</span></li>
-          <li><b>{board.mailSummarized}</b><span>回邮摘要</span></li>
-          <li><b>{formatPace(board.avgInquiryPace) || "尚无"}</b><span>询单间隔</span></li>
-          <li><b>{formatPace(board.avgReplyPace) || "尚无"}</b><span>回复速度</span></li>
-          <li><b>{board.avgMailReply != null ? `${board.avgMailReply} 小时` : "尚无"}</b><span>回邮用时</span></li>
-        </ul>
-      </section>
-
       <nav className="hermes-grok__tabs" aria-label="工作台分区">
         <button type="button" className={pane === "chat" ? "is-on" : ""} onClick={() => setPane("chat")}>
           对话
         </button>
         <button type="button" className={pane === "board" ? "is-on" : ""} onClick={() => setPane("board")}>
-          看板
+          单子
         </button>
       </nav>
 
@@ -470,33 +457,15 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         </section>
 
         <aside className="hermes-panel">
-          <section className="hermes-cast">
-            <header>
-              <h3>真实客户</h3>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索" />
-            </header>
-            <ul>
-              {visible.map((item) => (
-                <li key={item.id}>
-                  <button type="button" className={selected?.id === item.id ? "is-on" : ""} onClick={() => setSelectedId(item.id)}>
-                    <strong>{item.name}</strong>
-                    <span>{PROGRESS_LABEL[item.progress]} · {percent(progressRatio(item.progress))}</span>
-                    <em style={{ width: percent(progressRatio(item.progress)) }} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {!loading && visible.length === 0 ? (
-              <p className="hermes-grok__empty">还没有前台高级顾问对话。数字保持空，不会编。</p>
-            ) : null}
-          </section>
-
           {selected ? (
-            <>
+            <section className="hermes-detail">
+              <button type="button" className="hermes-back" onClick={() => setSelectedId("")}>
+                返回单子
+              </button>
               <header className="hermes-panel__who">
                 <strong>{selected.name}</strong>
                 <span>
-                  {selected.owner === "human" ? "人工跟进中" : selected.following ? `${AGENT_NAME} 跟进中` : "尚未跟进"}
+                  {ticketFollow(selected)}
                   {isLiveCase(selected) ? " · 真实对话" : ""}
                 </span>
               </header>
@@ -555,28 +524,57 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                   <dd>{selected.reaction || selected.evaluation || "尚无"}</dd>
                 </div>
               </dl>
-            </>
+              <section className="hermes-grok__time">
+                <h3>这条单的时间线</h3>
+                {timeline.length === 0 ? <p className="hermes-grok__empty">还没有事件。</p> : null}
+                <ol>
+                  {timeline.map((item) => (
+                    <li key={item.id}>
+                      <time dateTime={item.at}>{formatTime(item.at)}</time>
+                      <span>{item.text}</span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </section>
           ) : (
-            <p className="hermes-grok__empty">选一位真实客户，进度条和邮件状态会出现在这里。</p>
+            <>
+              <section className="hermes-tickets">
+                <header>
+                  <div>
+                    <h3>单子</h3>
+                    <p>
+                      {visible.length ? `${visible.length} 张真实对话` : "还没有单子"}
+                      {board.live ? ` · 点进去看详细进度` : ""}
+                    </p>
+                  </div>
+                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索" />
+                </header>
+                <ul>
+                  {visible.map((item) => (
+                    <li key={item.id}>
+                      <button type="button" className="hermes-ticket" onClick={() => setSelectedId(item.id)}>
+                        <strong>{item.name}</strong>
+                        <span>{ticketFollow(item)} · {PROGRESS_LABEL[item.progress]}</span>
+                        <span>{ticketMail(item)}</span>
+                        <div className="hermes-rail__track hermes-ticket__bar" aria-hidden="true">
+                          <i style={{ width: percent(progressRatio(item.progress)) }} />
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {!loading && visible.length === 0 ? (
+                  <p className="hermes-grok__empty">还没有前台高级顾问对话。有真实单子后，这里会先看到跟进和进度，点进去才看详情。</p>
+                ) : null}
+              </section>
+              <section>
+                <h3>记忆 · {AGENT_NAME} 维护</h3>
+                <p className="hermes-lore">{memory.shared || "还没有共用记忆。"}</p>
+                <p className="hermes-lore hermes-lore--desk">{memory.desk || "还没有仅后台笔记。"}</p>
+              </section>
+            </>
           )}
-
-          <section>
-            <h3>记忆 · {AGENT_NAME} 维护</h3>
-            <p className="hermes-lore">{memory.shared || "还没有共用记忆。"}</p>
-            <p className="hermes-lore hermes-lore--desk">{memory.desk || "还没有仅后台笔记。"}</p>
-          </section>
-          <section className="hermes-grok__time">
-            <h3>时间线</h3>
-            {timeline.length === 0 ? <p className="hermes-grok__empty">还没有事件。</p> : null}
-            <ol>
-              {timeline.map((item) => (
-                <li key={item.id}>
-                  <time dateTime={item.at}>{formatTime(item.at)}</time>
-                  <span>{item.text}</span>
-                </li>
-              ))}
-            </ol>
-          </section>
         </aside>
       </div>
     </div>

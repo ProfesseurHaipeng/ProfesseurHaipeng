@@ -1,12 +1,12 @@
 .admin-gate,
 .admin-shell {
-  --admin-bg: #07090f;
-  --admin-panel: #10151f;
-  --admin-line: #243044;
-  --admin-ink: #e8eef8;
-  --admin-muted: #8b97ab;
-  --admin-soft: #151b26;
-  --admin-cyan: #3ee0c6;
+  --admin-bg: #ffffff;
+  --admin-panel: #ffffff;
+  --admin-line: #eceef8;
+  --admin-ink: #111111;
+  --admin-muted: #5f5f6a;
+  --admin-soft: #f6f6fa;
+  --admin-cyan: #4f5498;
   min-height: 100vh;
   background: var(--admin-bg);
   color: var(--admin-ink);
@@ -38,7 +38,7 @@
 .admin-side {
   padding: 1.4rem 1.1rem;
   border-right: 1px solid var(--admin-line);
-  background: #0b1018;
+  background: var(--admin-soft);
 }
 
 .admin-side h1 {
@@ -64,9 +64,8 @@
 }
 
 .admin-side button.is-active {
-  background: var(--admin-soft);
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(62, 224, 198, 0.25);
+  background: var(--lavender);
+  color: var(--lavender-ink);
 }
 
 .admin-main {
@@ -95,9 +94,9 @@
 
 .admin-shell .latin-kicker,
 .admin-gate .latin-kicker {
-  color: var(--admin-muted);
-  background: transparent;
-  border: 1px solid var(--admin-line);
+  color: var(--lavender-ink);
+  background: var(--lavender);
+  border: 0;
 }
 
 .admin-shell a,
@@ -107,17 +106,16 @@
 
 .admin-shell .btn,
 .admin-gate .btn {
-  background: var(--admin-soft);
-  color: var(--admin-ink);
-  border-color: var(--admin-line);
+  background: var(--admin-ink);
+  color: #fff;
+  border-color: var(--admin-ink);
 }
 
 .admin-shell .btn:hover,
 .admin-gate .btn:hover {
-  background: #1d2838;
+  background: #2a2a30;
   color: #fff;
-  border-color: var(--admin-cyan);
-  box-shadow: none;
+  border-color: #2a2a30;
 }
 
 .admin-shell .btn--ghost,
@@ -129,8 +127,8 @@
 
 .admin-shell .notice,
 .admin-gate .notice {
-  color: #fecaca;
-  border-top-color: #7f1d1d;
+  color: #8a2f1d;
+  border-top-color: #e8c4bc;
 }
 
 .admin-field,
@@ -166,7 +164,7 @@
   margin-top: 0.9rem;
   border: 0;
   background: transparent;
-  color: #f0a8a0;
+  color: #8a2f1d;
   padding: 0.35rem 0.5rem 0.35rem 0;
   text-align: left;
   cursor: pointer;
@@ -230,16 +228,16 @@
 }
 
 .admin-lead__org {
-  color: var(--admin-cyan);
-  background: var(--admin-soft);
+  color: var(--lavender-ink);
+  background: var(--lavender);
   border-radius: 999px;
   padding: 0.08rem 0.55rem;
   font-size: 0.78rem;
 }
 
 .admin-lead__ai {
-  color: #f5c15a;
-  background: #2a2110;
+  color: #8a5a17;
+  background: #fdf1de;
   border-radius: 999px;
   padding: 0.08rem 0.55rem;
   font-size: 0.78rem;
@@ -351,7 +349,7 @@
     min-height: 2.6rem;
     border-radius: 999px;
     padding: 0.4rem 0.75rem;
-    background: var(--admin-soft);
+    background: #fff;
     color: var(--admin-ink);
   }
 
@@ -376,23 +374,20 @@
 }
 
 .hermes-grok {
-  --hg-bg: #07090f;
-  --hg-panel: #10151f;
-  --hg-line: #243044;
-  --hg-ink: #e8eef8;
-  --hg-muted: #8b97ab;
-  --hg-soft: #151b26;
-  --hud-cyan: #3ee0c6;
-  --hud-gold: #f5c15a;
+  --hg-bg: #ffffff;
+  --hg-panel: #ffffff;
+  --hg-line: #eceef8;
+  --hg-ink: #111111;
+  --hg-muted: #5f5f6a;
+  --hg-soft: #f6f6fa;
+  --hud-cyan: #4f5498;
+  --hud-gold: #8a5a17;
   position: relative;
   display: grid;
-  grid-template-rows: auto auto auto auto 1fr;
+  grid-template-rows: auto auto auto 1fr;
   min-height: 100vh;
   overflow: hidden;
-  background:
-    radial-gradient(900px 420px at 88% -8%, rgba(62, 224, 198, 0.1), transparent 55%),
-    radial-gradient(700px 360px at 0% 100%, rgba(96, 165, 250, 0.08), transparent 50%),
-    linear-gradient(180deg, #0b1018, var(--hg-bg));
+  background: var(--hg-bg);
   color: var(--hg-ink);
 }
 
@@ -417,7 +412,7 @@
   gap: 0.75rem 1rem;
   padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--hg-line);
-  background: rgba(10, 14, 22, 0.88);
+  background: #fff;
   z-index: 1;
 }
 
@@ -464,7 +459,6 @@
 
 .hermes-grok__status--connected i {
   background: #34d399;
-  box-shadow: 0 0 10px #34d399;
 }
 
 .hermes-grok__status--connecting i {
@@ -520,17 +514,17 @@
 }
 
 .hermes-grok__tabs button.is-on {
-  background: var(--hud-cyan);
-  color: #04110e;
-  border-color: var(--hud-cyan);
+  background: var(--lavender);
+  color: var(--lavender-ink);
+  border-color: var(--lavender);
   font-weight: 800;
 }
 
 .hermes-grok__error {
   margin: 0;
   padding: 0.45rem 1rem;
-  color: #fecaca;
-  background: #3b1d1d;
+  color: #8a2f1d;
+  background: #fff3f0;
 }
 
 .hermes-world {
@@ -590,9 +584,8 @@
 .hermes-rail__track {
   height: 0.72rem;
   border-radius: 999px;
-  background: #1a2230;
+  background: #eceef8;
   overflow: hidden;
-  box-shadow: inset 0 0 0 1px #2a364c;
 }
 
 .hermes-rail__track i,
@@ -600,10 +593,9 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #1a8f7e, var(--hud-cyan), var(--hud-gold));
+  background: linear-gradient(90deg, #7b80d4, var(--hud-cyan));
   background-size: 200% 100%;
   animation: hermes-xp 2.2s linear infinite;
-  box-shadow: 0 0 16px rgba(62, 224, 198, 0.4);
   transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -613,7 +605,7 @@
   justify-content: space-between;
   margin: 0.35rem 0 0;
   padding: 0;
-  color: #6d7a90;
+  color: #8a8a96;
   font-size: 0.6rem;
 }
 
@@ -626,7 +618,7 @@
 }
 
 .hermes-meter {
-  background: #0b1018;
+  background: var(--hg-soft);
   border: 1px solid var(--hg-line);
   border-radius: 0.7rem;
   padding: 0.45rem 0.5rem;
@@ -665,9 +657,7 @@
   grid-template-rows: 1fr auto;
   min-height: 0;
   border-right: 1px solid var(--hg-line);
-  background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.03), transparent 28rem),
-    #0a0d13;
+  background: #fff;
 }
 
 .hermes-grok__chat.is-drop {
@@ -695,7 +685,7 @@
 .hermes-grok__hello h2 {
   margin: 0;
   font-size: clamp(2.4rem, 6vw, 4rem);
-  color: #fff;
+  color: #111;
   letter-spacing: -0.04em;
 }
 
@@ -751,7 +741,7 @@
   width: 7.2rem;
   height: 7.2rem;
   border-radius: 0.7rem;
-  background: linear-gradient(90deg, #1a2230, #2a364c, #1a2230);
+  background: linear-gradient(90deg, #eceef8, #d9dcef, #eceef8);
   background-size: 200% 100%;
   animation: hermes-xp 1.4s linear infinite;
 }
@@ -809,7 +799,7 @@
   align-items: flex-end;
   gap: 0.45rem;
   border: 1px solid var(--hg-line);
-  background: #121826;
+  background: #fff;
   border-radius: 1.3rem;
   padding: 0.45rem 0.5rem 0.45rem 0.55rem;
 }
@@ -831,7 +821,7 @@
   border-radius: 999px;
   width: 2.15rem;
   height: 2.15rem;
-  background: #1d2838;
+  background: var(--hg-soft);
   color: var(--hg-ink);
   cursor: pointer;
 }
@@ -839,8 +829,8 @@
 .hermes-gpt__box button[type="submit"] {
   width: auto;
   padding: 0 0.85rem;
-  background: #f4f4f7;
-  color: #0b0c0f;
+  background: #111;
+  color: #fff;
   font-weight: 800;
 }
 
@@ -854,7 +844,7 @@
   display: grid;
   gap: 0.95rem;
   align-content: start;
-  background: rgba(10, 14, 22, 0.55);
+  background: #fafafc;
 }
 
 .hermes-panel__who {
@@ -871,14 +861,73 @@
   gap: 0.5rem;
 }
 
+.hermes-tickets header,
+.hermes-cast header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.hermes-tickets header p {
+  margin: 0.15rem 0 0;
+  color: var(--hg-muted);
+  font-size: 0.78rem;
+}
+
+.hermes-tickets input,
 .hermes-cast input {
   width: 8.5rem;
   border: 1px solid var(--hg-line);
-  background: #0b1018;
+  background: #fff;
   color: var(--hg-ink);
   border-radius: 999px;
   padding: 0.32rem 0.6rem;
 }
+
+.hermes-tickets ul {
+  list-style: none;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.hermes-ticket {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--hg-line);
+  background: #fff;
+  color: inherit;
+  border-radius: 0.85rem;
+  padding: 0.75rem 0.8rem 0.85rem;
+  display: grid;
+  gap: 0.28rem;
+  cursor: pointer;
+}
+
+.hermes-ticket:hover,
+.hermes-ticket:focus-visible {
+  border-color: var(--hud-cyan);
+}
+
+.hermes-ticket span { color: var(--hg-muted); font-size: 0.74rem; }
+
+.hermes-ticket__bar { height: 0.42rem; margin-top: 0.2rem; }
+
+.hermes-back {
+  width: fit-content;
+  border: 1px solid var(--hg-line);
+  background: #fff;
+  color: var(--hg-ink);
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.hermes-detail { display: grid; gap: 0.85rem; }
 
 .hermes-cast ul,
 .hermes-grok__time ol,
@@ -939,7 +988,7 @@
 }
 
 .hermes-lore {
-  background: #0b1018;
+  background: #fff;
   border: 1px solid var(--hg-line);
   border-radius: 0.7rem;
   padding: 0.65rem 0.7rem;
@@ -955,7 +1004,7 @@
 }
 
 .hermes-facts div {
-  background: #0b1018;
+  background: #fff;
   border: 1px solid var(--hg-line);
   border-radius: 0.7rem;
   padding: 0.45rem 0.55rem;
@@ -993,8 +1042,8 @@
 
 @media (max-width: 860px) {
   .admin-side nav button.is-active {
-    background: var(--admin-cyan);
-    color: #04110e;
+    background: var(--lavender);
+    color: var(--lavender-ink);
   }
 
   .admin-main--desk {
