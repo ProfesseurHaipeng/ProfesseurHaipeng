@@ -2157,6 +2157,10 @@ h3 {
     text-align: center;
     justify-content: center;
     display: inline-flex;
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+    min-height: 3.1rem;
     margin-top: 0.75rem;
     padding: 0.7rem 0.9rem !important;
   }
@@ -2285,12 +2289,15 @@ h3 {
   .hero__copy .btn-row .btn,
   .cta .btn-row .btn,
   .contact-card .btn,
-  .note-form .btn,
-  .nav-cta {
+  .note-form .btn {
     flex: 1 1 100%;
     min-height: 3.1rem;
     width: 100%;
     font-weight: 700;
+  }
+
+  .note-form {
+    padding-bottom: calc(0.5rem + var(--fab-space));
   }
 
   .text-link {
@@ -2350,7 +2357,11 @@ h3 {
   }
 
   .stats-band {
-    padding: 0.4rem 0 1.15rem;
+    padding: 0.4rem 0 calc(1.1rem + var(--fab-space));
+  }
+
+  .stats-band .stats {
+    padding-right: 7rem;
   }
 
   .mineral-grid {
@@ -2373,10 +2384,6 @@ h3 {
   .hero .lede {
     overflow-wrap: anywhere;
     word-break: break-word;
-  }
-
-  .stats-band {
-    padding-bottom: calc(1.1rem + var(--fab-space));
   }
 
   .location-map figcaption {
@@ -2564,7 +2571,9 @@ h3 {
   }
 
   .nav-cta {
-    min-height: 3rem;
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 3.1rem;
   }
 
   .site-guide {
