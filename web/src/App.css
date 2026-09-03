@@ -234,6 +234,13 @@
   color: var(--ember);
 }
 
+.site-footer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.85rem;
+  margin: 0.4rem 0 0;
+}
+
 .site-footer__fine {
   width: min(var(--wide), 100%);
   margin: 1.8rem auto 0;
@@ -1522,6 +1529,7 @@ h3 {
 
 .location-map__open {
   color: var(--lavender-ink);
+  font-weight: 700;
 }
 
 .hero .media-frame {
@@ -2286,10 +2294,16 @@ h3 {
   }
 
   .text-link {
-    min-height: 2.6rem;
+    min-height: 2.75rem;
     display: inline-flex;
     align-items: center;
-    padding: 0.2rem 0;
+    justify-content: center;
+    width: fit-content;
+    max-width: 100%;
+    padding: 0.4rem 0.95rem;
+    border: 1.5px solid var(--ink);
+    border-radius: 999px;
+    background: #fff;
   }
 
   .block {
@@ -2341,6 +2355,73 @@ h3 {
 
   .mineral-grid {
     grid-template-columns: 1fr;
+  }
+
+  .wrap,
+  .page,
+  .callout,
+  .split-panel,
+  .page-hero,
+  .contact-card,
+  .note-form,
+  .text-link {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .page-hero .lede,
+  .hero .lede {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .stats-band {
+    padding-bottom: calc(1.1rem + var(--fab-space));
+  }
+
+  .location-map figcaption {
+    align-items: center;
+    gap: 0.55rem;
+  }
+
+  .location-map__open {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.6rem;
+    padding: 0.35rem 0.8rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--ink);
+  }
+
+  .site-footer nav a {
+    display: flex;
+    align-items: center;
+    min-height: 2.75rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .site-footer__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+    margin-top: 0.35rem;
+  }
+
+  .site-footer__actions a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    padding: 0.4rem 0.7rem;
+    border: 1.5px solid var(--ink);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--ink);
+    font-weight: 700;
   }
 
   .photo-strip {
@@ -2411,6 +2492,9 @@ h3 {
   .chip-row--static li {
     flex: 0 0 auto;
     white-space: nowrap;
+    min-height: 2.6rem;
+    display: inline-flex;
+    align-items: center;
   }
 
   .note-card {

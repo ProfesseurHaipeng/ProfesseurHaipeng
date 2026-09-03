@@ -35,9 +35,8 @@ export function SiteFooter() {
               <a href={`tel:${channels.phone}`}>{channels.phone}</a>
             </p>
           ) : null}
-          <p>
+          <p className="site-footer__actions">
             <Link to="/contact">谈合作</Link>
-            {" · "}
             <Link to="/admin">内容后台</Link>
           </p>
         </div>
