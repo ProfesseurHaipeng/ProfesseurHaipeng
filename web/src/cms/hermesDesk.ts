@@ -5,6 +5,9 @@ import type { Lead } from "./leads"
 export type HermesOwner = "hermes" | "human"
 export type HermesEnergy = "high" | "mid" | "low" | "unset"
 export type HermesProgress = "new" | "contacted" | "talking" | "sample" | "negotiate" | "hold" | "closed"
+export type HermesMailStatus = "none" | "queued" | "sent" | "failed"
+export type HermesMailTrack = "none" | "on" | "opened" | "clicked"
+export type HermesChannel = "chat" | "email" | "form" | "unset"
 
 export type HermesCase = {
   id: string
@@ -25,13 +28,30 @@ export type HermesCase = {
   energy: HermesEnergy
   source: "ai" | "form" | "manual"
   gone?: boolean
+  mailStatus?: HermesMailStatus
+  mailSentAt?: string
+  mailFollowUp?: boolean
+  mailTracking?: HermesMailTrack
+  mailSummary?: string
+  inquiryCount?: number
+  lastInquiryAt?: string
+  lastAdvisorAt?: string
+  inquiryPaceMin?: number
+  replyPaceMin?: number
+  emailReplyHours?: number
+  chatTurns?: number
+  nextAction?: string
+  lastChannel?: HermesChannel
 }
+
+export type HermesCoachImage = { id: string; mime: string; name: string }
 
 export type HermesCoachTurn = {
   id: string
   at: string
   role: "staff" | "hermes"
   content: string
+  images?: HermesCoachImage[]
 }
 
 export type HermesDeskFilter = {
@@ -94,6 +114,186 @@ export const ENERGY_LABEL: Record<HermesEnergy, string> = {
   mid: "一般",
   low: "积极性低",
   unset: "未评估",
+}
+
+export const PROGRESS_TRACK: HermesProgress[] = ["new", "contacted", "talking", "sample", "negotiate", "closed"]
+
+export const MAIL_STATUS_LABEL: Record<HermesMailStatus, string> = {
+  none: "未发邮件",
+  queued: "待发送",
+  sent: "已发送",
+  failed: "发送失败",
+}
+
+export const MAIL_TRACK_LABEL: Record<HermesMailTrack, string> = {
+  none: "无跟踪",
+  on: "已开跟踪",
+  opened: "已打开",
+  clicked: "已点击",
+}
+
+export const CHANNEL_LABEL: Record<HermesChannel, string> = {
+  chat: "对话",
+  email: "邮件",
+  form: "表单",
+  unset: "未知",
+}
+
+export const STAFF_ACTIONS = ["health", "coach"] as const
+
+export function isStaffAction(action: string) {
+  return action === "health" || action === "coach"
+}
+
+export function progressRatio(progress: HermesProgress) {
+  if (progress === "hold") return 0.42
+  const index = PROGRESS_TRACK.indexOf(progress)
+  if (index < 0) return 0
+  return index / (PROGRESS_TRACK.length - 1)
+}
+
+export function formatPace(minutes?: number) {
+  if (minutes == null || !Number.isFinite(minutes) || minutes < 0) return ""
+  if (minutes < 1) return "不到 1 分钟"
+  if (minutes < 60) return `${Math.round(minutes)} 分钟`
+  const hours = minutes / 60
+  if (hours < 48) return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)} 小时`
+  return `${Math.round(hours / 24)} 天`
+}
+
+export function emptyTelemetry(): Pick<
+  HermesCase,
+  | "mailStatus"
+  | "mailFollowUp"
+  | "mailTracking"
+  | "mailSummary"
+  | "inquiryCount"
+  | "chatTurns"
+  | "nextAction"
+  | "lastChannel"
+> {
+  return {
+    mailStatus: "none",
+    mailFollowUp: false,
+    mailTracking: "none",
+    mailSummary: "",
+    inquiryCount: 0,
+    chatTurns: 0,
+    nextAction: "",
+    lastChannel: "unset",
+  }
+}
+
+export function normalizeCase(item: HermesCase): HermesCase {
+  const inquiry = Number(item.inquiryCount)
+  const turns = Number(item.chatTurns)
+  return {
+    ...item,
+    mailStatus:
+      item.mailStatus === "queued" || item.mailStatus === "sent" || item.mailStatus === "failed" ? item.mailStatus : "none",
+    mailFollowUp: item.mailFollowUp === true,
+    mailTracking:
+      item.mailTracking === "on" || item.mailTracking === "opened" || item.mailTracking === "clicked"
+        ? item.mailTracking
+        : "none",
+    mailSummary: typeof item.mailSummary === "string" ? item.mailSummary : "",
+    inquiryCount: Number.isFinite(inquiry) && inquiry > 0 ? inquiry : 0,
+    chatTurns: Number.isFinite(turns) && turns > 0 ? turns : 0,
+    nextAction: typeof item.nextAction === "string" ? item.nextAction : "",
+    lastChannel:
+      item.lastChannel === "chat" || item.lastChannel === "email" || item.lastChannel === "form" ? item.lastChannel : "unset",
+  }
+}
+
+function minutesBetween(from?: string, to = "") {
+  if (!from) return undefined
+  const gap = (Date.parse(to) - Date.parse(from)) / 60000
+  return Number.isFinite(gap) && gap >= 0 ? Math.round(gap) : undefined
+}
+
+export function recordInquiry(item: HermesCase, now = new Date().toISOString()): HermesCase {
+  const current = normalizeCase(item)
+  const inquiryPace = minutesBetween(current.lastInquiryAt, now) ?? current.inquiryPaceMin
+  const replyPace = minutesBetween(current.lastAdvisorAt, now) ?? current.replyPaceMin
+  return {
+    ...current,
+    inquiryCount: (current.inquiryCount || 0) + 1,
+    chatTurns: (current.chatTurns || 0) + 1,
+    lastInquiryAt: now,
+    lastAdvisorAt: now,
+    inquiryPaceMin: inquiryPace,
+    replyPaceMin: replyPace,
+    lastChannel: "chat",
+    updatedAt: now,
+  }
+}
+
+export function formatInquiryRate(item: HermesCase, now = Date.now()) {
+  const count = item.inquiryCount || 0
+  if (count < 1 || !item.at) return ""
+  const days = (now - Date.parse(item.at)) / 86400000
+  if (!Number.isFinite(days) || days < 0) return ""
+  if (days < 1) return `${count} 次 / 当天`
+  return `${Math.round((count / days) * 7 * 10) / 10} 次 / 周`
+}
+
+export function boardMetrics(cases: HermesCase[]) {
+  const live = cases.filter((item) => isLiveCase(item)).map(normalizeCase)
+  const withPace = live.filter((item) => item.inquiryPaceMin != null)
+  const withReply = live.filter((item) => item.replyPaceMin != null)
+  const withMailReply = live.filter((item) => item.emailReplyHours != null)
+  return {
+    live: live.length,
+    following: live.filter((item) => item.following && item.owner === "hermes").length,
+    idle: live.filter((item) => !item.following && item.owner === "hermes").length,
+    human: live.filter((item) => item.owner === "human").length,
+    high: live.filter((item) => item.energy === "high").length,
+    low: live.filter((item) => item.energy === "low").length,
+    archived: cases.filter((item) => !isLiveCase(item)).length,
+    mailNone: live.filter((item) => item.mailStatus === "none").length,
+    mailQueued: live.filter((item) => item.mailStatus === "queued").length,
+    mailSent: live.filter((item) => item.mailStatus === "sent").length,
+    mailFailed: live.filter((item) => item.mailStatus === "failed").length,
+    mailFollow: live.filter((item) => item.mailFollowUp).length,
+    mailTracked: live.filter((item) => item.mailTracking !== "none").length,
+    mailSummarized: live.filter((item) => Boolean(item.mailSummary)).length,
+    inquiries: live.reduce((sum, item) => sum + (item.inquiryCount || 0), 0),
+    chatTurns: live.reduce((sum, item) => sum + (item.chatTurns || 0), 0),
+    avgInquiryPace: withPace.length
+      ? Math.round(withPace.reduce((sum, item) => sum + (item.inquiryPaceMin || 0), 0) / withPace.length)
+      : undefined,
+    avgReplyPace: withReply.length
+      ? Math.round(withReply.reduce((sum, item) => sum + (item.replyPaceMin || 0), 0) / withReply.length)
+      : undefined,
+    avgMailReply: withMailReply.length
+      ? Math.round((withMailReply.reduce((sum, item) => sum + (item.emailReplyHours || 0), 0) / withMailReply.length) * 10) / 10
+      : undefined,
+    worldProgress: live.length
+      ? live.reduce((sum, item) => sum + progressRatio(item.progress), 0) / live.length
+      : 0,
+  }
+}
+
+export function newImageId(now = Date.now()) {
+  return `img-${String(now).padStart(15, "0")}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+const IMAGE_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"])
+
+export function sanitizeCoachImages(raw: unknown) {
+  if (!Array.isArray(raw)) return []
+  const out: { id: string; mime: string; name: string; data: string }[] = []
+  for (const item of raw.slice(0, 3)) {
+    if (!item || typeof item !== "object") continue
+    const row = item as { mime?: unknown; name?: unknown; data?: unknown }
+    const mime = typeof row.mime === "string" ? row.mime : ""
+    const data = typeof row.data === "string" ? row.data.replace(/\s+/g, "") : ""
+    const name = typeof row.name === "string" ? row.name.replace(/\s+/g, " ").trim().slice(0, 80) : "image"
+    if (!IMAGE_MIME.has(mime) || !/^[A-Za-z0-9+/=]+$/.test(data)) continue
+    if (data.length * 0.75 > 1_600_000) continue
+    out.push({ id: newImageId(), mime, name, data })
+  }
+  return out
 }
 
 export function newHermesCaseId(now = Date.now()) {
@@ -217,7 +417,7 @@ export function decorateDeskPayload(options: {
   filter?: HermesDeskFilter
 }) {
   return {
-    cases: filterHermesCases(options.cases, options.filter),
+    cases: filterHermesCases(options.cases, options.filter).map(normalizeCase),
     coach: options.coach,
     events: options.events,
     memory: options.memory,
@@ -228,6 +428,7 @@ export function decorateDeskPayload(options: {
     stats: deskStats(options.cases),
     attention: attentionCases(options.cases),
     pipeline: pipelineStats(options.cases),
+    board: boardMetrics(options.cases),
   }
 }
 
@@ -310,6 +511,42 @@ export function patchHermesCase(item: HermesCase, raw: Record<string, unknown>, 
   if ("reaction" in raw) next.reaction = clean(raw.reaction, MAX.reaction)
   if ("evaluation" in raw) next.evaluation = clean(raw.evaluation, MAX.evaluation)
   if ("energy" in raw) next.energy = asEnergy(raw.energy)
+  if ("mailStatus" in raw) {
+    next.mailStatus =
+      raw.mailStatus === "queued" || raw.mailStatus === "sent" || raw.mailStatus === "failed" || raw.mailStatus === "none"
+        ? raw.mailStatus
+        : next.mailStatus
+  }
+  if ("mailSentAt" in raw) next.mailSentAt = clean(raw.mailSentAt, 40) || undefined
+  if ("lastAdvisorAt" in raw) next.lastAdvisorAt = clean(raw.lastAdvisorAt, 40) || undefined
+  if ("mailFollowUp" in raw) next.mailFollowUp = raw.mailFollowUp === true
+  if ("mailTracking" in raw) {
+    next.mailTracking =
+      raw.mailTracking === "on" || raw.mailTracking === "opened" || raw.mailTracking === "clicked" || raw.mailTracking === "none"
+        ? raw.mailTracking
+        : next.mailTracking
+  }
+  if ("mailSummary" in raw) next.mailSummary = clean(raw.mailSummary, 800)
+  if ("inquiryCount" in raw && typeof raw.inquiryCount === "number" && raw.inquiryCount >= 0) {
+    next.inquiryCount = Math.min(9999, Math.round(raw.inquiryCount))
+  }
+  if ("inquiryPaceMin" in raw && typeof raw.inquiryPaceMin === "number" && raw.inquiryPaceMin >= 0) {
+    next.inquiryPaceMin = Math.round(raw.inquiryPaceMin)
+  }
+  if ("replyPaceMin" in raw && typeof raw.replyPaceMin === "number" && raw.replyPaceMin >= 0) {
+    next.replyPaceMin = Math.round(raw.replyPaceMin)
+  }
+  if ("emailReplyHours" in raw && typeof raw.emailReplyHours === "number" && raw.emailReplyHours >= 0) {
+    next.emailReplyHours = Math.round(raw.emailReplyHours * 10) / 10
+  }
+  if ("chatTurns" in raw && typeof raw.chatTurns === "number" && raw.chatTurns >= 0) {
+    next.chatTurns = Math.min(9999, Math.round(raw.chatTurns))
+  }
+  if ("nextAction" in raw) next.nextAction = clean(raw.nextAction, 200)
+  if ("lastChannel" in raw) {
+    next.lastChannel =
+      raw.lastChannel === "chat" || raw.lastChannel === "email" || raw.lastChannel === "form" ? raw.lastChannel : next.lastChannel
+  }
   if (next.owner === "human") next.following = false
   return next
 }
@@ -333,6 +570,8 @@ export function caseFromLead(lead: Lead, now = new Date().toISOString()): Hermes
     evaluation: "",
     energy: "unset",
     source: lead.source === "ai" ? "ai" : "form",
+    ...emptyTelemetry(),
+    lastChannel: lead.source === "ai" ? "chat" : "form",
   }
 }
 
@@ -381,6 +620,12 @@ export function upsertFromTicket(
         evaluation: "",
         energy: "unset" as const,
         source: "ai" as const,
+        ...emptyTelemetry(),
+        lastChannel: "chat" as const,
+        inquiryCount: 1,
+        chatTurns: 1,
+        lastInquiryAt: now,
+        lastAdvisorAt: now,
       }
   if (next.owner === "human") next.following = false
   return { cases: [next, ...cases.filter((item) => item.id !== next.id)], case: next }
@@ -395,8 +640,9 @@ export function upsertFromVisit(
   const existing = findHermesCase(cases, { visitorId })
   if (existing) {
     if (existing.owner === "human") return { cases, case: existing }
+    const touched = recordInquiry(existing, now)
     const next = patchHermesCase(
-      existing,
+      touched,
       { following: true, progress: existing.progress === "new" ? "talking" : existing.progress, note: note || existing.note },
       now,
     )
@@ -418,6 +664,12 @@ export function upsertFromVisit(
     evaluation: "",
     energy: "unset",
     source: "ai",
+    ...emptyTelemetry(),
+    lastChannel: "chat",
+    inquiryCount: 1,
+    chatTurns: 1,
+    lastInquiryAt: now,
+    lastAdvisorAt: now,
   }
   return { cases: [created, ...cases], case: created }
 }
@@ -443,18 +695,58 @@ export function stripDeskTags(text: string) {
   return text.replace(DESK_RE, "").replace(/<\/?desk>/gi, "").trim()
 }
 
-export function extractDeskUpdates(reply: string): { reply: string; updates: Record<string, unknown>[] } {
+function memoryPatchFrom(raw: Record<string, unknown>): Partial<HermesMemory> | undefined {
+  const nested = raw.memory && typeof raw.memory === "object" ? (raw.memory as Record<string, unknown>) : undefined
+  const shared = typeof nested?.shared === "string" ? nested.shared : typeof raw.shared === "string" ? raw.shared : undefined
+  const desk = typeof nested?.desk === "string" ? nested.desk : typeof raw.desk === "string" ? raw.desk : undefined
+  if (shared == null && desk == null) return undefined
+  return { ...(shared != null ? { shared } : {}), ...(desk != null ? { desk } : {}) }
+}
+
+export function applyMemoryPatch(current: HermesMemory, patch: Partial<HermesMemory>, now = new Date().toISOString()): HermesMemory {
+  return {
+    shared: typeof patch.shared === "string" ? patch.shared.trim().slice(0, 8000) : current.shared,
+    desk: typeof patch.desk === "string" ? patch.desk.trim().slice(0, 8000) : current.desk,
+    updatedAt: now,
+  }
+}
+
+export function extractDeskUpdates(reply: string): {
+  reply: string
+  updates: Record<string, unknown>[]
+  memory?: Partial<HermesMemory>
+} {
   const match = reply.match(DESK_RE)
   const cleaned = stripDeskTags(reply)
   if (!match) return { reply: cleaned, updates: [] }
   try {
     const raw = JSON.parse(match[1]) as Record<string, unknown>
+    const memory = memoryPatchFrom(raw)
     if (Array.isArray(raw.updates)) {
-      return { reply: cleaned, updates: raw.updates.filter((item) => item && typeof item === "object") as Record<string, unknown>[] }
+      return {
+        reply: cleaned,
+        updates: raw.updates.filter((item) => item && typeof item === "object") as Record<string, unknown>[],
+        memory,
+      }
     }
-    if (raw.id || raw.progress || raw.energy || raw.reaction || raw.evaluation || "following" in raw) {
-      return { reply: cleaned, updates: [raw] }
+    if (
+      raw.id ||
+      raw.progress ||
+      raw.energy ||
+      raw.reaction ||
+      raw.evaluation ||
+      raw.mailStatus ||
+      raw.mailSummary ||
+      raw.mailTracking ||
+      raw.nextAction ||
+      "mailFollowUp" in raw ||
+      "following" in raw ||
+      "owner" in raw ||
+      "inquiryCount" in raw
+    ) {
+      return { reply: cleaned, updates: [raw], memory }
     }
+    if (memory) return { reply: cleaned, updates: [], memory }
   } catch {
     /* ignore bad desk payload */
   }
@@ -480,14 +772,21 @@ const COACH_RULES = `你是皮纳图博火山灰项目的高级顾问 Hermes。�
 - 前台对话看不到这些。你在前台也不会、不能把工作台数据说出去。
 - 不要编造客户。档案列表没有的人，就说还没有这场对话。
 
+【控制权】
+- 同事只能通过这个对话框给你下指令。进度、接管、邮件状态、跟单、跟踪、行为数据、记忆，全部由你改，不要让同事在界面上改。
+- 同事说接管 / 交回 / 改进度 / 记邮件 / 改记忆，你用 <desk> 更新。一键接管也只能由你执行。
+
 【你能做的】
 - 根据同事的意图，说明你会怎么跟进哪些客户、话术怎么改、谁先谁后。
 - 用短段纯文本，不要 Markdown。
 - 向同事汇报时默认隐藏邮箱和其他隐私联系方式，只写称呼、机构、作物、区域、吨位和跟进事项。
-- 需要改档案时，先用正常的话说明改了什么，再在回复最后另起一行输出：
-  <desk>{"updates":[{"id":"客户档案id","following":true,"progress":"talking","reaction":"客户反响","evaluation":"你的评价","energy":"high"}]}</desk>
+- 需要改档案或记忆时，先用正常的话说明改了什么，再在回复最后另起一行输出：
+  <desk>{"memory":{"shared":"与前台共用的长期记忆","desk":"仅后台笔记"},"updates":[{"id":"客户档案id","following":true,"owner":"hermes","progress":"talking","energy":"high","mailStatus":"sent","mailFollowUp":true,"mailTracking":"on","mailSummary":"客户回邮大意","inquiryCount":2,"replyPaceMin":15,"emailReplyHours":6,"nextAction":"寄样品","lastChannel":"email"}]}</desk>
 - progress 只能是 new / contacted / talking / sample / negotiate / hold / closed。
 - energy 只能是 high / mid / low / unset。
+- mailStatus 只能是 none / queued / sent / failed。
+- mailTracking 只能是 none / on / opened / clicked。
+- 没有真实邮件或对话记录时，不要编发送成功、跟单、速度和摘要。
 - 不要提 NAS、端口、网关、沙箱。`
 
 export function caseBrief(item: HermesCase) {
@@ -504,6 +803,14 @@ export function caseBrief(item: HermesCase) {
     item.note ? `线索=${item.note}` : "",
     item.reaction ? `反响=${item.reaction}` : "",
     item.evaluation ? `评价=${item.evaluation}` : "",
+    `邮件=${MAIL_STATUS_LABEL[item.mailStatus || "none"]}${item.mailFollowUp ? "，有跟单" : ""}${item.mailTracking && item.mailTracking !== "none" ? `，${MAIL_TRACK_LABEL[item.mailTracking]}` : ""}`,
+    item.mailSummary ? `回邮摘要=${item.mailSummary}` : "",
+    item.inquiryCount ? `询单=${item.inquiryCount}次` : "",
+    formatInquiryRate(item) ? `询单速度=${formatInquiryRate(item)}` : "",
+    item.inquiryPaceMin != null ? `询单间隔=${formatPace(item.inquiryPaceMin)}` : "",
+    item.replyPaceMin != null ? `回复速度=${formatPace(item.replyPaceMin)}` : "",
+    item.emailReplyHours != null ? `回邮用时=${item.emailReplyHours}小时` : "",
+    item.nextAction ? `下一步=${item.nextAction}` : "",
   ]
     .filter(Boolean)
     .join("；")
@@ -515,7 +822,7 @@ export function buildCoachMessages(
   extra?: string,
   memory?: HermesMemory,
 ) {
-  const live = cases.filter((item) => isLiveCase(item))
+  const live = cases.filter((item) => isLiveCase(item)).map(normalizeCase)
   const roster = live.length
     ? live.slice(0, 40).map((item) => `- ${caseBrief(item)}`).join("\n")
     : "当前还没有真实客户档案。不要编造。"
@@ -528,7 +835,9 @@ export function buildCoachMessages(
   const system = `${COACH_RULES}\n\n【当前客户档案】\n${roster}${memoryBlock ? `\n\n${memoryBlock}` : ""}${extra ? `\n\n${extra}` : ""}`
   const turns = history.slice(-16).map((item) => ({
     role: item.role === "staff" ? ("user" as const) : ("assistant" as const),
-    content: item.content.slice(0, 4000),
+    content: item.images?.length
+      ? `${item.content.slice(0, 4000)}\n\n[同事附了 ${item.images.length} 张图]`
+      : item.content.slice(0, 4000),
   }))
   return [{ role: "system" as const, content: system }, ...turns]
 }
@@ -542,23 +851,30 @@ export async function resolveCoachReply(
   history: HermesCoachTurn[],
   env: Record<string, string | undefined>,
   memory?: HermesMemory,
+  images?: { mime: string; data: string }[],
 ) {
   const hermes = hermesEnvFrom(env)
   if (!hermes) {
-    return { reply: coachUnavailableReply(), cases, source: "local" as const }
+    return { reply: coachUnavailableReply(), cases, memory, source: "local" as const }
   }
   try {
     const raw = await completeChatCompletions(hermes, buildCoachMessages(cases, history, undefined, memory), {
       hosts: "exact",
+      images,
     })
     if (raw) {
       const parsed = extractDeskUpdates(raw)
       if (parsed.reply) {
-        return { reply: parsed.reply, cases: applyDeskUpdates(cases, parsed.updates), source: "hermes" as const }
+        return {
+          reply: parsed.reply,
+          cases: applyDeskUpdates(cases, parsed.updates),
+          memory: parsed.memory && memory ? applyMemoryPatch(memory, parsed.memory) : memory,
+          source: "hermes" as const,
+        }
       }
     }
   } catch (error) {
     console.error("ash-hermes-desk coach", error)
   }
-  return { reply: coachUnavailableReply(), cases, source: "local" as const }
+  return { reply: coachUnavailableReply(), cases, memory, source: "local" as const }
 }

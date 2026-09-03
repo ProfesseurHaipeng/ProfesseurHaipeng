@@ -25,12 +25,14 @@ function localGuide(): Plugin {
       events: unknown[]
       memory: { shared: string; desk: string; updatedAt: string }
       health: { status: "connected" | "disconnected"; checkedAt: string; model?: string; detail?: string } | null
+      images: Record<string, { mime: string; name: string; data: string }>
     } = {
       cases: [],
       coach: [],
       events: [],
       memory: { shared: "", desk: "", updatedAt: "" },
       health: null,
+      images: {},
     }
     const staffOk = (req: IncomingMessage) => {
       const user = env.ADMIN_USER || "admin"
@@ -103,6 +105,19 @@ function localGuide(): Plugin {
           ].slice(-80)
         }
         if (req.method === "GET") {
+          const url = new URL(req.url || "/", "http://local")
+          const asset = url.searchParams.get("asset") || ""
+          if (asset.startsWith("img-")) {
+            const image = localDesk.images[asset]
+            if (!image) {
+              res.statusCode = 404
+              res.end(JSON.stringify({ error: "missing" }))
+              return
+            }
+            res.setHeader("Content-Type", image.mime)
+            res.end(Buffer.from(image.data, "base64"))
+            return
+          }
           res.end(JSON.stringify(pack()))
           return
         }
@@ -115,7 +130,11 @@ function localGuide(): Plugin {
           const raw = await readBody(req)
           const body = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
           const action = typeof body.action === "string" ? body.action : ""
-          const now = new Date().toISOString()
+          if (action && !deskMod.isStaffAction(action)) {
+            res.statusCode = 403
+            res.end(JSON.stringify({ error: "hermes-only" }))
+            return
+          }
           if (action === "health") {
             const health = await hermesMod.probeHermes(env)
             if (localDesk.health?.status !== health.status) {
@@ -125,92 +144,35 @@ function localGuide(): Plugin {
             res.end(JSON.stringify({ ...pack(), health }))
             return
           }
-          if (action === "sync") {
-            const before = localDesk.cases.length
-            localDesk.cases = deskMod.importLeads(localDesk.cases, localLeads, now)
-            if (localDesk.cases.length > before) pushEvent("attach", `同步了 ${localDesk.cases.length - before} 条 AI 工单`)
-            res.end(JSON.stringify(pack()))
-            return
-          }
-          if (action === "prune") {
-            const next = deskMod.pruneUnspokenCases(localDesk.cases)
-            const removed = localDesk.cases.length - next.length
-            localDesk.cases = next
-            if (removed) pushEvent("note", `清理了 ${removed} 条没有真实对话的表单卡`)
-            res.end(JSON.stringify({ ...pack(), removed }))
-            return
-          }
-          if (action === "memory") {
-            localDesk.memory = {
-              shared: typeof body.shared === "string" ? body.shared.trim().slice(0, 8000) : localDesk.memory.shared,
-              desk: typeof body.desk === "string" ? body.desk.trim().slice(0, 8000) : localDesk.memory.desk,
-              updatedAt: now,
-            }
-            pushEvent("note", "更新了长期记忆或工作台笔记")
-            res.end(JSON.stringify({ ...pack(), memory: localDesk.memory }))
-            return
-          }
-          if (action === "attach") {
-            const result = deskMod.attachLead(localDesk.cases, localLeads, typeof body.leadId === "string" ? body.leadId : "", now)
-            if (result.error === "missing" || result.error === "not-ai") {
-              res.statusCode = 400
-              res.end(JSON.stringify({ error: result.error }))
-              return
-            }
-            localDesk.cases = result.cases
-            if (result.case && result.error !== "exists") pushEvent("attach", `接入 AI 工单 ${result.case.name}`, result.case.id)
-            res.end(JSON.stringify({ ...pack(), case: result.case }))
-            return
-          }
-          const id = typeof body.id === "string" ? body.id : ""
-          const current = localDesk.cases.find((item: { id?: string }) => item.id === id)
-          if (action === "note") {
-            const text = typeof body.text === "string" ? body.text.replace(/\s+/g, " ").trim().slice(0, 2000) : ""
-            if (!current) {
-              res.statusCode = 404
-              res.end(JSON.stringify({ error: "missing" }))
-              return
-            }
-            if (!text) {
-              res.statusCode = 400
-              res.end(JSON.stringify({ error: "empty" }))
-              return
-            }
-            pushEvent("note", text, current.id)
-            res.end(JSON.stringify(pack()))
-            return
-          }
-          if (action === "takeover" || action === "resume" || action === "update") {
-            if (!current) {
-              res.statusCode = 404
-              res.end(JSON.stringify({ error: "missing" }))
-              return
-            }
-            const next =
-              action === "takeover"
-                ? deskMod.applyTakeover(current, now)
-                : action === "resume"
-                  ? deskMod.applyResume(current, now)
-                  : deskMod.patchHermesCase(current, body, now)
-            localDesk.cases = deskMod.sortHermesCases([next, ...localDesk.cases.filter((item: { id?: string }) => item.id !== next.id)])
-            pushEvent(
-              action === "update" ? "update" : action,
-              action === "takeover" ? `人工接管 ${next.name}` : action === "resume" ? `交回 Hermes ${next.name}` : `更新档案 ${next.name}`,
-              next.id,
-            )
-            res.end(JSON.stringify({ ...pack(), case: next }))
-            return
-          }
           if (action === "coach") {
+            const now = new Date().toISOString()
             const message = typeof body.message === "string" ? body.message.trim().slice(0, 2000) : ""
-            if (!message) {
+            const images = deskMod.sanitizeCoachImages(body.images)
+            if (!message && !images.length) {
               res.statusCode = 400
               res.end(JSON.stringify({ error: "empty" }))
               return
             }
-            const staff = { id: deskMod.newCoachTurnId(), at: now, role: "staff", content: message }
+            for (const image of images) localDesk.images[image.id] = { mime: image.mime, name: image.name, data: image.data }
+            const staff = {
+              id: deskMod.newCoachTurnId(),
+              at: now,
+              role: "staff",
+              content: message || "（附图）",
+              images: images.map((image: { id: string; mime: string; name: string }) => ({
+                id: image.id,
+                mime: image.mime,
+                name: image.name,
+              })),
+            }
             const history = [...localDesk.coach, staff]
-            const result = await deskMod.resolveCoachReply(localDesk.cases, history, env, localDesk.memory)
+            const result = await deskMod.resolveCoachReply(
+              localDesk.cases,
+              history,
+              env,
+              localDesk.memory,
+              images.map((image: { mime: string; data: string }) => ({ mime: image.mime, data: image.data })),
+            )
             const replyTurn = {
               id: deskMod.newCoachTurnId(Date.now() + 1),
               at: new Date().toISOString(),
@@ -218,8 +180,9 @@ function localGuide(): Plugin {
               content: result.reply,
             }
             localDesk.cases = result.cases
+            if (result.memory) localDesk.memory = result.memory
             localDesk.coach = [...history, replyTurn]
-            pushEvent("coach", message.slice(0, 180))
+            pushEvent("coach", (message || "附图").slice(0, 180))
             res.end(JSON.stringify({ ...pack(), coach: localDesk.coach, reply: result.reply }))
             return
           }

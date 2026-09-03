@@ -1,19 +1,26 @@
 import { describe, expect, it } from "vitest"
 import {
+  applyMemoryPatch,
   applyResume,
   applyTakeover,
   attachLead,
+  boardMetrics,
   buildCoachMessages,
   caseFromLead,
   deskStats,
   extractDeskUpdates,
   filterHermesCases,
   findHermesCase,
+  formatInquiryRate,
   frontHermesExtra,
   importLeads,
   isHumanOwned,
+  isStaffAction,
+  progressRatio,
   pruneUnspokenCases,
   publicVisitorContext,
+  recordInquiry,
+  sanitizeCoachImages,
   upsertFromTicket,
   upsertFromVisit,
   type HermesCase,
@@ -77,6 +84,11 @@ describe("hermes desk cases", () => {
     expect(second.case.name).toBe("王先生")
     expect(second.case.visitorId).toBe("vis-1")
     expect(second.case.energy).toBe("unset")
+    expect(first.case.inquiryCount).toBe(1)
+    const again = upsertFromVisit(first.cases, "vis-1", "再问吨位", "2026-09-03T13:00:00.000Z")
+    expect(again.case.inquiryCount).toBe(2)
+    expect(again.case.inquiryPaceMin).toBe(60)
+    expect(again.case.replyPaceMin).toBe(60)
   })
 
   it("does not turn contact-form leads into Hermes cases", () => {
@@ -135,6 +147,9 @@ describe("desk coach protocol", () => {
     expect(messages[0]?.content).toContain("不要提 NAS")
     expect(messages[0]?.content).toContain("同一个人")
     expect(messages[0]?.content).toContain("权限更高")
+    expect(messages[0]?.content).toContain("一键接管也只能由你执行")
+    expect(messages[0]?.content).toContain("mailStatus")
+    expect(messages[0]?.content).toContain("不要编发送成功")
   })
 
   it("builds a case from an AI lead as already followed", () => {
@@ -150,5 +165,66 @@ describe("desk coach protocol", () => {
     })
     expect(item.following).toBe(true)
     expect(item.source).toBe("ai")
+  })
+
+  it("lets Hermes patch mail fields and memory through desk tags", () => {
+    const parsed = extractDeskUpdates(
+      '记下了回邮。\n<desk>{"memory":{"shared":"先问作物"},"updates":[{"id":"case-1","mailStatus":"sent","mailFollowUp":true,"mailTracking":"opened","mailSummary":"要样品"}]}</desk>',
+    )
+    expect(parsed.reply).toBe("记下了回邮。")
+    expect(parsed.updates[0]).toMatchObject({
+      mailStatus: "sent",
+      mailFollowUp: true,
+      mailTracking: "opened",
+      mailSummary: "要样品",
+    })
+    expect(parsed.memory?.shared).toBe("先问作物")
+    expect(applyMemoryPatch({ shared: "", desk: "旧笔记", updatedAt: "" }, parsed.memory || {}).desk).toBe("旧笔记")
+  })
+})
+
+describe("desk board telemetry", () => {
+  it("keeps an empty board empty instead of inventing mail or speed", () => {
+    expect(boardMetrics([])).toMatchObject({
+      live: 0,
+      inquiries: 0,
+      mailSent: 0,
+      mailFailed: 0,
+      mailFollow: 0,
+      mailTracked: 0,
+      mailSummarized: 0,
+      avgInquiryPace: undefined,
+      avgReplyPace: undefined,
+      avgMailReply: undefined,
+      worldProgress: 0,
+    })
+  })
+
+  it("turns progress into a bar ratio and counts real inquiries only", () => {
+    expect(progressRatio("new")).toBe(0)
+    expect(progressRatio("closed")).toBe(1)
+    expect(progressRatio("talking")).toBeGreaterThan(0)
+    const paced = recordInquiry(
+      sample({ inquiryCount: 1, lastInquiryAt: now, lastAdvisorAt: now }),
+      "2026-09-03T14:00:00.000Z",
+    )
+    expect(paced.inquiryCount).toBe(2)
+    expect(paced.inquiryPaceMin).toBe(120)
+    expect(formatInquiryRate(sample({ inquiryCount: 2, at: now }), Date.parse("2026-09-10T12:00:00.000Z"))).toContain("次 / 周")
+    const metrics = boardMetrics([sample({ mailStatus: "sent", mailFollowUp: true, mailTracking: "on", inquiryCount: 3 })])
+    expect(metrics.mailSent).toBe(1)
+    expect(metrics.mailFollow).toBe(1)
+    expect(metrics.inquiries).toBe(3)
+  })
+
+  it("blocks staff from board writes and rejects junk images", () => {
+    expect(isStaffAction("health")).toBe(true)
+    expect(isStaffAction("coach")).toBe(true)
+    expect(isStaffAction("takeover")).toBe(false)
+    expect(isStaffAction("update")).toBe(false)
+    expect(isStaffAction("memory")).toBe(false)
+    expect(sanitizeCoachImages([{ mime: "image/png", name: "a.png", data: "abcd" }])).toHaveLength(1)
+    expect(sanitizeCoachImages([{ mime: "application/pdf", name: "x.pdf", data: "abcd" }])).toHaveLength(0)
+    expect(sanitizeCoachImages([{ mime: "image/png", name: "bad", data: "not-base64!!" }])).toHaveLength(0)
   })
 })

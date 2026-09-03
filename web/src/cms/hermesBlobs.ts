@@ -15,6 +15,8 @@ type BlobStore = {
   list: () => Promise<{ blobs: { key: string }[] }>
 }
 
+export type HermesImageBlob = { mime: string; name: string; data: string }
+
 async function store(name: string): Promise<BlobStore | null> {
   try {
     const { getStore } = await import("@netlify/blobs")
@@ -136,4 +138,21 @@ export async function writeHermesHealth(health: HermesHealth) {
   if (!blobs) return false
   await blobs.setJSON("health", health)
   return true
+}
+
+export async function writeHermesImage(id: string, image: HermesImageBlob) {
+  const blobs = await store("ash-hermes")
+  if (!blobs || !id.startsWith("img-")) return false
+  await blobs.setJSON(id, image)
+  return true
+}
+
+export async function readHermesImage(id: string): Promise<HermesImageBlob | null> {
+  const blobs = await store("ash-hermes")
+  if (!blobs || !id.startsWith("img-")) return null
+  const raw = await blobs.get(id, { type: "json" })
+  if (!raw || typeof raw !== "object") return null
+  const row = raw as Partial<HermesImageBlob>
+  if (typeof row.mime !== "string" || typeof row.data !== "string") return null
+  return { mime: row.mime, name: typeof row.name === "string" ? row.name : "image", data: row.data }
 }

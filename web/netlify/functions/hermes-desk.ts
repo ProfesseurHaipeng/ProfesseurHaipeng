@@ -2,32 +2,28 @@ import type { Config } from "@netlify/functions"
 import { hermesLinkInfo, hermesReady, probeHermes } from "../../src/cms/hermes"
 import {
   appendHermesEvent,
-  deleteHermesCase,
   readHermesCases,
   readHermesCoach,
   readHermesEvents,
   readHermesHealth,
+  readHermesImage,
   readHermesMemory,
   writeHermesCase,
   writeHermesCoach,
   writeHermesHealth,
+  writeHermesImage,
   writeHermesMemory,
 } from "../../src/cms/hermesBlobs"
 import {
-  applyResume,
-  applyTakeover,
   attachableLeads,
-  attachLead,
   decorateDeskPayload,
   emptyMemory,
-  importLeads,
+  isStaffAction,
   newCoachTurnId,
   newEventId,
-  patchHermesCase,
-  pruneUnspokenCases,
   publicAttachable,
   resolveCoachReply,
-  sortHermesCases,
+  sanitizeCoachImages,
   type HermesCoachTurn,
   type HermesDeskFilter,
   type HermesEvent,
@@ -40,7 +36,8 @@ import { sortLeads, type Lead } from "../../src/cms/leads"
  *
  * GET  /api/hermes-desk
  * POST /api/hermes-desk  { action }
- *   health | coach | takeover | resume | update | memory | note | attach | prune | sync
+ *   staff: health | coach (images allowed)
+ *   Hermes-only via <desk> in coach: takeover, progress, mail, behavior, memory fields
  */
 
 type BlobStore = {
@@ -138,7 +135,22 @@ export default async (req: Request) => {
   if (!isStaff(req)) return json({ error: "unauthorized" }, 401)
 
   if (req.method === "GET") {
-    return json(await payload(asFilter(new URL(req.url))))
+    const url = new URL(req.url)
+    const asset = url.searchParams.get("asset") || ""
+    if (asset.startsWith("img-")) {
+      const image = await readHermesImage(asset)
+      if (!image) return json({ error: "missing" }, 404)
+      const bytes = Buffer.from(image.data, "base64")
+      return new Response(bytes, {
+        status: 200,
+        headers: {
+          "Content-Type": image.mime,
+          "Cache-Control": "private, max-age=3600",
+          "Access-Control-Allow-Origin": "*",
+        },
+      })
+    }
+    return json(await payload(asFilter(url)))
   }
 
   if (req.method !== "POST") return json({ error: "method" }, 405)
@@ -151,6 +163,9 @@ export default async (req: Request) => {
   }
 
   const action = typeof body.action === "string" ? body.action : ""
+  if (action && !isStaffAction(action)) {
+    return json({ error: "hermes-only" }, 403)
+  }
   let cases = await readHermesCases()
   const now = new Date().toISOString()
 
@@ -171,111 +186,29 @@ export default async (req: Request) => {
     return json({ ...(await payload()), health })
   }
 
-  if (action === "sync") {
-    const next = importLeads(cases, await loadLeads(), now)
-    let added = 0
-    for (const item of next) {
-      if (!cases.some((row) => row.id === item.id)) {
-        await writeHermesCase(item)
-        added += 1
-      }
-    }
-    if (added) await appendHermesEvent(eventOf("attach", `同步了 ${added} 条 AI 工单`))
-    return json(await payload())
-  }
-
-  if (action === "prune") {
-    const next = pruneUnspokenCases(cases)
-    const removed = cases.filter((item) => !next.some((row) => row.id === item.id))
-    for (const item of removed) await deleteHermesCase(item.id)
-    if (removed.length) {
-      await appendHermesEvent(eventOf("note", `清理了 ${removed.length} 条没有真实对话的表单卡`))
-    }
-    const env = envBag()
-    const leads = await loadLeads()
-    return json({
-      ...decorateDeskPayload({
-        cases: next,
-        coach: await readHermesCoach(),
-        events: await readHermesEvents(),
-        memory: await readHermesMemory(),
-        health: await readHermesHealth(),
-        link: hermesLinkInfo(env),
-        hermesReady: hermesReady(env),
-        attachable: publicAttachable(attachableLeads(next, leads)),
-      }),
-      removed: removed.length,
-    })
-  }
-
-  if (action === "memory") {
-    const current = await readHermesMemory()
-    const next = {
-      shared: typeof body.shared === "string" ? body.shared.trim().slice(0, 8000) : current.shared,
-      desk: typeof body.desk === "string" ? body.desk.trim().slice(0, 8000) : current.desk,
-      updatedAt: now,
-    }
-    await writeHermesMemory(next)
-    await appendHermesEvent(eventOf("note", "更新了长期记忆或工作台笔记"))
-    return json({ ...(await payload()), memory: next })
-  }
-
-  if (action === "attach") {
-    const leadId = typeof body.leadId === "string" ? body.leadId : ""
-    const result = attachLead(cases, await loadLeads(), leadId, now)
-    if (result.error === "missing" || result.error === "not-ai") {
-      return json({ error: result.error }, 400)
-    }
-    if (result.case && result.error !== "exists") {
-      await writeHermesCase(result.case)
-      await appendHermesEvent(eventOf("attach", `接入 AI 工单 ${result.case.name}`, result.case.id))
-    }
-    return json({ ...(await payload()), case: result.case })
-  }
-
-  const id = typeof body.id === "string" ? body.id : ""
-  const current = cases.find((item) => item.id === id)
-
-  if (action === "note") {
-    const text = typeof body.text === "string" ? body.text.replace(/\s+/g, " ").trim().slice(0, 2000) : ""
-    if (!current) return json({ error: "missing" }, 404)
-    if (!text) return json({ error: "empty" }, 400)
-    await appendHermesEvent(eventOf("note", text, current.id))
-    return json(await payload())
-  }
-
-  if (action === "takeover" || action === "resume" || action === "update") {
-    if (!current) return json({ error: "missing" }, 404)
-    const next =
-      action === "takeover"
-        ? applyTakeover(current, now)
-        : action === "resume"
-          ? applyResume(current, now)
-          : patchHermesCase(current, body, now)
-    await writeHermesCase(next)
-    cases = sortHermesCases([next, ...cases.filter((item) => item.id !== next.id)])
-    await appendHermesEvent(
-      eventOf(
-        action === "update" ? "update" : action,
-        action === "takeover" ? `人工接管 ${next.name}` : action === "resume" ? `交回 Hermes ${next.name}` : `更新档案 ${next.name}`,
-        next.id,
-      ),
-    )
-    return json({ ...(await payload()), case: next })
-  }
-
   if (action === "coach") {
     const message = typeof body.message === "string" ? body.message.trim().slice(0, 2000) : ""
-    if (!message) return json({ error: "empty" }, 400)
+    const images = sanitizeCoachImages(body.images)
+    if (!message && !images.length) return json({ error: "empty" }, 400)
+    for (const image of images) {
+      await writeHermesImage(image.id, { mime: image.mime, name: image.name, data: image.data })
+    }
     const staff: HermesCoachTurn = {
       id: newCoachTurnId(),
       at: now,
       role: "staff",
-      content: message,
+      content: message || "（附图）",
+      images: images.map(({ id, mime, name }) => ({ id, mime, name })),
     }
     const history = [...(await readHermesCoach()), staff]
     const memory = (await readHermesMemory()) || emptyMemory()
-    const coachResult = await resolveCoachReply(cases, history, envBag(), memory)
+    const coachResult = await resolveCoachReply(
+      cases,
+      history,
+      envBag(),
+      memory,
+      images.map(({ mime, data }) => ({ mime, data })),
+    )
     const replyTurn: HermesCoachTurn = {
       id: newCoachTurnId(Date.now() + 1),
       at: new Date().toISOString(),
@@ -284,11 +217,14 @@ export default async (req: Request) => {
     }
     const coach = [...history, replyTurn]
     await writeHermesCoach(coach)
+    if (coachResult.memory && JSON.stringify(coachResult.memory) !== JSON.stringify(memory)) {
+      await writeHermesMemory(coachResult.memory)
+    }
     for (const item of coachResult.cases) {
       const before = cases.find((row) => row.id === item.id)
       if (!before || JSON.stringify(before) !== JSON.stringify(item)) await writeHermesCase(item)
     }
-    await appendHermesEvent(eventOf("coach", message.slice(0, 180)))
+    await appendHermesEvent(eventOf("coach", (message || "附图").slice(0, 180)))
     return json({ ...(await payload()), coach, reply: coachResult.reply })
   }
 

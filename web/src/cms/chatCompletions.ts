@@ -59,7 +59,32 @@ function alternateMinimaxBases(preferred: string) {
   return [...new Set(ordered)]
 }
 
-async function completeOnce(env: ChatCompletionsEnv, messages: GuideMessage[]) {
+function withImages(
+  messages: GuideMessage[],
+  images?: { mime: string; data: string }[],
+) {
+  if (!images?.length) return messages.map((item) => ({ role: item.role, content: item.content }))
+  const lastUser = [...messages].reverse().find((item) => item.role === "user")
+  return messages.map((item) => {
+    if (item !== lastUser) return { role: item.role, content: item.content }
+    return {
+      role: item.role,
+      content: [
+        { type: "text" as const, text: item.content },
+        ...images.map((image) => ({
+          type: "image_url" as const,
+          image_url: { url: `data:${image.mime};base64,${image.data}` },
+        })),
+      ],
+    }
+  })
+}
+
+async function completeOnce(
+  env: ChatCompletionsEnv,
+  messages: GuideMessage[],
+  images?: { mime: string; data: string }[],
+) {
   const endpoint = new URL(`${env.baseUrl}/chat/completions`)
   if (env.groupId) endpoint.searchParams.set("GroupId", env.groupId)
 
@@ -73,7 +98,7 @@ async function completeOnce(env: ChatCompletionsEnv, messages: GuideMessage[]) {
       model: env.model,
       temperature: 0.3,
       max_tokens: 1200,
-      messages: messages.map((item) => ({ role: item.role, content: item.content })),
+      messages: withImages(messages, images),
     }),
   })
 
@@ -112,13 +137,13 @@ function isHostAuthError(error: unknown) {
 export async function completeChatCompletions(
   env: ChatCompletionsEnv,
   messages: GuideMessage[],
-  options?: { hosts?: "minimax-alt" | "exact" },
+  options?: { hosts?: "minimax-alt" | "exact"; images?: { mime: string; data: string }[] },
 ) {
   const bases = options?.hosts === "exact" ? [env.baseUrl.replace(/\/$/, "")] : alternateMinimaxBases(env.baseUrl)
   let lastError: unknown
   for (const baseUrl of bases) {
     try {
-      return await completeOnce({ ...env, baseUrl }, messages)
+      return await completeOnce({ ...env, baseUrl }, messages, options?.hosts === "exact" ? options.images : undefined)
     } catch (error) {
       lastError = error
       if (options?.hosts === "exact" || !isHostAuthError(error) || bases.indexOf(baseUrl) === bases.length - 1) {

@@ -1,39 +1,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { HermesHealth } from "../cms/hermes"
 import {
+  CHANNEL_LABEL,
   ENERGY_LABEL,
+  MAIL_STATUS_LABEL,
+  MAIL_TRACK_LABEL,
   PROGRESS_LABEL,
-  attentionCases,
-  deskStats,
+  PROGRESS_TRACK,
+  boardMetrics,
   emptyMemory,
   filterHermesCases,
+  formatInquiryRate,
+  formatPace,
   isLiveCase,
-  pipelineStats,
-  type HermesAttachable,
+  normalizeCase,
+  progressRatio,
   type HermesCase,
+  type HermesCoachImage,
   type HermesCoachTurn,
   type HermesDeskLink,
-  type HermesEnergy,
   type HermesEvent,
   type HermesMemory,
-  type HermesProgress,
 } from "../cms/hermesDesk"
 import { withBase } from "../lib/asset"
 import type { AdminAuth } from "./LeadsPanel"
 
-type FilterFollow = "all" | "following" | "idle"
-type FilterOwner = "all" | "hermes" | "human"
-type FilterEnergy = "all" | HermesEnergy
 type LinkView = "connecting" | "connected" | "disconnected"
-type MobilePane = "chat" | "people" | "file"
+type MobilePane = "chat" | "board"
+type PendingImage = { key: string; mime: string; name: string; data: string; preview: string }
 
 const STATUS_LABEL: Record<LinkView, string> = {
   connecting: "正在连接",
   connected: "正常连接",
   disconnected: "断开连接",
 }
-
-const STARTERS = ["先跟刚转过来的客户", "待评估的先标一下", "样品进度同步一下"]
 
 function formatTime(iso: string) {
   try {
@@ -47,6 +47,88 @@ function deskEndpoint() {
   return withBase("api/hermes-desk")
 }
 
+function percent(value: number) {
+  return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`
+}
+
+async function fileToPending(file: File): Promise<PendingImage | null> {
+  if (!file.type.startsWith("image/")) return null
+  const buffer = await file.arrayBuffer()
+  if (buffer.byteLength > 1_600_000) return null
+  const bytes = new Uint8Array(buffer)
+  let binary = ""
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return {
+    key: `${file.name}-${file.size}-${Date.now()}`,
+    mime: file.type,
+    name: file.name.slice(0, 80),
+    data: btoa(binary),
+    preview: URL.createObjectURL(file),
+  }
+}
+
+function AuthImage({ id, headers }: { id: string; headers: HeadersInit }) {
+  const [src, setSrc] = useState("")
+  useEffect(() => {
+    let url = ""
+    let dead = false
+    void fetch(`${deskEndpoint()}?asset=${encodeURIComponent(id)}`, { headers })
+      .then((response) => (response.ok ? response.blob() : null))
+      .then((blob) => {
+        if (!blob || dead) return
+        url = URL.createObjectURL(blob)
+        setSrc(url)
+      })
+    return () => {
+      dead = true
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [headers, id])
+  if (!src) return <span className="hermes-grok__img-wait" aria-hidden="true" />
+  return <img src={src} alt="" />
+}
+
+function ProgressRail({
+  value,
+  label,
+  paused,
+}: {
+  value: number
+  label: string
+  paused?: boolean
+}) {
+  return (
+    <div className={`hermes-rail${paused ? " is-paused" : ""}`}>
+      <div className="hermes-rail__meta">
+        <span>{label}</span>
+        <b>{percent(value)}</b>
+      </div>
+      <div className="hermes-rail__track" aria-hidden="true">
+        <i style={{ width: percent(value) }} />
+      </div>
+      <ol>
+        {PROGRESS_TRACK.map((step) => (
+          <li key={step} className={PROGRESS_LABEL[step] === label || progressRatio(step) <= value + 0.01 ? "is-on" : ""}>
+            {PROGRESS_LABEL[step]}
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+function Meter({ label, value, hint }: { label: string; value: number; hint: string }) {
+  return (
+    <div className="hermes-meter">
+      <span>{label}</span>
+      <strong>{hint}</strong>
+      <div className="hermes-rail__track" aria-hidden="true">
+        <i style={{ width: percent(value) }} />
+      </div>
+    </div>
+  )
+}
+
 type DeskPayload = {
   cases?: HermesCase[]
   coach?: HermesCoachTurn[]
@@ -54,9 +136,7 @@ type DeskPayload = {
   memory?: HermesMemory
   link?: HermesDeskLink
   health?: HermesHealth | null
-  hermesReady?: boolean
-  attachable?: HermesAttachable[]
-  case?: HermesCase
+  board?: ReturnType<typeof boardMetrics>
   reply?: string
   error?: string
 }
@@ -66,30 +146,22 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   const [coach, setCoach] = useState<HermesCoachTurn[]>([])
   const [events, setEvents] = useState<HermesEvent[]>([])
   const [memory, setMemory] = useState<HermesMemory>(emptyMemory())
-  const [attachable, setAttachable] = useState<HermesAttachable[]>([])
+  const [board, setBoard] = useState(() => boardMetrics([]))
   const [link, setLink] = useState<HermesDeskLink>({ configured: false, model: "", host: "" })
   const [status, setStatus] = useState<LinkView>("connecting")
   const [healthAt, setHealthAt] = useState("")
   const [healthDetail, setHealthDetail] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [busyId, setBusyId] = useState("")
   const [sending, setSending] = useState(false)
-  const [savingMemory, setSavingMemory] = useState(false)
   const [input, setInput] = useState("")
-  const [note, setNote] = useState("")
-  const [origin, setOrigin] = useState<"live" | "all">("live")
-  const [follow, setFollow] = useState<FilterFollow>("all")
-  const [owner, setOwner] = useState<FilterOwner>("all")
-  const [energy, setEnergy] = useState<FilterEnergy>("all")
-  const [progressFilter, setProgressFilter] = useState<HermesProgress | "all">("all")
   const [query, setQuery] = useState("")
   const [selectedId, setSelectedId] = useState("")
   const [pane, setPane] = useState<MobilePane>("chat")
-  const [drafts, setDrafts] = useState<Record<string, Partial<HermesCase>>>({})
-  const [sharedDraft, setSharedDraft] = useState("")
-  const [deskDraft, setDeskDraft] = useState("")
+  const [pending, setPending] = useState<PendingImage[]>([])
+  const [dragOver, setDragOver] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const headers = useMemo(
     () => ({
@@ -101,20 +173,16 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   )
 
   const apply = useCallback((payload: DeskPayload) => {
-    if (Array.isArray(payload.cases)) setCases(payload.cases)
+    if (Array.isArray(payload.cases)) setCases(payload.cases.map(normalizeCase))
     if (Array.isArray(payload.coach)) setCoach(payload.coach)
     if (Array.isArray(payload.events)) setEvents(payload.events)
     if (payload.memory) setMemory(payload.memory)
-    if (Array.isArray(payload.attachable)) setAttachable(payload.attachable)
+    if (payload.board) setBoard(payload.board)
     if (payload.link) setLink(payload.link)
     if (payload.health) {
       setStatus(payload.health.status === "connected" ? "connected" : "disconnected")
       setHealthAt(payload.health.checkedAt || "")
       setHealthDetail(payload.health.detail || "")
-    }
-    if (payload.case) {
-      setCases((current) => [payload.case as HermesCase, ...current.filter((item) => item.id !== payload.case?.id)])
-      setSelectedId(payload.case.id)
     }
   }, [])
 
@@ -126,7 +194,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         body: JSON.stringify(body),
       })
       const payload = (await response.json()) as DeskPayload
-      if (!response.ok) throw new Error(payload.error || `接口返回 ${response.status}`)
+      if (!response.ok) throw new Error(payload.error === "hermes-only" ? "这项只能由 Hermes 改" : payload.error || `接口返回 ${response.status}`)
       apply(payload)
       return payload
     },
@@ -170,78 +238,40 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight })
   }, [coach, sending])
 
-  useEffect(() => {
-    setSharedDraft(memory.shared)
-    setDeskDraft(memory.desk)
-  }, [memory.desk, memory.shared, memory.updatedAt])
-
-  const visible = filterHermesCases(cases, { follow, owner, energy, query, origin }).filter((item) =>
-    progressFilter === "all" ? true : item.progress === progressFilter,
+  useEffect(
+    () => () => {
+      for (const item of pending) URL.revokeObjectURL(item.preview)
+    },
+    [pending],
   )
-  const selected = cases.find((item) => item.id === selectedId) || visible[0] || null
-  const stats = deskStats(cases)
-  const attention = attentionCases(cases)
-  const pipeline = pipelineStats(cases)
-  const timeline = events.filter((item) => !selected || !item.caseId || item.caseId === selected.id).slice(-16).reverse()
-  const draft = selected ? drafts[selected.id] || {} : {}
 
-  const act = async (id: string, action: "takeover" | "resume") => {
-    setBusyId(id)
-    setError("")
-    try {
-      await post({ action, id })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "操作失败")
-    } finally {
-      setBusyId("")
+  const visible = filterHermesCases(cases, { origin: "live", query }).map(normalizeCase)
+  const selected = cases.map(normalizeCase).find((item) => item.id === selectedId) || visible[0] || null
+  const timeline = events.filter((item) => !selected || !item.caseId || item.caseId === selected.id).slice(-12).reverse()
+
+  const addFiles = async (files: FileList | File[]) => {
+    const next: PendingImage[] = []
+    for (const file of [...files]) {
+      if (pending.length + next.length >= 3) break
+      const item = await fileToPending(file)
+      if (item) next.push(item)
     }
+    if (next.length) setPending((current) => [...current, ...next].slice(0, 3))
   }
 
-  const saveCase = async (item: HermesCase) => {
-    const next = drafts[item.id] || {}
-    setBusyId(item.id)
-    setError("")
-    try {
-      await post({
-        action: "update",
-        id: item.id,
-        progress: next.progress ?? item.progress,
-        reaction: next.reaction ?? item.reaction,
-        evaluation: next.evaluation ?? item.evaluation,
-        energy: next.energy ?? item.energy,
-      })
-      setDrafts((current) => {
-        const copy = { ...current }
-        delete copy[item.id]
-        return copy
-      })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "保存失败")
-    } finally {
-      setBusyId("")
-    }
-  }
-
-  const saveMemory = async () => {
-    setSavingMemory(true)
-    setError("")
-    try {
-      await post({ action: "memory", shared: sharedDraft, desk: deskDraft })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "记忆未保存")
-    } finally {
-      setSavingMemory(false)
-    }
-  }
-
-  const sendCoach = async (preset?: string) => {
-    const message = (preset ?? input).trim()
-    if (!message || sending) return
+  const sendCoach = async () => {
+    const message = input.trim()
+    if ((!message && !pending.length) || sending) return
     setSending(true)
     setError("")
     setInput("")
+    const images = pending.map(({ mime, name, data }) => ({ mime, name, data }))
+    setPending((current) => {
+      for (const item of current) URL.revokeObjectURL(item.preview)
+      return []
+    })
     try {
-      await post({ action: "coach", message })
+      await post({ action: "coach", message, images })
     } catch (err) {
       setError(err instanceof Error ? err.message : "发送失败")
       setInput(message)
@@ -250,31 +280,27 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
     }
   }
 
-  const sendNote = async () => {
-    if (!selected || !note.trim()) return
-    setBusyId(selected.id)
-    try {
-      await post({ action: "note", id: selected.id, text: note.trim() })
-      setNote("")
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "笔记未写入")
-    } finally {
-      setBusyId("")
-    }
-  }
+  const inquiryMeter = selected?.inquiryCount ? Math.min(1, selected.inquiryCount / 8) : 0
+  const rateHint = selected ? formatInquiryRate(selected) : ""
+  const rateMeter = selected?.inquiryCount
+    ? Math.min(1, (selected.inquiryCount || 0) / Math.max(1, (Date.now() - Date.parse(selected.at)) / 86400000) / 4)
+    : 0
+  const replyMeter = selected?.replyPaceMin != null ? Math.max(0.12, 1 - Math.min(selected.replyPaceMin, 240) / 240) : 0
+  const inquirePaceMeter = selected?.inquiryPaceMin != null ? Math.max(0.12, 1 - Math.min(selected.inquiryPaceMin, 7 * 24 * 60) / (7 * 24 * 60)) : 0
+  const mailReplyMeter = selected?.emailReplyHours != null ? Math.max(0.12, 1 - Math.min(selected.emailReplyHours, 72) / 72) : 0
 
   return (
-    <div className="hermes-grok">
+    <div className="hermes-grok hermes-hud">
+      <div className={`hermes-scan${status === "connecting" ? " is-on" : ""}`} aria-hidden="true" />
       <header className="hermes-grok__top">
         <div className="hermes-grok__brand">
           <strong>Hermes</strong>
-          <span>后台工作台 · 与前台高级顾问是同一个人</span>
+          <span>看板只读 · 同事只通过对话指挥</span>
         </div>
         <p className={`hermes-grok__status hermes-grok__status--${status}`} title={healthDetail || undefined}>
           <i />
           {STATUS_LABEL[status]}
           {link.model && status === "connected" ? <em>{link.model}</em> : null}
-          {status === "disconnected" && link.configured ? <em>{link.host || "网关不可达"}</em> : null}
           {status === "disconnected" && !link.configured ? <em>未配置网关</em> : null}
         </p>
         <div className="hermes-grok__tools">
@@ -282,342 +308,261 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
             探测连接
           </button>
           <button type="button" className="hermes-grok__ghost" onClick={() => void load()} disabled={loading}>
-            {loading ? "刷新中" : "刷新"}
+            {loading ? "读取中" : "刷新"}
           </button>
-          {stats.archived > 0 ? (
-            <button
-              type="button"
-              className="hermes-grok__ghost"
-              onClick={() => void post({ action: "prune" }).catch((err) => setError(err instanceof Error ? err.message : "清理失败"))}
-            >
-              清理空表单卡 {stats.archived}
-            </button>
-          ) : null}
         </div>
       </header>
 
+      <section className="hermes-world" aria-label="总进度">
+        <ProgressRail
+          value={board.worldProgress}
+          label={visible.length ? "全部真实对话进度" : "等待真实对话"}
+        />
+        <ul className="hermes-world__stats">
+          <li><b>{board.live}</b><span>真实对话</span></li>
+          <li><b>{board.following}</b><span>Hermes 跟进</span></li>
+          <li><b>{board.human}</b><span>人工跟进</span></li>
+          <li><b>{board.inquiries}</b><span>询单次数</span></li>
+          <li><b>{board.chatTurns}</b><span>对话轮次</span></li>
+          <li><b>{board.mailSent}</b><span>邮件已发</span></li>
+          <li><b>{board.mailFailed}</b><span>发送失败</span></li>
+          <li><b>{board.mailFollow}</b><span>有跟单</span></li>
+          <li><b>{board.mailTracked}</b><span>有跟踪</span></li>
+          <li><b>{board.mailSummarized}</b><span>回邮摘要</span></li>
+          <li><b>{formatPace(board.avgInquiryPace) || "尚无"}</b><span>询单间隔</span></li>
+          <li><b>{formatPace(board.avgReplyPace) || "尚无"}</b><span>回复速度</span></li>
+          <li><b>{board.avgMailReply != null ? `${board.avgMailReply} 小时` : "尚无"}</b><span>回邮用时</span></li>
+        </ul>
+      </section>
+
       <nav className="hermes-grok__tabs" aria-label="工作台分区">
-        {(
-          [
-            ["chat", "对话"],
-            ["people", "客户"],
-            ["file", "档案"],
-          ] as const
-        ).map(([key, label]) => (
-          <button key={key} type="button" className={pane === key ? "is-on" : ""} onClick={() => setPane(key)}>
-            {label}
-          </button>
-        ))}
+        <button type="button" className={pane === "chat" ? "is-on" : ""} onClick={() => setPane("chat")}>
+          对话
+        </button>
+        <button type="button" className={pane === "board" ? "is-on" : ""} onClick={() => setPane("board")}>
+          看板
+        </button>
       </nav>
 
       {error ? <p className="hermes-grok__error">{error}</p> : null}
 
       <div className={`hermes-grok__body hermes-grok__body--${pane}`}>
-        <aside className="hermes-grok__rail">
-          <section>
-            <h3>看板</h3>
-            <ul className="hermes-grok__pills">
-              <li>真实对话 {stats.live}</li>
-              <li>跟进中 {stats.following}</li>
-              <li>人工 {stats.human}</li>
-              <li>高意向 {stats.high}</li>
-            </ul>
-            <div className="hermes-grok__pipe">
-              {(Object.keys(PROGRESS_LABEL) as HermesProgress[]).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={progressFilter === key ? "is-on" : ""}
-                  onClick={() => setProgressFilter((current) => (current === key ? "all" : key))}
-                >
-                  {PROGRESS_LABEL[key]}
-                  <b>{pipeline[key] || 0}</b>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h3>需要看</h3>
-            <div className="hermes-grok__attn">
-              <button type="button" onClick={() => attention.human[0] && setSelectedId(attention.human[0].id)}>
-                人工接管 {attention.human.length}
-              </button>
-              <button type="button" onClick={() => attention.high[0] && setSelectedId(attention.high[0].id)}>
-                积极性高 {attention.high.length}
-              </button>
-              <button type="button" onClick={() => attention.stale[0] && setSelectedId(attention.stale[0].id)}>
-                待评估 {attention.stale.length}
-              </button>
-            </div>
-          </section>
-
-          <section className="hermes-grok__people">
-            <header>
-              <h3>客户</h3>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={origin === "live"}
-                  onChange={(event) => setOrigin(event.target.checked ? "live" : "all")}
-                />
-                仅真实对话
-              </label>
-            </header>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索称呼、机构、作物" />
-            <div className="hermes-grok__filters">
-              <select value={follow} onChange={(event) => setFollow(event.target.value as FilterFollow)}>
-                <option value="all">跟进</option>
-                <option value="following">正在跟</option>
-                <option value="idle">未跟</option>
-              </select>
-              <select value={owner} onChange={(event) => setOwner(event.target.value as FilterOwner)}>
-                <option value="all">接手</option>
-                <option value="hermes">Hermes</option>
-                <option value="human">人工</option>
-              </select>
-              <select value={energy} onChange={(event) => setEnergy(event.target.value as FilterEnergy)}>
-                <option value="all">意向</option>
-                <option value="high">高</option>
-                <option value="mid">一般</option>
-                <option value="low">低</option>
-                <option value="unset">未评估</option>
-              </select>
-            </div>
-            <ul>
-              {visible.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    className={selected?.id === item.id ? "is-on" : ""}
-                    onClick={() => {
-                      setSelectedId(item.id)
-                      setPane("file")
-                    }}
-                  >
-                    <strong>{item.name}</strong>
-                    <span>
-                      {item.owner === "human" ? "人工" : item.following ? "跟进中" : "未跟"}
-                      {item.energy !== "unset" ? ` · ${ENERGY_LABEL[item.energy]}` : ""}
-                    </span>
-                    <em>{item.note || "还没有线索"}</em>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {!loading && visible.length === 0 ? (
-              <p className="hermes-grok__empty">
-                {origin === "live"
-                  ? "还没有前台高级顾问对话。访客点「转高级顾问」后会出现。联络表线索在「前台线索」，不会自动变成 Hermes 档案。"
-                  : "没有符合筛选的档案。"}
-              </p>
-            ) : null}
-          </section>
-
-          {attachable.length > 0 ? (
-            <section>
-              <h3>可接入的 AI 工单</h3>
-              <ul className="hermes-grok__attach">
-                {attachable.map((item) => (
-                  <li key={item.id}>
-                    <span>{item.name}</span>
-                    <button type="button" onClick={() => void post({ action: "attach", leadId: item.id })}>
-                      接入
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-        </aside>
-
-        <section className="hermes-grok__chat">
+        <section
+          className={`hermes-grok__chat${dragOver ? " is-drop" : ""}`}
+          onDragOver={(event) => {
+            event.preventDefault()
+            setDragOver(true)
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(event) => {
+            event.preventDefault()
+            setDragOver(false)
+            void addFiles(event.dataTransfer.files)
+          }}
+        >
           <div className="hermes-grok__log" ref={logRef}>
             {coach.length === 0 && !sending ? (
               <div className="hermes-grok__hello">
                 <h2>Hermes</h2>
-                <p>后台和前台是同一个人、同一份长期记忆。这里权限更高，前台看不到工作台数据。</p>
-                <div>
-                  {STARTERS.map((item) => (
-                    <button key={item} type="button" onClick={() => void sendCoach(item)}>
-                      {item}
-                    </button>
-                  ))}
-                </div>
+                <p>进度、接管、邮件和客户行为都由我改。你只要在这里说话，也可以发图。</p>
               </div>
             ) : null}
             {coach.map((turn) => (
               <article key={turn.id} className={`hermes-grok__bubble hermes-grok__bubble--${turn.role}`}>
+                {turn.images?.length ? (
+                  <div className="hermes-grok__thumbs">
+                    {turn.images.map((image: HermesCoachImage) => (
+                      <AuthImage key={image.id} id={image.id} headers={headers} />
+                    ))}
+                  </div>
+                ) : null}
                 <p>{turn.content}</p>
-                <time dateTime={turn.at}>{turn.role === "staff" ? "同事" : "Hermes"} · {formatTime(turn.at)}</time>
+                <time dateTime={turn.at}>
+                  {turn.role === "staff" ? "你" : "Hermes"} · {formatTime(turn.at)}
+                </time>
               </article>
             ))}
-            {sending ? <p className="hermes-grok__typing">Hermes 正在看档案…</p> : null}
+            {sending ? (
+              <div className="hermes-load" aria-live="polite">
+                <span />
+                <span />
+                <span />
+                Hermes 正在看档案
+              </div>
+            ) : null}
           </div>
           <form
-            className="hermes-grok__composer"
+            className="hermes-gpt"
             onSubmit={(event) => {
               event.preventDefault()
               void sendCoach()
             }}
           >
-            <label className="sr-only" htmlFor="hermes-grok-input">
-              给 Hermes 的指令
-            </label>
-            <textarea
-              id="hermes-grok-input"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault()
-                  void sendCoach()
-                }
+            {pending.length ? (
+              <ul className="hermes-gpt__pending">
+                {pending.map((item) => (
+                  <li key={item.key}>
+                    <img src={item.preview} alt={item.name} />
+                    <button
+                      type="button"
+                      aria-label="去掉这张图"
+                      onClick={() =>
+                        setPending((current) => {
+                          const hit = current.find((row) => row.key === item.key)
+                          if (hit) URL.revokeObjectURL(hit.preview)
+                          return current.filter((row) => row.key !== item.key)
+                        })
+                      }
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <div className="hermes-gpt__box">
+              <button type="button" className="hermes-gpt__plus" onClick={() => fileRef.current?.click()} aria-label="添加图片">
+                +
+              </button>
+              <label className="sr-only" htmlFor="hermes-grok-input">
+                给 Hermes 的指令
+              </label>
+              <textarea
+                id="hermes-grok-input"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onPaste={(event) => {
+                  const files = [...event.clipboardData.files]
+                  if (files.some((file) => file.type.startsWith("image/"))) {
+                    event.preventDefault()
+                    void addFiles(files)
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault()
+                    void sendCoach()
+                  }
+                }}
+                placeholder="给 Hermes 下指令，或拖一张图进来…"
+                rows={1}
+                maxLength={2000}
+              />
+              <button type="submit" disabled={(!input.trim() && !pending.length) || sending}>
+                {sending ? "…" : "发送"}
+              </button>
+            </div>
+            <input
+              ref={fileRef}
+              className="sr-only"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              multiple
+              onChange={(event) => {
+                if (event.target.files) void addFiles(event.target.files)
+                event.target.value = ""
               }}
-              placeholder="给 Hermes 一条指令。他和前台是同一个人，只是这里看得更多。"
-              rows={2}
-              maxLength={2000}
             />
-            <button type="submit" disabled={!input.trim() || sending}>
-              {sending ? "…" : "发送"}
-            </button>
+            {healthAt ? <p className="hermes-grok__probe">上次探测 {formatTime(healthAt)}</p> : null}
           </form>
-          {healthAt ? <p className="hermes-grok__probe">上次探测 {formatTime(healthAt)}</p> : null}
         </section>
 
-        <aside className="hermes-grok__file">
-          {selected ? (
-            <>
-              <header>
-                <strong>{selected.name}</strong>
-                {selected.org ? <span>{selected.org}</span> : null}
-                <p>
-                  {selected.owner === "human" ? "人工跟进" : selected.following ? "Hermes 跟进中" : "Hermes 未跟进"}
-                  {" · "}
-                  {PROGRESS_LABEL[selected.progress]}
-                  {isLiveCase(selected) ? " · 真实对话" : " · 历史表单"}
-                </p>
-              </header>
-              <p className="hermes-grok__clue">{selected.note || "还没有线索摘要。"}</p>
-              <dl>
-                <div>
-                  <dt>联系</dt>
-                  <dd>{selected.contact || "未留"}</dd>
-                </div>
-                <div>
-                  <dt>反响</dt>
-                  <dd>{selected.reaction || "尚无"}</dd>
-                </div>
-                <div>
-                  <dt>评价</dt>
-                  <dd>{selected.evaluation || "尚无"}</dd>
-                </div>
-              </dl>
-              <div className="hermes-grok__edit">
-                <label>
-                  进度
-                  <select
-                    value={(draft.progress ?? selected.progress) as HermesProgress}
-                    onChange={(event) =>
-                      setDrafts((current) => ({
-                        ...current,
-                        [selected.id]: { ...current[selected.id], progress: event.target.value as HermesProgress },
-                      }))
-                    }
-                  >
-                    {Object.entries(PROGRESS_LABEL).map(([key, label]) => (
-                      <option key={key} value={key}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  意向
-                  <select
-                    value={(draft.energy ?? selected.energy) as HermesEnergy}
-                    onChange={(event) =>
-                      setDrafts((current) => ({
-                        ...current,
-                        [selected.id]: { ...current[selected.id], energy: event.target.value as HermesEnergy },
-                      }))
-                    }
-                  >
-                    {Object.entries(ENERGY_LABEL).map(([key, label]) => (
-                      <option key={key} value={key}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  反响
-                  <input
-                    value={draft.reaction ?? selected.reaction}
-                    onChange={(event) =>
-                      setDrafts((current) => ({
-                        ...current,
-                        [selected.id]: { ...current[selected.id], reaction: event.target.value },
-                      }))
-                    }
-                    placeholder="客户怎么回应"
-                  />
-                </label>
-                <label>
-                  评价
-                  <input
-                    value={draft.evaluation ?? selected.evaluation}
-                    onChange={(event) =>
-                      setDrafts((current) => ({
-                        ...current,
-                        [selected.id]: { ...current[selected.id], evaluation: event.target.value },
-                      }))
-                    }
-                    placeholder="Hermes 或同事怎么看"
-                  />
-                </label>
-              </div>
-              <footer>
-                {selected.owner === "hermes" ? (
-                  <button type="button" disabled={busyId === selected.id} onClick={() => void act(selected.id, "takeover")}>
-                    {busyId === selected.id ? "接管中…" : "人工接管"}
+        <aside className="hermes-panel">
+          <section className="hermes-cast">
+            <header>
+              <h3>真实客户</h3>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索" />
+            </header>
+            <ul>
+              {visible.map((item) => (
+                <li key={item.id}>
+                  <button type="button" className={selected?.id === item.id ? "is-on" : ""} onClick={() => setSelectedId(item.id)}>
+                    <strong>{item.name}</strong>
+                    <span>{PROGRESS_LABEL[item.progress]} · {percent(progressRatio(item.progress))}</span>
+                    <em style={{ width: percent(progressRatio(item.progress)) }} />
                   </button>
-                ) : (
-                  <button type="button" disabled={busyId === selected.id} onClick={() => void act(selected.id, "resume")}>
-                    {busyId === selected.id ? "交回中…" : "交回 Hermes"}
-                  </button>
-                )}
-                <button type="button" disabled={busyId === selected.id} onClick={() => void saveCase(selected)}>
-                  保存档案
-                </button>
-              </footer>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  void sendNote()
-                }}
-              >
-                <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="写一条仅后台可见的笔记" />
-                <button type="submit" disabled={!note.trim()}>
-                  记下
-                </button>
-              </form>
-            </>
-          ) : (
-            <p className="hermes-grok__empty">选左边一位真实客户，档案会出现在这里。</p>
-          )}
-
-          <section className="hermes-grok__memory">
-            <h3>长期记忆 · 前后台共用</h3>
-            <textarea value={sharedDraft} onChange={(event) => setSharedDraft(event.target.value)} rows={4} maxLength={8000} />
-            <h3>工作台笔记 · 仅后台</h3>
-            <textarea value={deskDraft} onChange={(event) => setDeskDraft(event.target.value)} rows={4} maxLength={8000} />
-            <button type="button" onClick={() => void saveMemory()} disabled={savingMemory}>
-              {savingMemory ? "保存中…" : "保存记忆"}
-            </button>
-            {memory.updatedAt ? <small>上次 {formatTime(memory.updatedAt)}</small> : null}
+                </li>
+              ))}
+            </ul>
+            {!loading && visible.length === 0 ? (
+              <p className="hermes-grok__empty">还没有前台高级顾问对话。数字保持空，不会编。</p>
+            ) : null}
           </section>
 
+          {selected ? (
+            <>
+              <header className="hermes-panel__who">
+                <strong>{selected.name}</strong>
+                <span>
+                  {selected.owner === "human" ? "人工跟进中" : selected.following ? "Hermes 跟进中" : "尚未跟进"}
+                  {isLiveCase(selected) ? " · 真实对话" : ""}
+                </span>
+              </header>
+              <ProgressRail
+                value={progressRatio(selected.progress)}
+                label={PROGRESS_LABEL[selected.progress]}
+                paused={selected.progress === "hold"}
+              />
+              <section>
+                <h3>邮件</h3>
+                <ul className="hermes-mail">
+                  <li className={selected.mailStatus !== "none" ? "is-on" : ""}>
+                    {MAIL_STATUS_LABEL[selected.mailStatus || "none"]}
+                    {selected.mailSentAt ? ` · ${formatTime(selected.mailSentAt)}` : ""}
+                  </li>
+                  <li className={selected.mailFollowUp ? "is-on" : ""}>{selected.mailFollowUp ? "有跟单" : "无跟单"}</li>
+                  <li className={selected.mailTracking && selected.mailTracking !== "none" ? "is-on" : ""}>
+                    {MAIL_TRACK_LABEL[selected.mailTracking || "none"]}
+                  </li>
+                </ul>
+                <p className="hermes-sum">{selected.mailSummary || "还没有客户回邮摘要。Hermes 读到真邮件后再写。"}</p>
+              </section>
+              <section>
+                <h3>客户行为</h3>
+                <div className="hermes-meters">
+                  <Meter label="询单次数" value={inquiryMeter} hint={selected.inquiryCount ? `${selected.inquiryCount} 次` : "尚无"} />
+                  <Meter label="询单速度" value={rateMeter} hint={rateHint || "尚无"} />
+                  <Meter label="询单间隔" value={inquirePaceMeter} hint={formatPace(selected.inquiryPaceMin) || "尚无"} />
+                  <Meter label="回复速度" value={replyMeter} hint={formatPace(selected.replyPaceMin) || "尚无"} />
+                  <Meter label="回邮用时" value={mailReplyMeter} hint={selected.emailReplyHours != null ? `${selected.emailReplyHours} 小时` : "尚无"} />
+                </div>
+              </section>
+              <dl className="hermes-facts">
+                <div>
+                  <dt>意向</dt>
+                  <dd>{ENERGY_LABEL[selected.energy]}</dd>
+                </div>
+                <div>
+                  <dt>渠道</dt>
+                  <dd>{CHANNEL_LABEL[selected.lastChannel || "unset"]}</dd>
+                </div>
+                <div>
+                  <dt>对话轮次</dt>
+                  <dd>{selected.chatTurns || "尚无"}</dd>
+                </div>
+                <div>
+                  <dt>下一步</dt>
+                  <dd>{selected.nextAction || "尚无"}</dd>
+                </div>
+                <div>
+                  <dt>线索</dt>
+                  <dd>{selected.note || "尚无"}</dd>
+                </div>
+                <div>
+                  <dt>反响 / 评价</dt>
+                  <dd>{selected.reaction || selected.evaluation || "尚无"}</dd>
+                </div>
+              </dl>
+            </>
+          ) : (
+            <p className="hermes-grok__empty">选一位真实客户，进度条和邮件状态会出现在这里。</p>
+          )}
+
+          <section>
+            <h3>记忆 · Hermes 维护</h3>
+            <p className="hermes-lore">{memory.shared || "还没有共用记忆。"}</p>
+            <p className="hermes-lore hermes-lore--desk">{memory.desk || "还没有仅后台笔记。"}</p>
+          </section>
           <section className="hermes-grok__time">
             <h3>时间线</h3>
             {timeline.length === 0 ? <p className="hermes-grok__empty">还没有事件。</p> : null}
