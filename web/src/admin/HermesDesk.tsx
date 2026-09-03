@@ -684,6 +684,29 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         </section>
 
         <aside className="hermes-panel">
+          <nav className="hermes-mod" aria-label="工作台模块">
+            <button
+              type="button"
+              className={module === "tickets" ? "is-on" : ""}
+              onClick={() => {
+                setModule("tickets")
+                setPane("board")
+              }}
+            >
+              工单档案
+            </button>
+            <button
+              type="button"
+              className={module === "inquiry" ? "is-on" : ""}
+              onClick={() => {
+                setModule("inquiry")
+                setFocus({ kind: "home" })
+                setPane("inquiry")
+              }}
+            >
+              询单系统
+            </button>
+          </nav>
           {module === "inquiry" ? (
             <InquiryPanel
               inquiry={inquiry}

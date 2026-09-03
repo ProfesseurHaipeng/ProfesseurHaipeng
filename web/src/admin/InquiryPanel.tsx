@@ -60,7 +60,7 @@ export function InquiryPanel({
     <section className="inq-board">
       <header className="inq-board__top">
         <div>
-          <h2>询单设定</h2>
+          <h2>Karmenai · 询单系统</h2>
           <p className="inq-board__hint">条件会写入 Karmenai 的系统提示；点「开始寻找」后还会发一条明确指令到对话。</p>
         </div>
         <span className="inq-board__status">{preview.jobLabel}</span>
