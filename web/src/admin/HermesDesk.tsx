@@ -179,6 +179,8 @@ type DeskPayload = {
   memory?: HermesMemory
   link?: HermesDeskLink
   health?: HermesHealth | null
+  hermesReady?: boolean
+  attachable?: { id: string; name: string; org: string; note: string; at: string }[]
   board?: ReturnType<typeof boardMetrics>
   inquiry?: InquiryState
   reply?: string
@@ -203,6 +205,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   const [pane, setPane] = useState<MobilePane>("board")
   const [module, setModule] = useState<BoardModule>("tickets")
   const [inquiry, setInquiry] = useState<InquiryState>(emptyInquiry)
+  const [hermesReady, setHermesReady] = useState(false)
   const [pending, setPending] = useState<PendingImage[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [folds, setFolds] = useState<Record<string, boolean>>({
@@ -233,6 +236,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
     if (payload.memory) setMemory(payload.memory)
     if (payload.inquiry) setInquiry(payload.inquiry)
     if (payload.link) setLink(payload.link)
+    if (typeof payload.hermesReady === "boolean") setHermesReady(payload.hermesReady)
     if (payload.health) {
       setStatus(payload.health.status === "connected" ? "connected" : "disconnected")
       setHealthAt(payload.health.checkedAt || "")
@@ -446,6 +450,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         </li>
       </ul>
       <p className="hermes-sum">{item.mailSummary || `还没有客户回邮摘要。${AGENT_NAME} 读到真邮件后再写。`}</p>
+      <p className="hermes-sum">站点没有发信接口。这里只显示顾问记下的状态，不是邮局回执。</p>
     </>
   )
 
@@ -687,6 +692,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
             <InquiryPanel
               inquiry={inquiry}
               busy={sending || loading}
+              hermesReady={hermesReady}
               onAdd={async (text) => {
                 setError("")
                 try {
@@ -708,12 +714,30 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                 setError("")
                 if (compactBoard()) setPane("chat")
                 try {
+                  if (inquiry.targets.length) await post({ action: "job", status: "searching" })
                   await post({ action: "coach", message })
                 } catch (err) {
                   setError(err instanceof Error ? err.message : "安排失败")
                 } finally {
                   setSending(false)
                 }
+              }}
+              onFile={async (findingId) => {
+                setError("")
+                try {
+                  const payload = await post({ action: "file", findingId })
+                  const filed = payload.inquiry?.findings?.find((item) => item.id === findingId)
+                  if (filed?.caseId) {
+                    setModule("tickets")
+                    goBoard({ kind: "ticket", id: filed.caseId })
+                  }
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "建档失败")
+                }
+              }}
+              onOpenTicket={(caseId) => {
+                setModule("tickets")
+                goBoard({ kind: "ticket", id: caseId })
               }}
             />
           ) : selected ? (

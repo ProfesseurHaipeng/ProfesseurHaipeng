@@ -16,11 +16,14 @@ import {
   writeHermesMemory,
   writeInquiryState,
 } from "../../src/cms/hermesBlobs"
-import { applyTargetWrite } from "../../src/cms/inquiryDesk"
+import { applyStaffJob, applyTargetWrite } from "../../src/cms/inquiryDesk"
 import {
+  attachLead,
   attachableLeads,
   decorateDeskPayload,
   emptyMemory,
+  fileFinding,
+  importLeads,
   isStaffAction,
   newCoachTurnId,
   newEventId,
@@ -39,8 +42,8 @@ import { sortLeads, type Lead } from "../../src/cms/leads"
  *
  * GET  /api/hermes-desk
  * POST /api/hermes-desk  { action }
- *   staff: health | coach (images allowed) | targets
- *   Hermes-only via <desk> / <inquiry> in coach: cases, mail, memory, findings
+ *   staff: health | coach | targets | job | file | attach | import
+ *   Hermes-only via <desk> / <inquiry> in coach: progress, mail notes, memory, findings
  */
 
 type BlobStore = {
@@ -116,10 +119,19 @@ function eventOf(kind: HermesEvent["kind"], text: string, caseId?: string): Herm
   return { id: newEventId(), at: new Date().toISOString(), kind, text, caseId }
 }
 
-async function payload(filter?: HermesDeskFilter) {
-  const env = envBag()
+async function syncLeadCases() {
   const cases = await readHermesCases()
   const leads = await loadLeads()
+  const next = importLeads(cases, leads)
+  for (const item of next) {
+    if (!cases.some((row) => row.id === item.id)) await writeHermesCase(item)
+  }
+  return { cases: next, leads }
+}
+
+async function payload(filter?: HermesDeskFilter) {
+  const env = envBag()
+  const { cases, leads } = await syncLeadCases()
   return decorateDeskPayload({
     cases,
     coach: await readHermesCoach(),
@@ -170,7 +182,7 @@ export default async (req: Request) => {
   if (action && !isStaffAction(action)) {
     return json({ error: "hermes-only" }, 403)
   }
-  let cases = await readHermesCases()
+  let { cases } = await syncLeadCases()
   const now = new Date().toISOString()
 
   if (action === "health") {
@@ -196,6 +208,43 @@ export default async (req: Request) => {
     if (next.error === "empty") return json({ error: "empty" }, 400)
     await writeInquiryState({ ...inquiry, targets: next.targets })
     await appendHermesEvent(eventOf("update", "询单：更新要找的厂商弊端"))
+    return json(await payload())
+  }
+
+  if (action === "job") {
+    const inquiry = await readInquiryState()
+    const next = applyStaffJob(inquiry.job, inquiry.targets, body.status, now)
+    if (next.error === "empty") return json({ error: "empty" }, 400)
+    if (next.error === "hermes-only") return json({ error: "hermes-only" }, 403)
+    await writeInquiryState({ ...inquiry, job: next.job })
+    await appendHermesEvent(eventOf("update", `询单：${next.job.status}`))
+    return json(await payload())
+  }
+
+  if (action === "file") {
+    const findingId = typeof body.findingId === "string" ? body.findingId : ""
+    const inquiry = await readInquiryState()
+    const result = fileFinding(inquiry, cases, findingId, now)
+    if (result.error) return json({ error: result.error }, 400)
+    await writeInquiryState(result.inquiry)
+    if (result.case) await writeHermesCase(result.case)
+    await appendHermesEvent(eventOf("update", `询单：建档 ${result.case?.org || ""}`.trim(), result.case?.id))
+    return json(await payload())
+  }
+
+  if (action === "attach") {
+    const leadId = typeof body.leadId === "string" ? body.leadId : ""
+    const leads = await loadLeads()
+    const result = attachLead(cases, leads, leadId, now)
+    if (result.error === "missing") return json({ error: "missing" }, 400)
+    if (result.case && result.error !== "exists") await writeHermesCase(result.case)
+    await appendHermesEvent(eventOf("update", `接入线索 ${result.case?.name || leadId}`, result.case?.id))
+    return json(await payload())
+  }
+
+  if (action === "import") {
+    const { cases: next } = await syncLeadCases()
+    await appendHermesEvent(eventOf("update", `接入前台线索 ${Math.max(0, next.length - cases.length)} 条`))
     return json(await payload())
   }
 

@@ -71,6 +71,19 @@ function localGuide(): Plugin {
           res.end(JSON.stringify({ leads: localLeads }))
           return
         }
+        if (req.method === "DELETE") {
+          const url = new URL(req.url || "/", "http://local")
+          const id = url.searchParams.get("id") || ""
+          if (!id.startsWith("lead-")) {
+            res.statusCode = 400
+            res.end(JSON.stringify({ error: "bad-id" }))
+            return
+          }
+          const index = localLeads.findIndex((item) => item.id === id)
+          if (index >= 0) localLeads.splice(index, 1)
+          res.end(JSON.stringify({ ok: true }))
+          return
+        }
         res.statusCode = 405
         res.end(JSON.stringify({ error: "method" }))
       })()
@@ -90,8 +103,12 @@ function localGuide(): Plugin {
         const deskMod = await server.ssrLoadModule("/src/cms/hermesDesk.ts")
         const hermesMod = await server.ssrLoadModule("/src/cms/hermes.ts")
         const inquiryMod = await server.ssrLoadModule("/src/cms/inquiryDesk.ts")
-        const pack = () =>
-          deskMod.decorateDeskPayload({
+        const syncLeads = () => {
+          localDesk.cases = deskMod.importLeads(localDesk.cases, localLeads)
+        }
+        const pack = () => {
+          syncLeads()
+          return deskMod.decorateDeskPayload({
             cases: localDesk.cases,
             coach: localDesk.coach,
             events: localDesk.events,
@@ -102,6 +119,7 @@ function localGuide(): Plugin {
             attachable: deskMod.publicAttachable(deskMod.attachableLeads(localDesk.cases, localLeads)),
             inquiry: localDesk.inquiry,
           })
+        }
         const pushEvent = (kind: string, text: string, caseId?: string) => {
           localDesk.events = [
             ...localDesk.events,
@@ -157,6 +175,57 @@ function localGuide(): Plugin {
             }
             localDesk.inquiry = { ...localDesk.inquiry, targets: next.targets }
             pushEvent("update", "询单：更新要找的厂商弊端")
+            res.end(JSON.stringify(pack()))
+            return
+          }
+          if (action === "job") {
+            const next = inquiryMod.applyStaffJob(localDesk.inquiry.job, localDesk.inquiry.targets, body.status)
+            if (next.error === "empty") {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: "empty" }))
+              return
+            }
+            if (next.error === "hermes-only") {
+              res.statusCode = 403
+              res.end(JSON.stringify({ error: "hermes-only" }))
+              return
+            }
+            localDesk.inquiry = { ...localDesk.inquiry, job: next.job }
+            pushEvent("update", `询单：${next.job.status}`)
+            res.end(JSON.stringify(pack()))
+            return
+          }
+          if (action === "file") {
+            const findingId = typeof body.findingId === "string" ? body.findingId : ""
+            const result = deskMod.fileFinding(localDesk.inquiry, localDesk.cases, findingId)
+            if (result.error) {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: result.error }))
+              return
+            }
+            localDesk.inquiry = result.inquiry
+            localDesk.cases = result.cases
+            pushEvent("update", `询单：建档 ${result.case?.org || ""}`.trim(), result.case?.id)
+            res.end(JSON.stringify(pack()))
+            return
+          }
+          if (action === "attach") {
+            const leadId = typeof body.leadId === "string" ? body.leadId : ""
+            const result = deskMod.attachLead(localDesk.cases, localLeads, leadId)
+            if (result.error === "missing") {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: "missing" }))
+              return
+            }
+            localDesk.cases = result.cases
+            pushEvent("update", `接入线索 ${result.case?.name || leadId}`, result.case?.id)
+            res.end(JSON.stringify(pack()))
+            return
+          }
+          if (action === "import") {
+            const before = localDesk.cases.length
+            syncLeads()
+            pushEvent("update", `接入前台线索 ${Math.max(0, localDesk.cases.length - before)} 条`)
             res.end(JSON.stringify(pack()))
             return
           }

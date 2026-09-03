@@ -17,6 +17,7 @@ export type InquiryFinding = {
   contact?: string
   outreach: InquiryOutreach
   draft?: string
+  caseId?: string
 }
 
 export type InquiryJob = {
@@ -182,6 +183,7 @@ export function sanitizeFinding(raw: unknown, now = new Date().toISOString()): I
     contact: clean(row.contact, 200) || undefined,
     outreach: asOutreach(row.outreach),
     draft: clean(row.draft, 2000) || undefined,
+    caseId: clean(row.caseId, 80) || undefined,
   }
 }
 
@@ -190,6 +192,8 @@ export function applyInquiryFindings(current: InquiryFinding[], raw: unknown[], 
   for (const item of raw) {
     const finding = sanitizeFinding(item, now)
     if (!finding) continue
+    const prev = next.find((row) => row.id === finding.id || row.org === finding.org)
+    if (prev?.caseId && !finding.caseId) finding.caseId = prev.caseId
     next = [finding, ...next.filter((row) => row.id !== finding.id && row.org !== finding.org)]
   }
   return next
@@ -210,6 +214,26 @@ export function applyInquiryState(current: InquiryState, raw: { findings?: unkno
     targets: current.targets,
     findings: Array.isArray(raw.findings) ? applyInquiryFindings(current.findings, raw.findings, now) : current.findings,
     job: raw.job ? applyInquiryJob(current.job, raw.job, now) : current.job,
+  }
+}
+
+export function applyStaffJob(
+  current: InquiryJob,
+  targets: InquiryTarget[],
+  status: unknown,
+  now = new Date().toISOString(),
+) {
+  if (status !== "searching" && status !== "paused" && status !== "idle") {
+    return { job: current, error: "hermes-only" as const }
+  }
+  if (status === "searching" && targets.length === 0) return { job: current, error: "empty" as const }
+  return {
+    job: {
+      status,
+      brief: targets.map((item) => item.label).join("、") || current.brief,
+      updatedAt: now,
+    },
+    error: null,
   }
 }
 

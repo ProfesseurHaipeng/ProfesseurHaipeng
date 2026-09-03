@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   addInquiryTarget,
   applyInquiryState,
+  applyStaffJob,
   applyTargetWrite,
   emptyInquiry,
   extractInquiryUpdates,
@@ -77,5 +78,13 @@ describe("inquiry module on the desk", () => {
     expect(inquiryStepFill("review", 2, 2)).toBe("now")
     expect(inquiryRunHint("review", 2)).toContain("核实来源")
     expect(inquiryRunHint("idle", 0)).toContain("先设定")
+  })
+
+  it("lets staff start or pause a job but not mark review themselves", () => {
+    const started = applyStaffJob({ status: "idle", brief: "", updatedAt: "" }, [{ id: "tg-1", label: "土壤板结", at: now }], "searching", now)
+    expect(started.error).toBeNull()
+    expect(started.job.status).toBe("searching")
+    expect(applyStaffJob(started.job, [{ id: "tg-1", label: "土壤板结", at: now }], "review", now).error).toBe("hermes-only")
+    expect(applyStaffJob(started.job, [], "searching", now).error).toBe("empty")
   })
 })

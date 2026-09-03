@@ -38,6 +38,24 @@ export function LeadsPanel({ auth }: { auth: AdminAuth }) {
     void load()
   }, [load])
 
+  const attach = async (lead: Lead) => {
+    try {
+      const response = await fetch(withBase("api/hermes-desk"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Admin-User": auth.user,
+          "X-Admin-Pass": auth.pass,
+        },
+        body: JSON.stringify({ action: "attach", leadId: lead.id }),
+      })
+      const payload = (await response.json()) as { error?: string }
+      if (!response.ok) throw new Error(payload.error || `接口返回 ${response.status}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "接入失败")
+    }
+  }
+
   const remove = async (lead: Lead) => {
     if (!window.confirm(`删除 ${lead.name} 的这条线索？删除后无法恢复。`)) return
     try {
@@ -58,7 +76,7 @@ export function LeadsPanel({ auth }: { auth: AdminAuth }) {
         <div>
           <h2>前台线索</h2>
           <p className="admin-hint">
-            访客在「联络 · 留一条线索」提交后会记录在这里{leads.length ? `，当前 ${leads.length} 条` : ""}。
+            访客在「联络 · 留一条线索」提交后会记录在这里{leads.length ? `，当前 ${leads.length} 条` : ""}。接入工作台后会出现在工单档案。
           </p>
         </div>
         <button type="button" className="btn btn--ghost" onClick={() => void load()} disabled={loading}>
@@ -88,6 +106,9 @@ export function LeadsPanel({ auth }: { auth: AdminAuth }) {
               ) : (
                 <span className="admin-lead__contact">{lead.contact || "未留联系方式"}</span>
               )}
+              <button type="button" className="hermes-link" onClick={() => void attach(lead)}>
+                接入工作台
+              </button>
               <button type="button" className="admin-lead__delete" onClick={() => void remove(lead)}>
                 删除
               </button>

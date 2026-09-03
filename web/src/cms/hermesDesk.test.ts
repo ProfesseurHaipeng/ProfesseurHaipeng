@@ -4,6 +4,7 @@ import {
   applyResume,
   applyTakeover,
   attachLead,
+  fileFinding,
   boardMetrics,
   buildCoachMessages,
   caseFromLead,
@@ -108,7 +109,7 @@ describe("hermes desk cases", () => {
     expect(again.case.replyPaceMin).toBe(60)
   })
 
-  it("does not turn contact-form leads into Hermes cases", () => {
+  it("turns real form leads into tickets and files inquiry findings", () => {
     const lead: Lead = {
       id: "lead-1",
       at: now,
@@ -118,8 +119,26 @@ describe("hermes desk cases", () => {
       note: "茶叶基地",
       source: "form",
     }
-    expect(importLeads([], [lead], now)).toHaveLength(0)
-    expect(attachLead([], [lead], "lead-1", now).error).toBe("not-ai")
+    const imported = importLeads([], [lead], now)
+    expect(imported).toHaveLength(1)
+    expect(imported[0]?.source).toBe("form")
+    expect(attachLead([], [lead], "lead-1", now).error).toBeNull()
+    const filed = fileFinding(
+      {
+        targets: [],
+        findings: [{ id: "find-1", at: now, org: "绿田加工厂", source: "同事名片", outreach: "draft" }],
+        job: { status: "review", brief: "土壤板结", updatedAt: now },
+      },
+      [],
+      "find-1",
+      now,
+    )
+    expect(filed.error).toBeNull()
+    expect(filed.case?.factory).toBe("绿田加工厂")
+    expect(filed.inquiry.findings[0]?.caseId).toBe(filed.case?.id)
+    expect(fileFinding({ targets: [], findings: [], job: { status: "idle", brief: "", updatedAt: "" } }, [], "missing").error).toBe(
+      "missing",
+    )
   })
 
   it("keeps front-of-house context free of desk fields", () => {
@@ -133,11 +152,13 @@ describe("hermes desk cases", () => {
     expect(extra).not.toContain("内部看好")
   })
 
-  it("hides form-only cards from the live board and can prune them", () => {
-    const form = sample({ id: "case-form", source: "form", visitorId: undefined, reaction: "", evaluation: "", energy: "unset" })
+  it("keeps real form tickets on the live board and can prune empty stubs", () => {
+    const form = sample({ id: "case-form", source: "form", leadId: "lead-1", visitorId: undefined, reaction: "", evaluation: "", energy: "unset" })
+    const stub = sample({ id: "case-stub", source: "form", leadId: undefined, visitorId: undefined, gone: true })
     const live = sample()
-    expect(filterHermesCases([form, live], { origin: "live" })).toHaveLength(1)
-    expect(pruneUnspokenCases([form, live]).map((item) => item.id)).toEqual(["case-1"])
+    expect(filterHermesCases([form, live], { origin: "live" }).map((item) => item.id).sort()).toEqual(["case-1", "case-form"])
+    expect(filterHermesCases([form, stub, live], { origin: "live" }).map((item) => item.id).sort()).toEqual(["case-1", "case-form"])
+    expect(pruneUnspokenCases([form, live]).map((item) => item.id).sort()).toEqual(["case-1", "case-form"])
   })
 
   it("recognizes a human-owned visitor", () => {
@@ -275,6 +296,10 @@ describe("desk board telemetry", () => {
     expect(isStaffAction("health")).toBe(true)
     expect(isStaffAction("coach")).toBe(true)
     expect(isStaffAction("targets")).toBe(true)
+    expect(isStaffAction("job")).toBe(true)
+    expect(isStaffAction("file")).toBe(true)
+    expect(isStaffAction("attach")).toBe(true)
+    expect(isStaffAction("import")).toBe(true)
     expect(isStaffAction("takeover")).toBe(false)
     expect(isStaffAction("update")).toBe(false)
     expect(isStaffAction("memory")).toBe(false)

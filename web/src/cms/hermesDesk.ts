@@ -95,7 +95,14 @@ export function newEventId(now = Date.now()) {
 }
 
 export function isLiveCase(item: HermesCase) {
-  return item.source === "ai" || Boolean(item.visitorId)
+  if (item.gone) return false
+  return (
+    item.source === "ai" ||
+    item.source === "form" ||
+    item.source === "manual" ||
+    Boolean(item.visitorId) ||
+    Boolean(item.leadId)
+  )
 }
 
 const MAX = {
@@ -149,10 +156,18 @@ export const CHANNEL_LABEL: Record<HermesChannel, string> = {
   unset: "未知",
 }
 
-export const STAFF_ACTIONS = ["health", "coach", "targets"] as const
+export const STAFF_ACTIONS = ["health", "coach", "targets", "job", "file", "attach", "import"] as const
 
 export function isStaffAction(action: string) {
-  return action === "health" || action === "coach" || action === "targets"
+  return (
+    action === "health" ||
+    action === "coach" ||
+    action === "targets" ||
+    action === "job" ||
+    action === "file" ||
+    action === "attach" ||
+    action === "import"
+  )
 }
 
 export function progressRatio(progress: HermesProgress) {
@@ -471,10 +486,7 @@ export function pipelineStats(cases: HermesCase[]) {
 }
 
 export function attachableLeads(cases: HermesCase[], leads: Lead[]) {
-  return leads.filter((lead) => {
-    if (lead.source !== "ai") return false
-    return !findHermesCase(cases, { leadId: lead.id, contact: lead.contact || lead.email })
-  })
+  return leads.filter((lead) => !findHermesCase(cases, { leadId: lead.id, contact: lead.contact || lead.email }))
 }
 
 export function publicAttachable(leads: Lead[]) {
@@ -490,7 +502,6 @@ export function publicAttachable(leads: Lead[]) {
 export function attachLead(cases: HermesCase[], leads: Lead[], leadId: string, now = new Date().toISOString()) {
   const lead = leads.find((item) => item.id === leadId)
   if (!lead) return { cases, case: null as HermesCase | null, error: "missing" as const }
-  if (lead.source !== "ai") return { cases, case: null, error: "not-ai" as const }
   const hit = findHermesCase(cases, { leadId: lead.id, contact: lead.contact || lead.email })
   if (hit) return { cases, case: hit, error: "exists" as const }
   const created = caseFromLead(lead, now, cases)
@@ -790,12 +801,68 @@ export function upsertFromVisit(
 export function importLeads(cases: HermesCase[], leads: Lead[], now = new Date().toISOString()) {
   let next = cases
   for (const lead of leads) {
-    if (lead.source !== "ai") continue
     const hit = findHermesCase(next, { leadId: lead.id, contact: lead.contact || lead.email })
     if (hit) continue
     next = [caseFromLead(lead, now, next), ...next]
   }
   return sortHermesCases(next)
+}
+
+export function fileFinding(
+  inquiry: InquiryState,
+  cases: HermesCase[],
+  findingId: string,
+  now = new Date().toISOString(),
+) {
+  const finding = inquiry.findings.find((item) => item.id === findingId)
+  if (!finding) return { inquiry, cases, case: null as HermesCase | null, error: "missing" as const }
+  if (!finding.org || !finding.source) return { inquiry, cases, case: null, error: "unverified" as const }
+  const existing =
+    (finding.caseId && cases.find((item) => item.id === finding.caseId)) ||
+    cases.find((item) => factoryName(item) === finding.org || item.org === finding.org)
+  const note = [finding.pain, `来源：${finding.source}`].filter(Boolean).join(" · ")
+  const created = existing
+    ? patchHermesCase(
+        existing,
+        {
+          factory: finding.org,
+          org: existing.org || finding.org,
+          place: finding.place || existing.place,
+          contact: finding.contact || existing.contact,
+          note: existing.note || note,
+        },
+        now,
+      )
+    : {
+        id: newHermesCaseId(),
+        at: now,
+        updatedAt: now,
+        name: finding.org,
+        org: finding.org,
+        factory: finding.org,
+        ticketNo: newTicketNo(cases, now),
+        contact: finding.contact || "",
+        note,
+        place: finding.place,
+        owner: "hermes" as const,
+        following: true,
+        progress: "new" as const,
+        reaction: "",
+        evaluation: "",
+        energy: "unset" as const,
+        source: "manual" as const,
+        ...emptyTelemetry(),
+        lastChannel: "unset" as const,
+      }
+  return {
+    inquiry: {
+      ...inquiry,
+      findings: inquiry.findings.map((item) => (item.id === finding.id ? { ...item, caseId: created.id } : item)),
+    },
+    cases: sortHermesCases([created, ...cases.filter((item) => item.id !== created.id)]),
+    case: created,
+    error: null,
+  }
 }
 
 export function pruneUnspokenCases(cases: HermesCase[]) {

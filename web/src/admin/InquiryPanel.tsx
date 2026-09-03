@@ -12,15 +12,21 @@ const SUGGEST = ["土壤板结", "化肥成本高", "有机肥短缺", "水稻�
 export function InquiryPanel({
   inquiry,
   busy,
+  hermesReady,
   onAdd,
   onRemove,
   onAssign,
+  onFile,
+  onOpenTicket,
 }: {
   inquiry: InquiryState
   busy?: boolean
+  hermesReady?: boolean
   onAdd: (label: string) => Promise<void>
   onRemove: (id: string) => Promise<void>
   onAssign: (message: string) => Promise<void>
+  onFile: (findingId: string) => Promise<void>
+  onOpenTicket: (caseId: string) => void
 }) {
   const [label, setLabel] = useState("")
   const [open, setOpen] = useState<{ id: string; kind: "source" | "draft" } | null>(null)
@@ -42,7 +48,12 @@ export function InquiryPanel({
   }
   const unusedSuggest = SUGGEST.filter((item) => !inquiry.targets.some((row) => row.label === item))
   const hint = inquiryRunHint(inquiry.job.status, inquiry.targets.length)
-  const note = inquiry.job.brief ? `${hint} ${inquiry.job.brief}` : hint
+  const note =
+    inquiry.job.status === "searching" && !hermesReady
+      ? "任务已记下。网关接通后才会找来源，没有来源不建档。"
+      : inquiry.job.brief
+        ? `${hint} ${inquiry.job.brief}`
+        : hint
 
   return (
     <section className="inq-board">
@@ -102,100 +113,104 @@ export function InquiryPanel({
             )
           })}
         </ol>
-        <p className="inq-step-note">
-          {busy ? "指令已交给 Karmenai。网关接通后会按这四步走，没有来源不建档。" : note}
-        </p>
+        <p className="inq-step-note">{busy ? "正在把任务写入工作台。" : note}</p>
       </article>
 
       <article className="inq-card">
         <p className="inq-card__mark">C) 结果行</p>
-        <div className="inq-table-wrap">
-          <table className="inq-table">
-            <thead>
-              <tr>
-                <th>厂商</th>
-                <th>对口类型</th>
-                <th>来源</th>
-                <th>询单草稿</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {inquiry.findings.length === 0 ? (
-                <tr className="inq-table__ghost">
-                  <td>—</td>
-                  <td>—</td>
-                  <td>—</td>
-                  <td>—</td>
-                  <td>
-                    <span className="inq-ops">
-                      <span>看来源</span>
-                      <span>看草稿</span>
-                      <span>建档</span>
-                    </span>
-                  </td>
-                </tr>
-              ) : (
-                inquiry.findings.map((item) => (
-                  <FindingRow
-                    key={item.id}
+        {inquiry.findings.length === 0 ? (
+          <p className="inq-empty">尚无。有真实来源后，每家厂会出现在这里，并带询单草稿。</p>
+        ) : (
+          <>
+            <div className="inq-table-wrap">
+              <table className="inq-table">
+                <thead>
+                  <tr>
+                    <th>厂商</th>
+                    <th>对口类型</th>
+                    <th>来源</th>
+                    <th>询单草稿</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inquiry.findings.map((item) => (
+                    <FindingRow
+                      key={item.id}
+                      item={item}
+                      open={open}
+                      busy={busy}
+                      onOpen={setOpen}
+                      onFile={() => void onFile(item.id)}
+                      onOpenTicket={onOpenTicket}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ul className="inq-cards">
+              {inquiry.findings.map((item) => (
+                <li key={item.id}>
+                  <FindingMini
                     item={item}
                     open={open}
                     busy={busy}
                     onOpen={setOpen}
-                    onFile={() =>
-                      void onAssign(
-                        `把这家厂建档：${item.org}。来源是 ${item.source || "尚无"}。没有把握不要编，也不要群发。`,
-                      )
-                    }
+                    onFile={() => void onFile(item.id)}
+                    onOpenTicket={onOpenTicket}
                   />
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <ul className="inq-cards">
-          {inquiry.findings.length === 0 ? (
-            <li className="inq-mini is-empty">
-              <span>—</span>
-              <span className="inq-ops">
-                <span>看来源</span>
-                <span>看草稿</span>
-                <span>建档</span>
-              </span>
-            </li>
-          ) : (
-            inquiry.findings.map((item) => (
-              <li key={item.id}>
-                <FindingMini
-                  item={item}
-                  open={open}
-                  busy={busy}
-                  onOpen={setOpen}
-                  onFile={() =>
-                    void onAssign(
-                      `把这家厂建档：${item.org}。来源是 ${item.source || "尚无"}。没有把握不要编，也不要群发。`,
-                    )
-                  }
-                />
-              </li>
-            ))
-          )}
-        </ul>
-        {inquiry.findings.length === 0 ? (
-          <p className="inq-empty">尚无。有真实来源后，每家厂会出现在这里，并带询单草稿。</p>
-        ) : null}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </article>
 
-      <p className="inq-foot">只读看板 · 建档和发信仍需指令</p>
+      <p className="inq-foot">建档会写入工单档案。站点没有发信接口，所以没有群发。</p>
     </section>
   )
 }
 
-function shortText(value: string | undefined, empty = "—") {
+function shortText(value: string | undefined, empty = "尚无") {
   const text = (value || "").replace(/\s+/g, " ").trim()
   if (!text) return empty
   return text.length > 24 ? `${text.slice(0, 24)}…` : text
+}
+
+function FindingOps({
+  item,
+  shown,
+  busy,
+  onOpen,
+  onFile,
+  onOpenTicket,
+}: {
+  item: InquiryFinding
+  shown: "source" | "draft" | null
+  busy?: boolean
+  onOpen: (next: { id: string; kind: "source" | "draft" } | null) => void
+  onFile: () => void
+  onOpenTicket: (caseId: string) => void
+}) {
+  return (
+    <span className="inq-ops">
+      <button type="button" onClick={() => onOpen(shown === "source" ? null : { id: item.id, kind: "source" })}>
+        看来源
+      </button>
+      <button type="button" onClick={() => onOpen(shown === "draft" ? null : { id: item.id, kind: "draft" })}>
+        看草稿
+      </button>
+      {item.caseId ? (
+        <button type="button" onClick={() => onOpenTicket(item.caseId!)}>
+          看工单
+        </button>
+      ) : (
+        <button type="button" disabled={busy} onClick={onFile}>
+          建档
+        </button>
+      )}
+    </span>
+  )
 }
 
 function FindingRow({
@@ -204,33 +219,25 @@ function FindingRow({
   busy,
   onOpen,
   onFile,
+  onOpenTicket,
 }: {
   item: InquiryFinding
   open: { id: string; kind: "source" | "draft" } | null
   busy?: boolean
   onOpen: (next: { id: string; kind: "source" | "draft" } | null) => void
   onFile: () => void
+  onOpenTicket: (caseId: string) => void
 }) {
   const shown = open?.id === item.id ? open.kind : null
   return (
     <>
       <tr>
         <td>{item.org}</td>
-        <td>{item.pain || "—"}</td>
+        <td>{item.pain || "尚无"}</td>
         <td>{shortText(item.source)}</td>
         <td>{shortText(item.draft)}</td>
         <td>
-          <span className="inq-ops">
-            <button type="button" onClick={() => onOpen(shown === "source" ? null : { id: item.id, kind: "source" })}>
-              看来源
-            </button>
-            <button type="button" onClick={() => onOpen(shown === "draft" ? null : { id: item.id, kind: "draft" })}>
-              看草稿
-            </button>
-            <button type="button" disabled={busy} onClick={onFile}>
-              建档
-            </button>
-          </span>
+          <FindingOps item={item} shown={shown} busy={busy} onOpen={onOpen} onFile={onFile} onOpenTicket={onOpenTicket} />
         </td>
       </tr>
       {shown ? (
@@ -248,29 +255,21 @@ function FindingMini({
   busy,
   onOpen,
   onFile,
+  onOpenTicket,
 }: {
   item: InquiryFinding
   open: { id: string; kind: "source" | "draft" } | null
   busy?: boolean
   onOpen: (next: { id: string; kind: "source" | "draft" } | null) => void
   onFile: () => void
+  onOpenTicket: (caseId: string) => void
 }) {
   const shown = open?.id === item.id ? open.kind : null
   return (
     <article className="inq-mini">
       <strong>{item.org}</strong>
       <span>{item.pain || "对口类型尚无"}</span>
-      <span className="inq-ops">
-        <button type="button" onClick={() => onOpen(shown === "source" ? null : { id: item.id, kind: "source" })}>
-          看来源
-        </button>
-        <button type="button" onClick={() => onOpen(shown === "draft" ? null : { id: item.id, kind: "draft" })}>
-          看草稿
-        </button>
-        <button type="button" disabled={busy} onClick={onFile}>
-          建档
-        </button>
-      </span>
+      <FindingOps item={item} shown={shown} busy={busy} onOpen={onOpen} onFile={onFile} onOpenTicket={onOpenTicket} />
       {shown ? <p>{shown === "source" ? item.source || "来源尚无" : item.draft || "草稿尚无"}</p> : null}
     </article>
   )
