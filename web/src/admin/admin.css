@@ -317,237 +317,479 @@
   }
 }
 
-.hermes-desk {
+.admin-shell--hermes {
+  background: #0b0c0f;
+  color: #ececf1;
+}
+
+.admin-shell--hermes .admin-side {
+  background: #111214;
+  border-right-color: #22242a;
+  color: #ececf1;
+}
+
+.admin-shell--hermes .admin-hint,
+.admin-shell--hermes .latin-kicker,
+.admin-shell--hermes .admin-side a {
+  color: #9a9aa6;
+}
+
+.admin-shell--hermes .admin-side button {
+  color: #d6d6de;
+}
+
+.admin-shell--hermes .admin-side button.is-active {
+  background: #1d1f27;
+  color: #fff;
+}
+
+.admin-shell--hermes .admin-logout {
+  color: #f0a8a0;
+}
+
+.admin-main--hermes {
+  padding: 0;
+  display: block;
+  min-height: 100vh;
+  background: #0b0c0f;
+}
+
+.hermes-grok {
+  --hg-bg: #0b0c0f;
+  --hg-panel: #14151a;
+  --hg-line: #262833;
+  --hg-ink: #f4f4f7;
+  --hg-muted: #9a9aa6;
+  --hg-soft: #1c1d24;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-height: 100vh;
+  background: var(--hg-bg);
+  color: var(--hg-ink);
+}
+
+.hermes-grok__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--hg-line);
+}
+
+.hermes-grok__brand {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.hermes-grok__brand strong {
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
+}
+
+.hermes-grok__brand span,
+.hermes-grok__probe,
+.hermes-grok__empty,
+.hermes-grok__file header p,
+.hermes-grok__typing {
+  color: var(--hg-muted);
+  font-size: 0.8rem;
+}
+
+.hermes-grok__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  border: 1px solid var(--hg-line);
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  font-size: 0.8rem;
+  background: var(--hg-soft);
+}
+
+.hermes-grok__status i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #f87171;
+}
+
+.hermes-grok__status em {
+  font-style: normal;
+  color: var(--hg-muted);
+}
+
+.hermes-grok__status--connected i {
+  background: #34d399;
+}
+
+.hermes-grok__status--connecting i {
+  background: #fbbf24;
+  animation: hermes-pulse 1s ease-in-out infinite;
+}
+
+.hermes-grok__status--disconnected i {
+  background: #f87171;
+}
+
+@keyframes hermes-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.hermes-grok__tools,
+.hermes-grok__tabs,
+.hermes-grok__attn,
+.hermes-grok__filters,
+.hermes-grok__hello div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.hermes-grok__ghost,
+.hermes-grok__tabs button,
+.hermes-grok__attn button,
+.hermes-grok__pipe button,
+.hermes-grok__hello button,
+.hermes-grok__file footer button,
+.hermes-grok__memory button,
+.hermes-grok__attach button,
+.hermes-grok__composer button,
+.hermes-grok__file form button {
+  border: 1px solid var(--hg-line);
+  background: var(--hg-soft);
+  color: var(--hg-ink);
+  border-radius: 999px;
+  padding: 0.32rem 0.7rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.hermes-grok__composer button {
+  border-radius: 0.9rem;
+  padding: 0.55rem 0.95rem;
+  background: #f4f4f7;
+  color: #111;
+  border-color: #f4f4f7;
+}
+
+.hermes-grok__tabs {
+  display: none;
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid var(--hg-line);
+}
+
+.hermes-grok__tabs button.is-on,
+.hermes-grok__pipe button.is-on,
+.hermes-grok__people button.is-on {
+  background: #f4f4f7;
+  color: #111;
+  border-color: #f4f4f7;
+}
+
+.hermes-grok__error {
+  margin: 0;
+  padding: 0.45rem 1rem;
+  color: #fecaca;
+  background: #3b1d1d;
+}
+
+.hermes-grok__body {
+  display: grid;
+  grid-template-columns: minmax(16rem, 18.5rem) minmax(0, 1fr) minmax(18rem, 21rem);
+  min-height: 0;
+}
+
+.hermes-grok__rail,
+.hermes-grok__file {
+  border-color: var(--hg-line);
+  background: var(--hg-panel);
+  padding: 0.85rem 0.8rem 1.4rem;
+  overflow: auto;
   display: grid;
   gap: 1rem;
   align-content: start;
 }
 
-.hermes-desk__head {
+.hermes-grok__rail {
+  border-right: 1px solid var(--hg-line);
+}
+
+.hermes-grok__file {
+  border-left: 1px solid var(--hg-line);
+}
+
+.hermes-grok h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hg-muted);
+}
+
+.hermes-grok__pills {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 0.55rem;
+  padding: 0;
+}
+
+.hermes-grok__pills li {
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  background: var(--hg-soft);
+  font-size: 0.74rem;
+  color: #c7c7d1;
+}
+
+.hermes-grok__pipe {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.hermes-grok__pipe button {
   display: flex;
   justify-content: space-between;
-  align-items: end;
-  gap: 1rem;
-  flex-wrap: wrap;
+  border-radius: 0.65rem;
 }
 
-.hermes-desk__head h2 {
-  margin: 0 0 0.2rem;
-  font-size: 1.25rem;
-}
-
-.hermes-desk__tools {
+.hermes-grok__people header,
+.hermes-grok__attach li,
+.hermes-grok__file header,
+.hermes-grok__file footer,
+.hermes-grok__file form {
   display: flex;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.hermes-desk__stats {
+.hermes-grok__people input,
+.hermes-grok__people select,
+.hermes-grok__edit input,
+.hermes-grok__edit select,
+.hermes-grok__file form input,
+.hermes-grok__memory textarea,
+.hermes-grok__composer textarea {
+  width: 100%;
+  border: 1px solid var(--hg-line);
+  background: #0e0f13;
+  color: var(--hg-ink);
+  border-radius: 0.7rem;
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+}
+
+.hermes-grok__people ul,
+.hermes-grok__attach,
+.hermes-grok__time ol {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
+  display: grid;
+  gap: 0.35rem;
 }
 
-.hermes-desk__stats li,
-.hermes-tag {
-  border-radius: 999px;
-  padding: 0.2rem 0.65rem;
-  font-size: 0.78rem;
-  background: #eceef8;
-  color: #4f5498;
+.hermes-grok__people button {
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.6rem;
+  display: grid;
+  gap: 0.15rem;
+  cursor: pointer;
 }
 
-.hermes-desk__filters {
-  display: flex;
-  flex-wrap: wrap;
+.hermes-grok__people button span,
+.hermes-grok__people button em,
+.hermes-grok__time time {
+  font-size: 0.72rem;
+  color: var(--hg-muted);
+  font-style: normal;
+}
+
+.hermes-grok__chat {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  min-height: 0;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.03), transparent 28rem),
+    var(--hg-bg);
+}
+
+.hermes-grok__log {
+  overflow: auto;
+  padding: 1.5rem 1.2rem 0.6rem;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+}
+
+.hermes-grok__hello {
+  min-height: 18rem;
+  display: grid;
+  place-content: center;
+  text-align: center;
   gap: 0.7rem;
+  color: var(--hg-muted);
 }
 
-.hermes-desk__filters label,
-.hermes-case__edit label {
+.hermes-grok__hello h2 {
+  margin: 0;
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  color: #fff;
+  letter-spacing: -0.04em;
+}
+
+.hermes-grok__hello p {
+  margin: 0 auto;
+  max-width: 26rem;
+}
+
+.hermes-grok__hello div {
+  justify-content: center;
+}
+
+.hermes-grok__bubble {
+  max-width: min(40rem, 92%);
   display: grid;
   gap: 0.25rem;
-  font-size: 0.8rem;
-  color: #5f5f6a;
 }
 
-.hermes-desk__filters select,
-.hermes-desk__filters input,
-.hermes-case__edit select,
-.hermes-case__edit input,
-.hermes-coach__form textarea {
-  border: 1px solid #eceef8;
-  background: #fff;
-  padding: 0.45rem 0.6rem;
-  font: inherit;
+.hermes-grok__bubble p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+  padding: 0.75rem 0.9rem;
+  border-radius: 1.1rem;
+  background: var(--hg-soft);
+}
+
+.hermes-grok__bubble time {
+  font-size: 0.7rem;
+  color: var(--hg-muted);
+}
+
+.hermes-grok__bubble--staff {
+  justify-self: end;
+}
+
+.hermes-grok__bubble--staff p {
+  background: #f4f4f7;
   color: #111;
 }
 
-.hermes-desk__search {
-  flex: 1 1 12rem;
+.hermes-grok__bubble--staff time {
+  text-align: right;
 }
 
-.hermes-desk__grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(18rem, 0.9fr);
-  gap: 1rem;
-  align-items: start;
-}
-
-.hermes-desk__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.7rem;
-}
-
-.hermes-case {
-  border: 1px solid #eceef8;
-  border-radius: 0.7rem;
-  background: #fff;
-  padding: 0.85rem 1rem;
-  display: grid;
-  gap: 0.55rem;
-}
-
-.hermes-case.is-human {
-  border-color: #e8d0c8;
-  background: #fffaf8;
-}
-
-.hermes-case header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-
-.hermes-tag--human {
-  background: #fde8e2;
-  color: #8a2f1d;
-}
-
-.hermes-tag--hermes {
-  background: #fdf1de;
-  color: #8a5a17;
-}
-
-.hermes-tag--high {
-  background: #e6f6ee;
-  color: #1f6b43;
-}
-
-.hermes-tag--low {
-  background: #f3f3f5;
-  color: #6b6b74;
-}
-
-.hermes-case__note,
-.hermes-case__meta dd,
-.hermes-coach__row p {
-  margin: 0;
-  white-space: pre-wrap;
-  line-height: 1.5;
-}
-
-.hermes-case__meta {
-  margin: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.45rem 0.8rem;
-}
-
-.hermes-case__meta dt {
-  font-size: 0.75rem;
-  color: #8a8a96;
-}
-
-.hermes-case__edit {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-}
-
-.hermes-case footer,
-.hermes-coach__form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.hermes-coach {
-  border: 1px solid #eceef8;
-  border-radius: 0.7rem;
-  background: #fff;
-  padding: 0.85rem;
-  display: grid;
-  gap: 0.65rem;
-  position: sticky;
-  top: 0.8rem;
-  min-height: 28rem;
-}
-
-.hermes-coach h3 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-.hermes-coach__log {
-  display: grid;
-  gap: 0.55rem;
-  align-content: start;
-  max-height: 22rem;
-  overflow: auto;
-}
-
-.hermes-coach__row {
-  display: grid;
-  gap: 0.2rem;
-  padding: 0.55rem 0.65rem;
-  border-radius: 0.65rem;
-  background: #f6f6fa;
-}
-
-.hermes-coach__row--staff {
-  background: #111;
-  color: #fff;
-  justify-self: end;
-  max-width: 92%;
-}
-
-.hermes-coach__row time {
-  font-size: 0.72rem;
-  color: #8a8a96;
-}
-
-.hermes-coach__row--staff time {
-  color: rgba(255, 255, 255, 0.62);
-}
-
-.hermes-coach__form {
+.hermes-grok__composer {
   display: grid;
   grid-template-columns: 1fr auto;
+  gap: 0.55rem;
   align-items: end;
+  padding: 0.7rem 1rem 0.35rem;
 }
 
-.hermes-coach__form textarea {
+.hermes-grok__composer textarea {
+  min-height: 3.4rem;
   resize: vertical;
-  min-height: 4.2rem;
+  border-radius: 1.1rem;
+  padding: 0.7rem 0.85rem;
 }
 
-@media (max-width: 980px) {
-  .hermes-desk__grid,
-  .hermes-case__meta,
-  .hermes-case__edit,
-  .hermes-coach__form {
+.hermes-grok__probe {
+  margin: 0 1rem 0.7rem;
+}
+
+.hermes-grok__clue,
+.hermes-grok__file dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.hermes-grok__file dl {
+  margin: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.hermes-grok__file dt {
+  font-size: 0.72rem;
+  color: var(--hg-muted);
+}
+
+.hermes-grok__edit {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.hermes-grok__edit label,
+.hermes-grok__memory {
+  display: grid;
+  gap: 0.28rem;
+  font-size: 0.78rem;
+  color: var(--hg-muted);
+}
+
+.hermes-grok__time li {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--hg-line);
+}
+
+@media (max-width: 1100px) {
+  .hermes-grok__tabs {
+    display: flex;
+  }
+
+  .hermes-grok__body {
     grid-template-columns: 1fr;
   }
 
-  .hermes-coach {
-    position: static;
-    min-height: 0;
+  .hermes-grok__rail,
+  .hermes-grok__file,
+  .hermes-grok__chat {
+    display: none;
+    border: 0;
+    min-height: calc(100vh - 8rem);
+  }
+
+  .hermes-grok__body--chat .hermes-grok__chat,
+  .hermes-grok__body--people .hermes-grok__rail,
+  .hermes-grok__body--file .hermes-grok__file {
+    display: grid;
+  }
+}
+
+@media (max-width: 860px) {
+  .admin-shell--hermes .admin-side {
+    border-bottom-color: #22242a;
+  }
+
+  .admin-shell--hermes .admin-side nav button {
+    background: #1c1d24;
+    color: #ececf1;
+  }
+
+  .admin-shell--hermes .admin-side nav button.is-active {
+    background: #f4f4f7;
+    color: #111;
+  }
+
+  .admin-main--hermes {
+    padding: 0;
   }
 }

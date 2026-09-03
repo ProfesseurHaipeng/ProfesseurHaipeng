@@ -5,8 +5,10 @@ import {
   buildHermesMessages,
   hermesEnvFrom,
   hermesHandoffHint,
+  hermesLinkInfo,
   hermesReady,
   hermesUnavailableReply,
+  probeHermes,
   resolveHermesReply,
 } from "./hermes"
 
@@ -22,6 +24,17 @@ describe("hermes env", () => {
     expect(env?.apiKey).toBe("local")
     expect(env?.model).toBe("weho-senior-advisor")
     expect(hermesReady({ HERMES_API_BASE: "https://hermes.example.com/v1" })).toBe(true)
+    expect(hermesLinkInfo({ HERMES_API_BASE: "https://hermes.example.com/v1" })).toMatchObject({
+      configured: true,
+      host: "hermes.example.com",
+      model: "weho-senior-advisor",
+    })
+  })
+
+  it("treats a missing gateway as disconnected", async () => {
+    const health = await probeHermes({})
+    expect(health.status).toBe("disconnected")
+    expect(health.detail).toContain("HERMES_API_BASE")
   })
 })
 
@@ -41,6 +54,8 @@ describe("hermes prompt", () => {
     expect(messages[0]?.content).toContain("邮箱必须先征得同意")
     expect(messages[0]?.content).toContain("工作群")
     expect(messages[0]?.content).toContain("不要提 NAS")
+    expect(messages[0]?.content).toContain("工作台")
+    expect(messages[0]?.content).toContain("权限边界")
     expect(messages.at(-1)?.content).toContain("水稻")
   })
 

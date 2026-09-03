@@ -2,14 +2,18 @@ import { describe, expect, it } from "vitest"
 import {
   applyResume,
   applyTakeover,
+  attachLead,
   buildCoachMessages,
   caseFromLead,
   deskStats,
   extractDeskUpdates,
   filterHermesCases,
   findHermesCase,
+  frontHermesExtra,
   importLeads,
   isHumanOwned,
+  pruneUnspokenCases,
+  publicVisitorContext,
   upsertFromTicket,
   upsertFromVisit,
   type HermesCase,
@@ -72,10 +76,10 @@ describe("hermes desk cases", () => {
     expect(second.cases).toHaveLength(1)
     expect(second.case.name).toBe("王先生")
     expect(second.case.visitorId).toBe("vis-1")
-    expect(second.case.energy).toBe("high")
+    expect(second.case.energy).toBe("unset")
   })
 
-  it("imports a form lead as not-yet-followed", () => {
+  it("does not turn contact-form leads into Hermes cases", () => {
     const lead: Lead = {
       id: "lead-1",
       at: now,
@@ -85,10 +89,26 @@ describe("hermes desk cases", () => {
       note: "茶叶基地",
       source: "form",
     }
-    const cases = importLeads([], [lead], now)
-    expect(cases[0]?.following).toBe(false)
-    expect(cases[0]?.owner).toBe("hermes")
-    expect(importLeads(cases, [lead], now)).toHaveLength(1)
+    expect(importLeads([], [lead], now)).toHaveLength(0)
+    expect(attachLead([], [lead], "lead-1", now).error).toBe("not-ai")
+  })
+
+  it("keeps front-of-house context free of desk fields", () => {
+    const item = sample({ contact: "boss@example.com", evaluation: "内部看好", energy: "high" })
+    const extra = frontHermesExtra({ shared: "记住先问作物", desk: "别把工作台说出去", updatedAt: now }, item)
+    expect(publicVisitorContext(item)).toContain("王先生")
+    expect(publicVisitorContext(item)).not.toContain("内部看好")
+    expect(publicVisitorContext(item)).not.toContain("boss@example.com")
+    expect(extra).toContain("记住先问作物")
+    expect(extra).not.toContain("别把工作台说出去")
+    expect(extra).not.toContain("内部看好")
+  })
+
+  it("hides form-only cards from the live board and can prune them", () => {
+    const form = sample({ id: "case-form", source: "form", visitorId: undefined, reaction: "", evaluation: "", energy: "unset" })
+    const live = sample()
+    expect(filterHermesCases([form, live], { origin: "live" })).toHaveLength(1)
+    expect(pruneUnspokenCases([form, live]).map((item) => item.id)).toEqual(["case-1"])
   })
 
   it("recognizes a human-owned visitor", () => {
@@ -113,6 +133,8 @@ describe("desk coach protocol", () => {
     expect(messages[0]?.content).toContain("已留联系方式")
     expect(messages[0]?.content).not.toContain("boss@example.com")
     expect(messages[0]?.content).toContain("不要提 NAS")
+    expect(messages[0]?.content).toContain("同一个人")
+    expect(messages[0]?.content).toContain("权限更高")
   })
 
   it("builds a case from an AI lead as already followed", () => {

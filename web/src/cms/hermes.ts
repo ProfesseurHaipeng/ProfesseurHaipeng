@@ -18,6 +18,59 @@ export function hermesReady(source: Record<string, string | undefined>) {
   return Boolean(hermesEnvFrom(source))
 }
 
+export function hermesLinkInfo(source: Record<string, string | undefined>) {
+  const hermes = hermesEnvFrom(source)
+  if (!hermes) return { configured: false, model: "", host: "" }
+  let host = ""
+  try {
+    host = new URL(hermes.baseUrl).host
+  } catch {
+    host = ""
+  }
+  return { configured: true, model: hermes.model, host }
+}
+
+export type HermesHealth = {
+  status: "connected" | "disconnected"
+  checkedAt: string
+  model?: string
+  detail?: string
+}
+
+/** Live probe. Configured env is not the same as a working gateway. */
+export async function probeHermes(source: Record<string, string | undefined>): Promise<HermesHealth> {
+  const hermes = hermesEnvFrom(source)
+  const checkedAt = new Date().toISOString()
+  if (!hermes) {
+    return { status: "disconnected", checkedAt, detail: "未配置 HERMES_API_BASE" }
+  }
+  const headers = { Authorization: `Bearer ${hermes.apiKey}` }
+  const signal = AbortSignal.timeout(8000)
+  try {
+    const models = await fetch(`${hermes.baseUrl}/models`, { headers, signal })
+    if (models.ok) return { status: "connected", checkedAt, model: hermes.model }
+    const ping = await fetch(`${hermes.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      signal,
+      body: JSON.stringify({
+        model: hermes.model,
+        max_tokens: 1,
+        messages: [{ role: "user", content: "ping" }],
+      }),
+    })
+    if (ping.ok) return { status: "connected", checkedAt, model: hermes.model }
+    return { status: "disconnected", checkedAt, model: hermes.model, detail: `网关 ${models.status}` }
+  } catch {
+    return { status: "disconnected", checkedAt, model: hermes.model, detail: "网关不可达" }
+  }
+}
+
+export const HERMES_FRONT_BOUNDARY = `【权限边界：前台】
+- 你和后台工作台是同一个 Hermes，共用长期记忆。后台权限更高，前台只有这一场客户对话。
+- 禁止提及后台工作台、同事指令、其他客户、接管名单、内部评价、desk 记忆。
+- 客户问你是不是后台系统、有没有看到别的客户，就说你只处理眼前这场合作，然后回到作物和吨位。`
+
 const HERMES_RULES = `你是「菲律宾皮纳图博火山灰农业综合产业项目」的高级顾问 Hermes。你从产品顾问小林手里接手这场对话，代表项目方继续谈，不是外部顾问，也不是客服机器人。
 
 【接手方式】
@@ -36,6 +89,8 @@ const HERMES_RULES = `你是「菲律宾皮纳图博火山灰农业综合产业�
 - 邮箱必须先征得同意再收集。对方没同意就不要要邮箱，手机或微信即可。
 - 向工作群或同事汇报时，默认隐藏邮箱和其他隐私联系方式，只写称呼、机构、作物、区域、吨位和跟进事项。
 - 你只能做顾问对话、建立客户档案、提交跟进任务。不要提 NAS、端口、沙箱、网关、Hermes 部署方式，也不要自称能操作其他系统。
+
+${HERMES_FRONT_BOUNDARY}
 
 【站点文案】`
 

@@ -196,7 +196,7 @@ export function AdminApp() {
   }
 
   return (
-    <div className="admin-shell">
+    <div className={view === "hermes" ? "admin-shell admin-shell--hermes" : "admin-shell"}>
       <aside className="admin-side">
         <p className="latin-kicker">Back office</p>
         <h1>网站后台</h1>
@@ -235,7 +235,7 @@ export function AdminApp() {
           退出登录
         </button>
       </aside>
-      <section className="admin-main">
+      <section className={view === "hermes" ? "admin-main admin-main--hermes" : "admin-main"}>
         {view === "leads" ? (
           <LeadsPanel auth={auth} />
         ) : view === "hermes" ? (

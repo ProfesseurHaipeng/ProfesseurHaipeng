@@ -18,8 +18,20 @@ function localGuide(): Plugin {
       ...process.env,
       ...loadEnv(server.config.mode, server.config.envDir || process.cwd(), ""),
     }
-    const localLeads: unknown[] = []
-    const localDesk: { cases: { id: string }[]; coach: unknown[] } = { cases: [], coach: [] }
+    const localLeads: { id: string; source?: string; contact?: string; email?: string; name?: string; org?: string; note?: string; at?: string }[] = []
+    const localDesk: {
+      cases: { id: string }[]
+      coach: unknown[]
+      events: unknown[]
+      memory: { shared: string; desk: string; updatedAt: string }
+      health: { status: "connected" | "disconnected"; checkedAt: string; model?: string; detail?: string } | null
+    } = {
+      cases: [],
+      coach: [],
+      events: [],
+      memory: { shared: "", desk: "", updatedAt: "" },
+      health: null,
+    }
     const staffOk = (req: IncomingMessage) => {
       const user = env.ADMIN_USER || "admin"
       const pass = env.ADMIN_PASSWORD || "ash-draft"
@@ -73,14 +85,25 @@ function localGuide(): Plugin {
         }
         const deskMod = await server.ssrLoadModule("/src/cms/hermesDesk.ts")
         const hermesMod = await server.ssrLoadModule("/src/cms/hermes.ts")
+        const pack = () =>
+          deskMod.decorateDeskPayload({
+            cases: localDesk.cases,
+            coach: localDesk.coach,
+            events: localDesk.events,
+            memory: localDesk.memory,
+            health: localDesk.health,
+            link: hermesMod.hermesLinkInfo(env),
+            hermesReady: hermesMod.hermesReady(env),
+            attachable: deskMod.publicAttachable(deskMod.attachableLeads(localDesk.cases, localLeads)),
+          })
+        const pushEvent = (kind: string, text: string, caseId?: string) => {
+          localDesk.events = [
+            ...localDesk.events,
+            { id: deskMod.newEventId(), at: new Date().toISOString(), kind, text, caseId },
+          ].slice(-80)
+        }
         if (req.method === "GET") {
-          res.end(
-            JSON.stringify({
-              cases: deskMod.filterHermesCases(localDesk.cases),
-              coach: localDesk.coach,
-              hermesReady: hermesMod.hermesReady(env),
-            }),
-          )
+          res.end(JSON.stringify(pack()))
           return
         }
         if (req.method !== "POST") {
@@ -93,13 +116,70 @@ function localGuide(): Plugin {
           const body = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
           const action = typeof body.action === "string" ? body.action : ""
           const now = new Date().toISOString()
+          if (action === "health") {
+            const health = await hermesMod.probeHermes(env)
+            if (localDesk.health?.status !== health.status) {
+              pushEvent("health", health.status === "connected" ? "网关探测：正常连接" : "网关探测：断开连接")
+            }
+            localDesk.health = health
+            res.end(JSON.stringify({ ...pack(), health }))
+            return
+          }
           if (action === "sync") {
+            const before = localDesk.cases.length
             localDesk.cases = deskMod.importLeads(localDesk.cases, localLeads, now)
-            res.end(JSON.stringify({ cases: localDesk.cases, coach: localDesk.coach, hermesReady: hermesMod.hermesReady(env) }))
+            if (localDesk.cases.length > before) pushEvent("attach", `同步了 ${localDesk.cases.length - before} 条 AI 工单`)
+            res.end(JSON.stringify(pack()))
+            return
+          }
+          if (action === "prune") {
+            const next = deskMod.pruneUnspokenCases(localDesk.cases)
+            const removed = localDesk.cases.length - next.length
+            localDesk.cases = next
+            if (removed) pushEvent("note", `清理了 ${removed} 条没有真实对话的表单卡`)
+            res.end(JSON.stringify({ ...pack(), removed }))
+            return
+          }
+          if (action === "memory") {
+            localDesk.memory = {
+              shared: typeof body.shared === "string" ? body.shared.trim().slice(0, 8000) : localDesk.memory.shared,
+              desk: typeof body.desk === "string" ? body.desk.trim().slice(0, 8000) : localDesk.memory.desk,
+              updatedAt: now,
+            }
+            pushEvent("note", "更新了长期记忆或工作台笔记")
+            res.end(JSON.stringify({ ...pack(), memory: localDesk.memory }))
+            return
+          }
+          if (action === "attach") {
+            const result = deskMod.attachLead(localDesk.cases, localLeads, typeof body.leadId === "string" ? body.leadId : "", now)
+            if (result.error === "missing" || result.error === "not-ai") {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: result.error }))
+              return
+            }
+            localDesk.cases = result.cases
+            if (result.case && result.error !== "exists") pushEvent("attach", `接入 AI 工单 ${result.case.name}`, result.case.id)
+            res.end(JSON.stringify({ ...pack(), case: result.case }))
             return
           }
           const id = typeof body.id === "string" ? body.id : ""
           const current = localDesk.cases.find((item: { id?: string }) => item.id === id)
+          if (action === "note") {
+            const text = typeof body.text === "string" ? body.text.replace(/\s+/g, " ").trim().slice(0, 2000) : ""
+            if (!current) {
+              res.statusCode = 404
+              res.end(JSON.stringify({ error: "missing" }))
+              return
+            }
+            if (!text) {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: "empty" }))
+              return
+            }
+            pushEvent("note", text, current.id)
+            res.end(JSON.stringify(pack()))
+            return
+          }
           if (action === "takeover" || action === "resume" || action === "update") {
             if (!current) {
               res.statusCode = 404
@@ -113,7 +193,12 @@ function localGuide(): Plugin {
                   ? deskMod.applyResume(current, now)
                   : deskMod.patchHermesCase(current, body, now)
             localDesk.cases = deskMod.sortHermesCases([next, ...localDesk.cases.filter((item: { id?: string }) => item.id !== next.id)])
-            res.end(JSON.stringify({ cases: localDesk.cases, case: next, hermesReady: hermesMod.hermesReady(env) }))
+            pushEvent(
+              action === "update" ? "update" : action,
+              action === "takeover" ? `人工接管 ${next.name}` : action === "resume" ? `交回 Hermes ${next.name}` : `更新档案 ${next.name}`,
+              next.id,
+            )
+            res.end(JSON.stringify({ ...pack(), case: next }))
             return
           }
           if (action === "coach") {
@@ -125,7 +210,7 @@ function localGuide(): Plugin {
             }
             const staff = { id: deskMod.newCoachTurnId(), at: now, role: "staff", content: message }
             const history = [...localDesk.coach, staff]
-            const result = await deskMod.resolveCoachReply(localDesk.cases, history, env)
+            const result = await deskMod.resolveCoachReply(localDesk.cases, history, env, localDesk.memory)
             const replyTurn = {
               id: deskMod.newCoachTurnId(Date.now() + 1),
               at: new Date().toISOString(),
@@ -134,14 +219,8 @@ function localGuide(): Plugin {
             }
             localDesk.cases = result.cases
             localDesk.coach = [...history, replyTurn]
-            res.end(
-              JSON.stringify({
-                cases: localDesk.cases,
-                coach: localDesk.coach,
-                reply: result.reply,
-                hermesReady: hermesMod.hermesReady(env),
-              }),
-            )
+            pushEvent("coach", message.slice(0, 180))
+            res.end(JSON.stringify({ ...pack(), coach: localDesk.coach, reply: result.reply }))
             return
           }
           res.statusCode = 400
@@ -230,7 +309,14 @@ function localGuide(): Plugin {
             turnLang === "en"
               ? "The customer's latest message is in English. You MUST answer this turn in natural English."
               : "客户最后一条消息是中文。本轮必须全程用简体中文回答，不要夹英文段落。"
-          const extra = escalate ? `${langHint}\n${hermesMod.hermesHandoffHint(turnLang)}` : langHint
+          let extra = escalate ? `${langHint}\n${hermesMod.hermesHandoffHint(turnLang)}` : langHint
+          if (advisor === "hermes") {
+            extra = deskMod.frontHermesExtra(
+              localDesk.memory,
+              deskMod.findHermesCase(localDesk.cases, { visitorId }),
+              extra,
+            )
+          }
           const result = await runtimeMod.resolveGuideReply(
             messages,
             knowledgeMod.flattenKnowledge(contentMod.defaultContent),

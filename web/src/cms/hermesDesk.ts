@@ -3,7 +3,7 @@ import { hermesEnvFrom } from "./hermes"
 import type { Lead } from "./leads"
 
 export type HermesOwner = "hermes" | "human"
-export type HermesEnergy = "high" | "mid" | "low"
+export type HermesEnergy = "high" | "mid" | "low" | "unset"
 export type HermesProgress = "new" | "contacted" | "talking" | "sample" | "negotiate" | "hold" | "closed"
 
 export type HermesCase = {
@@ -37,7 +37,34 @@ export type HermesDeskFilter = {
   follow?: "all" | "following" | "idle"
   owner?: "all" | HermesOwner
   energy?: "all" | HermesEnergy
+  origin?: "all" | "live"
   query?: string
+}
+
+export type HermesMemory = {
+  shared: string
+  desk: string
+  updatedAt: string
+}
+
+export type HermesEvent = {
+  id: string
+  at: string
+  caseId?: string
+  kind: "ticket" | "escalate" | "takeover" | "resume" | "coach" | "note" | "update" | "attach" | "health"
+  text: string
+}
+
+export function emptyMemory(): HermesMemory {
+  return { shared: "", desk: "", updatedAt: "" }
+}
+
+export function newEventId(now = Date.now()) {
+  return `evt-${String(now).padStart(15, "0")}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+export function isLiveCase(item: HermesCase) {
+  return item.source === "ai" || Boolean(item.visitorId)
 }
 
 const MAX = {
@@ -65,6 +92,7 @@ export const ENERGY_LABEL: Record<HermesEnergy, string> = {
   high: "积极性高",
   mid: "一般",
   low: "积极性低",
+  unset: "未评估",
 }
 
 export function newHermesCaseId(now = Date.now()) {
@@ -85,7 +113,7 @@ function asProgress(value: unknown): HermesProgress {
 }
 
 function asEnergy(value: unknown): HermesEnergy {
-  return value === "high" || value === "low" || value === "mid" ? value : "mid"
+  return value === "high" || value === "low" || value === "mid" || value === "unset" ? value : "unset"
 }
 
 function asOwner(value: unknown): HermesOwner {
@@ -99,6 +127,7 @@ export function sortHermesCases(cases: HermesCase[]) {
 export function filterHermesCases(cases: HermesCase[], filter: HermesDeskFilter = {}) {
   const query = (filter.query || "").trim().toLowerCase()
   return sortHermesCases(cases).filter((item) => {
+    if (filter.origin === "live" && !isLiveCase(item)) return false
     if (filter.follow === "following" && !item.following) return false
     if (filter.follow === "idle" && item.following) return false
     if (filter.owner && filter.owner !== "all" && item.owner !== filter.owner) return false
@@ -110,14 +139,116 @@ export function filterHermesCases(cases: HermesCase[], filter: HermesDeskFilter 
 }
 
 export function deskStats(cases: HermesCase[]) {
+  const live = cases.filter((item) => isLiveCase(item))
   return {
-    total: cases.length,
-    following: cases.filter((item) => item.following && item.owner === "hermes").length,
-    idle: cases.filter((item) => !item.following && item.owner === "hermes").length,
-    human: cases.filter((item) => item.owner === "human").length,
-    high: cases.filter((item) => item.energy === "high").length,
-    low: cases.filter((item) => item.energy === "low").length,
+    total: live.length,
+    following: live.filter((item) => item.following && item.owner === "hermes").length,
+    idle: live.filter((item) => !item.following && item.owner === "hermes").length,
+    human: live.filter((item) => item.owner === "human").length,
+    high: live.filter((item) => item.energy === "high").length,
+    low: live.filter((item) => item.energy === "low").length,
+    live: live.length,
+    archived: cases.filter((item) => !isLiveCase(item)).length,
   }
+}
+
+export function pipelineStats(cases: HermesCase[]) {
+  const live = cases.filter((item) => isLiveCase(item))
+  return (Object.keys(PROGRESS_LABEL) as HermesProgress[]).reduce(
+    (acc, key) => {
+      acc[key] = live.filter((item) => item.progress === key).length
+      return acc
+    },
+    {} as Record<HermesProgress, number>,
+  )
+}
+
+export function attachableLeads(cases: HermesCase[], leads: Lead[]) {
+  return leads.filter((lead) => {
+    if (lead.source !== "ai") return false
+    return !findHermesCase(cases, { leadId: lead.id, contact: lead.contact || lead.email })
+  })
+}
+
+export function publicAttachable(leads: Lead[]) {
+  return leads.map((lead) => ({
+    id: lead.id,
+    name: lead.name,
+    org: lead.org,
+    note: lead.note,
+    at: lead.at,
+  }))
+}
+
+export function attachLead(cases: HermesCase[], leads: Lead[], leadId: string, now = new Date().toISOString()) {
+  const lead = leads.find((item) => item.id === leadId)
+  if (!lead) return { cases, case: null as HermesCase | null, error: "missing" as const }
+  if (lead.source !== "ai") return { cases, case: null, error: "not-ai" as const }
+  const hit = findHermesCase(cases, { leadId: lead.id, contact: lead.contact || lead.email })
+  if (hit) return { cases, case: hit, error: "exists" as const }
+  const created = caseFromLead(lead, now)
+  return { cases: sortHermesCases([created, ...cases]), case: created, error: null }
+}
+
+/** Frontend Hermes only. Never include desk memory, evaluations, or other customers. */
+export function frontHermesExtra(memory: HermesMemory | undefined, item: HermesCase | null, extra?: string) {
+  return [
+    extra?.trim() || "",
+    memory?.shared?.trim() ? `【长期记忆（与后台共用）】\n${memory.shared.trim()}` : "",
+    publicVisitorContext(item),
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+}
+
+export type HermesDeskLink = { configured: boolean; model: string; host: string }
+export type HermesAttachable = { id: string; name: string; org: string; note: string; at: string }
+
+export function decorateDeskPayload(options: {
+  cases: HermesCase[]
+  coach: HermesCoachTurn[]
+  events: HermesEvent[]
+  memory: HermesMemory
+  health: { status: "connected" | "disconnected"; checkedAt: string; model?: string; detail?: string } | null
+  link: HermesDeskLink
+  hermesReady: boolean
+  attachable: HermesAttachable[]
+  filter?: HermesDeskFilter
+}) {
+  return {
+    cases: filterHermesCases(options.cases, options.filter),
+    coach: options.coach,
+    events: options.events,
+    memory: options.memory,
+    link: options.link,
+    health: options.health,
+    hermesReady: options.hermesReady,
+    attachable: options.attachable,
+    stats: deskStats(options.cases),
+    attention: attentionCases(options.cases),
+    pipeline: pipelineStats(options.cases),
+  }
+}
+
+export function attentionCases(cases: HermesCase[]) {
+  const live = cases.filter((item) => isLiveCase(item))
+  return {
+    human: live.filter((item) => item.owner === "human"),
+    high: live.filter((item) => item.energy === "high" && item.owner === "hermes"),
+    stale: live.filter((item) => item.following && item.owner === "hermes" && !item.reaction && !item.evaluation),
+  }
+}
+
+export function publicVisitorContext(item: HermesCase | null) {
+  if (!item) return ""
+  return [
+    "【本场客户已知事实，可在前台使用】",
+    item.name ? `称呼：${item.name}` : "",
+    item.org ? `机构：${item.org}` : "",
+    item.note ? `线索：${item.note}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n")
 }
 
 export function findHermesCase(
@@ -199,7 +330,7 @@ export function caseFromLead(lead: Lead, now = new Date().toISOString()): Hermes
     progress: lead.source === "ai" ? "contacted" : "new",
     reaction: "",
     evaluation: "",
-    energy: contact.length >= 5 ? "high" : "mid",
+    energy: "unset",
     source: lead.source === "ai" ? "ai" : "form",
   }
 }
@@ -228,7 +359,6 @@ export function upsertFromTicket(
           leadId: extra.leadId || existing.leadId,
           following: extra.following ?? existing.following,
           progress: existing.progress === "new" ? "contacted" : existing.progress,
-          energy: ticket.contact.length >= 5 ? "high" : existing.energy,
         },
         now,
       )
@@ -248,7 +378,7 @@ export function upsertFromTicket(
         progress: "contacted" as const,
         reaction: "",
         evaluation: "",
-        energy: ticket.contact.length >= 5 ? ("high" as const) : ("mid" as const),
+        energy: "unset" as const,
         source: "ai" as const,
       }
   if (next.owner === "human") next.following = false
@@ -285,7 +415,7 @@ export function upsertFromVisit(
     progress: "talking",
     reaction: "",
     evaluation: "",
-    energy: "mid",
+    energy: "unset",
     source: "ai",
   }
   return { cases: [created, ...cases], case: created }
@@ -294,11 +424,16 @@ export function upsertFromVisit(
 export function importLeads(cases: HermesCase[], leads: Lead[], now = new Date().toISOString()) {
   let next = cases
   for (const lead of leads) {
+    if (lead.source !== "ai") continue
     const hit = findHermesCase(next, { leadId: lead.id, contact: lead.contact || lead.email })
     if (hit) continue
     next = [caseFromLead(lead, now), ...next]
   }
   return sortHermesCases(next)
+}
+
+export function pruneUnspokenCases(cases: HermesCase[]) {
+  return cases.filter((item) => isLiveCase(item) || item.reaction || item.evaluation)
 }
 
 const DESK_RE = /<desk>([\s\S]*?)<\/desk>/i
@@ -337,17 +472,22 @@ export function applyDeskUpdates(cases: HermesCase[], updates: Record<string, un
   return sortHermesCases(next)
 }
 
-const COACH_RULES = `你是皮纳图博火山灰项目的高级顾问 Hermes，现在在和项目内部同事说话，不是对客户。
+const COACH_RULES = `你是皮纳图博火山灰项目的高级顾问 Hermes。后台工作台和前台高级顾问是同一个人、同一份长期记忆，只是这里权限更高。
+
+【后台权限】
+- 能看全部真实客户档案、同事指令、desk 记忆、接管状态。
+- 前台对话看不到这些。你在前台也不会、不能把工作台数据说出去。
+- 不要编造客户。档案列表没有的人，就说还没有这场对话。
 
 【你能做的】
 - 根据同事的意图，说明你会怎么跟进哪些客户、话术怎么改、谁先谁后。
-- 用短段纯文本，不要 Markdown。中文称同事不必用「您」。
+- 用短段纯文本，不要 Markdown。
 - 向同事汇报时默认隐藏邮箱和其他隐私联系方式，只写称呼、机构、作物、区域、吨位和跟进事项。
 - 需要改档案时，先用正常的话说明改了什么，再在回复最后另起一行输出：
   <desk>{"updates":[{"id":"客户档案id","following":true,"progress":"talking","reaction":"客户反响","evaluation":"你的评价","energy":"high"}]}</desk>
 - progress 只能是 new / contacted / talking / sample / negotiate / hold / closed。
-- energy 只能是 high / mid / low。
-- 不要编造不存在的客户 id。不要提 NAS、端口、网关、沙箱。`
+- energy 只能是 high / mid / low / unset。
+- 不要提 NAS、端口、网关、沙箱。`
 
 export function caseBrief(item: HermesCase) {
   const contact = item.contact ? "已留联系方式" : "未留联系方式"
@@ -358,7 +498,7 @@ export function caseBrief(item: HermesCase) {
     `跟进方=${item.owner === "human" ? "人工" : "Hermes"}`,
     `状态=${item.following ? "正在跟进" : "未跟进"}`,
     `进度=${PROGRESS_LABEL[item.progress]}`,
-    `积极性=${ENERGY_LABEL[item.energy]}`,
+    item.energy !== "unset" ? `积极性=${ENERGY_LABEL[item.energy]}` : "积极性=未评估",
     contact,
     item.note ? `线索=${item.note}` : "",
     item.reaction ? `反响=${item.reaction}` : "",
@@ -368,11 +508,23 @@ export function caseBrief(item: HermesCase) {
     .join("；")
 }
 
-export function buildCoachMessages(cases: HermesCase[], history: HermesCoachTurn[], extra?: string) {
-  const roster = cases.length
-    ? cases.slice(0, 40).map((item) => `- ${caseBrief(item)}`).join("\n")
-    : "当前还没有客户档案。"
-  const system = `${COACH_RULES}\n\n【当前客户档案】\n${roster}${extra ? `\n\n${extra}` : ""}`
+export function buildCoachMessages(
+  cases: HermesCase[],
+  history: HermesCoachTurn[],
+  extra?: string,
+  memory?: HermesMemory,
+) {
+  const live = cases.filter((item) => isLiveCase(item))
+  const roster = live.length
+    ? live.slice(0, 40).map((item) => `- ${caseBrief(item)}`).join("\n")
+    : "当前还没有真实客户档案。不要编造。"
+  const memoryBlock = [
+    memory?.shared?.trim() ? `【长期记忆（与前台共用）】\n${memory.shared.trim()}` : "",
+    memory?.desk?.trim() ? `【工作台笔记（仅后台）】\n${memory.desk.trim()}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+  const system = `${COACH_RULES}\n\n【当前客户档案】\n${roster}${memoryBlock ? `\n\n${memoryBlock}` : ""}${extra ? `\n\n${extra}` : ""}`
   const turns = history.slice(-16).map((item) => ({
     role: item.role === "staff" ? ("user" as const) : ("assistant" as const),
     content: item.content.slice(0, 4000),
@@ -388,13 +540,16 @@ export async function resolveCoachReply(
   cases: HermesCase[],
   history: HermesCoachTurn[],
   env: Record<string, string | undefined>,
+  memory?: HermesMemory,
 ) {
   const hermes = hermesEnvFrom(env)
   if (!hermes) {
     return { reply: coachUnavailableReply(), cases, source: "local" as const }
   }
   try {
-    const raw = await completeChatCompletions(hermes, buildCoachMessages(cases, history), { hosts: "exact" })
+    const raw = await completeChatCompletions(hermes, buildCoachMessages(cases, history, undefined, memory), {
+      hosts: "exact",
+    })
     if (raw) {
       const parsed = extractDeskUpdates(raw)
       if (parsed.reply) {

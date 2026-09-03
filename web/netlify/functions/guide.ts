@@ -9,9 +9,11 @@ import {
   visitorLang,
 } from "../../src/cms/greeting"
 import { resolveGuideReply } from "../../src/cms/guideRuntime"
-import { readHermesCases, writeHermesCase } from "../../src/cms/hermesBlobs"
+import { readHermesCases, readHermesMemory, writeHermesCase } from "../../src/cms/hermesBlobs"
 import { hermesHandoffHint, hermesReady, type AdvisorId } from "../../src/cms/hermes"
 import {
+  findHermesCase,
+  frontHermesExtra,
   humanTakenOverReply,
   isHumanOwned,
   upsertFromTicket,
@@ -179,7 +181,10 @@ export default async (req: Request, context: Context) => {
     lang === "en"
       ? `Visitor location: ${place}. The customer's latest message is in English. You MUST answer this turn in natural English.`
       : `访客位置：${place}。客户最后一条消息是中文。本轮必须全程用简体中文回答，不要夹英文段落。`
-  const extra = escalate ? `${langHint}\n${hermesHandoffHint(lang)}` : langHint
+  let extra = escalate ? `${langHint}\n${hermesHandoffHint(lang)}` : langHint
+  if (advisor === "hermes") {
+    extra = frontHermesExtra(await readHermesMemory(), findHermesCase(deskCases, { visitorId }), extra)
+  }
   const result = await resolveGuideReply(history, flattenKnowledge(content), envBag(), extra, {
     advisor,
     escalate,
