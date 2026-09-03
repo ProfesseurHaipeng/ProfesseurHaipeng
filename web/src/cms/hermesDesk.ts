@@ -2,11 +2,20 @@ import { completeChatCompletions } from "./chatCompletions"
 import { hermesEnvFrom } from "./hermes"
 import {
   applyInquiryState,
+  attachTaskCase,
+  buildTaskAssignMessage,
+  cancelInquiryTask,
+  createInquiryTask,
+  deleteInquiryTask,
   emptyInquiry,
   extractInquiryUpdates,
+  hydrateInquiryState,
   inquiryCoachExtra,
+  startInquiryTask,
   stripInquiryTags,
+  updateInquiryTask,
   type InquiryState,
+  type InquiryTask,
 } from "./inquiryDesk"
 import type { Lead } from "./leads"
 
@@ -282,7 +291,7 @@ export function dedupeHermesCases(cases: HermesCase[]) {
   return next
 }
 
-export const STAFF_ACTIONS = ["health", "coach", "targets", "job", "file", "attach", "import", "cases", "coach-clear"] as const
+export const STAFF_ACTIONS = ["health", "coach", "targets", "job", "file", "attach", "import", "cases", "coach-clear", "task"] as const
 
 export const STAFF_CASE_FIELDS = [
   "name",
@@ -312,7 +321,8 @@ export function isStaffAction(action: string) {
     action === "attach" ||
     action === "import" ||
     action === "cases" ||
-    action === "coach-clear"
+    action === "coach-clear" ||
+    action === "task"
   )
 }
 
@@ -765,7 +775,7 @@ export function decorateDeskPayload(options: {
     health: options.health,
     hermesReady: options.hermesReady,
     attachable: options.attachable,
-    inquiry: options.inquiry || emptyInquiry(),
+    inquiry: hydrateInquiryState(options.inquiry || emptyInquiry()),
     stats: deskStats(options.cases),
     attention: attentionCases(options.cases),
     pipeline: pipelineStats(options.cases),
@@ -920,6 +930,224 @@ export function caseFromLead(lead: Lead, now = new Date().toISOString(), cases: 
     ...emptyTelemetry(),
     lastChannel: lead.source === "ai" ? "chat" : "form",
   }
+}
+
+export function caseFromInquiryTask(task: InquiryTask, cases: HermesCase[] = [], now = new Date().toISOString()): HermesCase {
+  return {
+    id: newHermesCaseId(),
+    at: now,
+    updatedAt: now,
+    name: task.name || "询单任务",
+    org: "询单系统",
+    ticketNo: newTicketNo(cases, now),
+    contact: "",
+    note: [task.instruction, task.targets.map((item) => item.label).join("、")].filter(Boolean).join(" · "),
+    owner: "hermes",
+    following: true,
+    progress: "new",
+    reaction: "",
+    evaluation: "",
+    energy: "unset",
+    source: "manual",
+    category: "inquiry",
+    color: "blue",
+    ...emptyTelemetry(),
+    lastChannel: "unset",
+    nextAction: "按条件找真实厂商",
+  }
+}
+
+export type InquiryTaskActionResult = {
+  inquiry: InquiryState
+  cases: HermesCase[]
+  ledger: HermesLedger
+  touched: HermesCase[]
+  gone: HermesCase[]
+  assignMessage?: string
+  caseId?: string
+  event?: string
+  error?: "empty" | "missing" | "cancelled" | "op"
+}
+
+function patchLinkedCase(
+  cases: HermesCase[],
+  caseId: string | undefined,
+  patch: Partial<HermesCase>,
+  now: string,
+) {
+  if (!caseId) return { cases, touched: [] as HermesCase[] }
+  const touched: HermesCase[] = []
+  const next = cases.map((item) => {
+    if (item.id !== caseId || item.gone) return item
+    const row = { ...item, ...patch, updatedAt: now }
+    touched.push(row)
+    return row
+  })
+  return { cases: next, touched }
+}
+
+function bindTaskCase(inquiry: InquiryState, cases: HermesCase[], task: InquiryTask, now: string) {
+  if (task.caseId) {
+    const existing = cases.find((item) => item.id === task.caseId && !item.gone)
+    if (existing) return { inquiry, cases, task, created: null as HermesCase | null }
+  }
+  const rec = caseFromInquiryTask(task, cases, now)
+  return {
+    inquiry: attachTaskCase(inquiry, task.id, rec.id, now),
+    cases: [rec, ...cases],
+    task: { ...task, caseId: rec.id },
+    created: rec,
+  }
+}
+
+export function applyInquiryTaskAction(
+  inquiry: InquiryState,
+  cases: HermesCase[],
+  ledger: HermesLedger,
+  body: Record<string, unknown>,
+  now = new Date().toISOString(),
+): InquiryTaskActionResult {
+  const empty: InquiryTaskActionResult = { inquiry, cases, ledger, touched: [], gone: [] }
+  const op = typeof body.op === "string" ? body.op : ""
+  const id = typeof body.id === "string" ? body.id : ""
+
+  if (op === "create") {
+    const created = createInquiryTask(inquiry, body, now)
+    if (created.error || !created.task) return { ...empty, error: created.error || "empty" }
+    const bound = bindTaskCase(created.state, cases, created.task, now)
+    const active = created.task.status === "searching"
+    const patched = active
+      ? patchLinkedCase(bound.cases, bound.task.caseId, { progress: "talking", following: true, nextAction: "正在找真实厂商" }, now)
+      : { cases: bound.cases, touched: [] as HermesCase[] }
+    return {
+      inquiry: bound.inquiry,
+      cases: patched.cases,
+      ledger,
+      touched: [...(bound.created ? [bound.created] : []), ...patched.touched],
+      gone: [],
+      assignMessage: active ? buildTaskAssignMessage(bound.task) : undefined,
+      caseId: bound.task.caseId,
+      event: `询单：创建任务 ${created.task.name}`,
+    }
+  }
+
+  if (op === "update") {
+    const updated = updateInquiryTask(inquiry, { ...body, id }, now)
+    if (updated.error || !updated.task) return { ...empty, error: updated.error || "missing" }
+    const withTargets: InquiryState = {
+      ...updated.state,
+      targets: updated.task.targets.length ? updated.task.targets : updated.state.targets,
+    }
+    const bound = bindTaskCase(withTargets, cases, updated.task, now)
+    const patched = patchLinkedCase(
+      bound.cases,
+      bound.task.caseId,
+      {
+        name: bound.task.name,
+        note: [bound.task.instruction, bound.task.targets.map((item) => item.label).join("、")].filter(Boolean).join(" · "),
+        nextAction: bound.task.enabled ? "按条件找真实厂商" : "已停用",
+      },
+      now,
+    )
+    return {
+      inquiry: bound.inquiry,
+      cases: patched.cases,
+      ledger,
+      touched: [...(bound.created ? [bound.created] : []), ...patched.touched],
+      gone: [],
+      caseId: bound.task.caseId,
+      event: `询单：更新任务 ${bound.task.name}`,
+    }
+  }
+
+  if (op === "select") {
+    const hit = inquiry.tasks.find((item) => item.id === id)
+    if (!hit) return { ...empty, error: "missing" }
+    const selected: InquiryState = {
+      ...inquiry,
+      currentId: id,
+      targets: hit.targets.length ? hit.targets : inquiry.targets,
+    }
+    const bound = bindTaskCase(selected, cases, hit, now)
+    return {
+      inquiry: bound.inquiry,
+      cases: bound.cases,
+      ledger,
+      touched: bound.created ? [bound.created] : [],
+      gone: [],
+      caseId: bound.task.caseId,
+    }
+  }
+
+  if (op === "start") {
+    const started = startInquiryTask(inquiry, id, now)
+    if (started.error || !started.task) return { ...empty, error: started.error || "missing" }
+    const bound = bindTaskCase(started.state, cases, started.task, now)
+    const patched = patchLinkedCase(
+      bound.cases,
+      bound.task.caseId,
+      { progress: "talking", following: true, nextAction: "正在找真实厂商" },
+      now,
+    )
+    return {
+      inquiry: bound.inquiry,
+      cases: patched.cases,
+      ledger,
+      touched: [...(bound.created ? [bound.created] : []), ...patched.touched],
+      gone: [],
+      assignMessage: buildTaskAssignMessage(bound.task),
+      caseId: bound.task.caseId,
+      event: `询单：开始 ${bound.task.name}`,
+    }
+  }
+
+  if (op === "cancel") {
+    const cancelled = cancelInquiryTask(inquiry, id, now)
+    if (cancelled.error || !cancelled.task) return { ...empty, error: cancelled.error || "missing" }
+    const patched = patchLinkedCase(
+      cases,
+      cancelled.task.caseId,
+      { progress: "hold", following: false, nextAction: "已取消本轮" },
+      now,
+    )
+    return {
+      inquiry: cancelled.state,
+      cases: patched.cases,
+      ledger,
+      touched: patched.touched,
+      gone: [],
+      caseId: cancelled.task.caseId,
+      event: `询单：取消 ${cancelled.task.name}`,
+    }
+  }
+
+  if (op === "delete") {
+    const removed = deleteInquiryTask(inquiry, id)
+    if (removed.error || !removed.task) return { ...empty, error: removed.error || "missing" }
+    if (!removed.task.caseId) {
+      return {
+        inquiry: removed.state,
+        cases,
+        ledger,
+        touched: [],
+        gone: [],
+        event: `询单：删除任务 ${removed.task.name}`,
+      }
+    }
+    const deleted = applyStaffCasesDelete(cases, [removed.task.caseId], now)
+    let nextLedger = ledger
+    for (const item of deleted.gone) nextLedger = markGoneOnLedger(nextLedger, item, now)
+    return {
+      inquiry: removed.state,
+      cases: deleted.cases,
+      ledger: nextLedger,
+      touched: [],
+      gone: deleted.gone,
+      event: `询单：删除任务 ${removed.task.name}`,
+    }
+  }
+
+  return { ...empty, error: "op" }
 }
 
 export function upsertFromTicket(

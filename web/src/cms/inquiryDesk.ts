@@ -1,5 +1,7 @@
 export type InquiryOutreach = "none" | "draft" | "queued" | "sent" | "blocked"
 export type InquiryJobStatus = "idle" | "searching" | "review" | "drafting" | "paused"
+export type InquiryTaskStatus = InquiryJobStatus | "cancelled" | "done" | "timeout"
+export type InquiryScheduleKind = "once" | "hourly" | "daily" | "weekdays" | "weekly" | "monthly" | "interval"
 
 export type InquiryTarget = {
   id: string
@@ -26,10 +28,45 @@ export type InquiryJob = {
   updatedAt: string
 }
 
+export type InquirySchedule = {
+  kind: InquiryScheduleKind
+  hour?: number
+  intervalHours?: number
+}
+
+export type InquiryRunRecord = {
+  id: string
+  at: string
+  status: "started" | "done" | "cancelled" | "timeout" | "noted"
+  note?: string
+}
+
+export type InquiryTask = {
+  id: string
+  name: string
+  instruction: string
+  targets: InquiryTarget[]
+  enabled: boolean
+  status: InquiryTaskStatus
+  schedule: InquirySchedule
+  limitHours?: number
+  startedAt?: string
+  dueAt?: string
+  caseId?: string
+  brief: string
+  createdAt: string
+  updatedAt: string
+  lastRunAt?: string
+  nextRunAt?: string
+  runs: InquiryRunRecord[]
+}
+
 export type InquiryState = {
   targets: InquiryTarget[]
   findings: InquiryFinding[]
   job: InquiryJob
+  tasks: InquiryTask[]
+  currentId?: string
 }
 
 export const OUTREACH_LABEL: Record<InquiryOutreach, string> = {
@@ -46,6 +83,34 @@ export const JOB_LABEL: Record<InquiryJobStatus, string> = {
   review: "待核对",
   drafting: "在起草",
   paused: "已暂停",
+}
+
+export const TASK_LABEL: Record<InquiryTaskStatus, string> = {
+  ...JOB_LABEL,
+  cancelled: "已取消",
+  done: "已结束",
+  timeout: "已到时",
+}
+
+export const SCHEDULE_KIND: { key: InquiryScheduleKind; label: string }[] = [
+  { key: "once", label: "只跑这一次" },
+  { key: "hourly", label: "每小时" },
+  { key: "daily", label: "每天" },
+  { key: "weekdays", label: "工作日" },
+  { key: "weekly", label: "每周" },
+  { key: "monthly", label: "每月" },
+  { key: "interval", label: "间隔" },
+]
+
+export const LIMIT_HOURS = [1, 6, 12, 24, 48, 72] as const
+
+export function scheduleLabel(schedule: InquirySchedule) {
+  const base = SCHEDULE_KIND.find((item) => item.key === schedule.kind)?.label || "只跑这一次"
+  if (schedule.kind === "interval") return `每 ${schedule.intervalHours || 6} 小时`
+  if (schedule.kind === "daily" || schedule.kind === "weekdays" || schedule.kind === "weekly" || schedule.kind === "monthly") {
+    return `${base} ${String(schedule.hour ?? 9).padStart(2, "0")}:00`
+  }
+  return base
 }
 
 export const INQUIRY_RUN = [
@@ -89,7 +154,7 @@ export function emptyInquiryJob(): InquiryJob {
 }
 
 export function emptyInquiry(): InquiryState {
-  return { targets: [], findings: [], job: emptyInquiryJob() }
+  return { targets: [], findings: [], job: emptyInquiryJob(), tasks: [] }
 }
 
 export function hydrateInquiryState(raw: unknown): InquiryState {
@@ -118,6 +183,8 @@ export function hydrateInquiryState(raw: unknown): InquiryState {
           updatedAt: clean(jobRaw.updatedAt, 40),
         }
       : base.job,
+    tasks: Array.isArray(row.tasks) ? row.tasks.map((item) => sanitizeTask(item)).filter((item): item is InquiryTask => Boolean(item)) : [],
+    currentId: clean(row.currentId, 80) || undefined,
   }
 }
 
@@ -167,6 +234,87 @@ function asJobStatus(value: unknown): InquiryJobStatus {
     : "idle"
 }
 
+function asTaskStatus(value: unknown): InquiryTaskStatus {
+  if (value === "cancelled" || value === "done" || value === "timeout") return value
+  return asJobStatus(value)
+}
+
+function asSchedule(raw: unknown): InquirySchedule {
+  if (!raw || typeof raw !== "object") return { kind: "once" }
+  const row = raw as Record<string, unknown>
+  const kind =
+    row.kind === "hourly" ||
+    row.kind === "daily" ||
+    row.kind === "weekdays" ||
+    row.kind === "weekly" ||
+    row.kind === "monthly" ||
+    row.kind === "interval" ||
+    row.kind === "once"
+      ? row.kind
+      : "once"
+  const hour = typeof row.hour === "number" && row.hour >= 0 && row.hour <= 23 ? Math.round(row.hour) : 9
+  const intervalHours =
+    typeof row.intervalHours === "number" && row.intervalHours >= 1 && row.intervalHours <= 168
+      ? Math.round(row.intervalHours)
+      : 6
+  return { kind, hour, intervalHours }
+}
+
+function sanitizeTask(raw: unknown): InquiryTask | null {
+  if (!raw || typeof raw !== "object") return null
+  const row = raw as Record<string, unknown>
+  const id = clean(row.id, 80)
+  if (!id) return null
+  const targets = Array.isArray(row.targets)
+    ? row.targets.flatMap((item) => {
+        if (!item || typeof item !== "object") return []
+        const target = item as Record<string, unknown>
+        const tid = clean(target.id, 80)
+        const label = sanitizeTargetLabel(target.label)
+        if (!tid || !label) return []
+        return [{ id: tid, label, at: clean(target.at, 40) }]
+      })
+    : []
+  const runs: InquiryRunRecord[] = Array.isArray(row.runs)
+    ? row.runs.flatMap((item) => {
+        if (!item || typeof item !== "object") return []
+        const run = item as Record<string, unknown>
+        const rid = clean(run.id, 80)
+        const at = clean(run.at, 40)
+        const status: InquiryRunRecord["status"] =
+          run.status === "started" ||
+          run.status === "done" ||
+          run.status === "cancelled" ||
+          run.status === "timeout" ||
+          run.status === "noted"
+            ? run.status
+            : "noted"
+        if (!rid || !at) return []
+        return [{ id: rid, at, status, note: clean(run.note, 200) || undefined }]
+      })
+    : []
+  const limitHours = typeof row.limitHours === "number" && row.limitHours > 0 ? Math.min(168, Math.round(row.limitHours)) : undefined
+  return {
+    id,
+    name: clean(row.name, 80) || "询单任务",
+    instruction: clean(row.instruction, 2000),
+    targets,
+    enabled: row.enabled !== false,
+    status: asTaskStatus(row.status),
+    schedule: asSchedule(row.schedule),
+    limitHours,
+    startedAt: clean(row.startedAt, 40) || undefined,
+    dueAt: clean(row.dueAt, 40) || undefined,
+    caseId: clean(row.caseId, 80) || undefined,
+    brief: clean(row.brief, 800),
+    createdAt: clean(row.createdAt, 40),
+    updatedAt: clean(row.updatedAt, 40),
+    lastRunAt: clean(row.lastRunAt, 40) || undefined,
+    nextRunAt: clean(row.nextRunAt, 40) || undefined,
+    runs: runs.slice(-20),
+  }
+}
+
 export function sanitizeFinding(raw: unknown, now = new Date().toISOString()): InquiryFinding | null {
   if (!raw || typeof raw !== "object") return null
   const row = raw as Record<string, unknown>
@@ -210,10 +358,18 @@ export function applyInquiryJob(current: InquiryJob, raw: unknown, now = new Dat
 }
 
 export function applyInquiryState(current: InquiryState, raw: { findings?: unknown[]; job?: unknown }, now = new Date().toISOString()): InquiryState {
+  const job = raw.job ? applyInquiryJob(current.job, raw.job, now) : current.job
+  const currentId = current.currentId
   return {
     targets: current.targets,
     findings: Array.isArray(raw.findings) ? applyInquiryFindings(current.findings, raw.findings, now) : current.findings,
-    job: raw.job ? applyInquiryJob(current.job, raw.job, now) : current.job,
+    job,
+    tasks: (current.tasks || []).map((task) =>
+      task.id === currentId
+        ? { ...task, status: asTaskStatus(job.status), brief: job.brief, updatedAt: now }
+        : task,
+    ),
+    currentId,
   }
 }
 
@@ -278,16 +434,25 @@ export type InquiryPromptPreview = {
   jobLabel: string
 }
 
+export function taskJobStatus(status: InquiryTaskStatus): InquiryJobStatus {
+  if (status === "cancelled" || status === "done" || status === "timeout") return "paused"
+  return status
+}
+
 export function inquiryPromptPreview(state: InquiryState): InquiryPromptPreview {
   const extra = inquiryCoachExtra(state)
   const lines = extra.split("\n")
   const excerpt = lines.slice(0, 12).join("\n")
+  const task = currentInquiryTask(state)
+  const targets = task?.targets.length ? task.targets : state.targets
   return {
-    userMessage: buildInquiryAssignMessage(state.targets),
+    userMessage: task ? buildTaskAssignMessage(task) : buildInquiryAssignMessage(targets),
     systemExcerpt: excerpt + (lines.length > 12 ? "\n…" : ""),
-    targetCount: state.targets.length,
+    targetCount: targets.length,
     findingCount: state.findings.length,
-    jobLabel: `${JOB_LABEL[state.job.status]}${state.job.brief ? ` · ${state.job.brief}` : ""}`,
+    jobLabel: task
+      ? `${TASK_LABEL[task.status]}${task.brief ? ` · ${task.brief}` : ""}`
+      : `${JOB_LABEL[state.job.status]}${state.job.brief ? ` · ${state.job.brief}` : ""}`,
   }
 }
 
@@ -302,6 +467,7 @@ export function inquiryCoachExtra(state: InquiryState) {
         .join("\n")
     : "还没有真实找到的厂商。"
   const jobLine = `${JOB_LABEL[state.job.status]}${state.job.brief ? `。${state.job.brief}` : ""}`
+  const currentTask = currentInquiryTask(state)
   return [
     "【询单模块（同一工作台、同一 Hermes）】",
     "- 同事设定要找的厂商弊端或对口类型。你按这些条件找真实厂商。",
@@ -313,6 +479,281 @@ export function inquiryCoachExtra(state: InquiryState) {
     "",
     `【要找的弊端 / 对口类型】\n${targetLines}`,
     `【当前询单任务】${jobLine}`,
+    currentTask
+      ? `【本页询单工单】名称=${currentTask.name}；节奏=${scheduleLabel(currentTask.schedule)}；限时=${currentTask.limitHours ? `${currentTask.limitHours} 小时` : "不限"}；工单=${currentTask.caseId || "尚未建档"}`
+      : "",
     `【已找到的厂商】\n${findLines}`,
-  ].join("\n")
+  ]
+    .filter(Boolean)
+    .join("\n")
+}
+
+export function currentInquiryTask(state: InquiryState) {
+  const tasks = state.tasks || []
+  return tasks.find((item) => item.id === state.currentId) || tasks[0]
+}
+
+export function migrateInquiryTasks(state: InquiryState, now = new Date().toISOString()) {
+  if (state.tasks.length) return { state, changed: false }
+  if (!state.targets.length && state.job.status === "idle") return { state, changed: false }
+  const task: InquiryTask = {
+    id: newInquiryId("task"),
+    name: state.job.brief || "询单任务",
+    instruction: "",
+    targets: state.targets,
+    enabled: true,
+    status: asTaskStatus(state.job.status),
+    schedule: { kind: "once" },
+    brief: state.job.brief,
+    createdAt: now,
+    updatedAt: now,
+    runs: [],
+  }
+  return { state: { ...state, tasks: [task], currentId: task.id }, changed: true }
+}
+
+export function nextInquiryRunAt(schedule: InquirySchedule, from = new Date().toISOString()) {
+  if (schedule.kind === "once") return undefined
+  const start = new Date(from)
+  if (Number.isNaN(start.getTime())) return undefined
+  const hour = schedule.hour ?? 9
+  if (schedule.kind === "hourly") {
+    start.setHours(start.getHours() + 1)
+    return start.toISOString()
+  }
+  if (schedule.kind === "interval") {
+    start.setHours(start.getHours() + (schedule.intervalHours || 6))
+    return start.toISOString()
+  }
+  const next = new Date(start)
+  next.setMinutes(0, 0, 0)
+  next.setHours(hour)
+  if (next.getTime() <= start.getTime()) next.setDate(next.getDate() + 1)
+  if (schedule.kind === "weekdays") {
+    while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1)
+  }
+  if (schedule.kind === "weekly") {
+    next.setDate(next.getDate() + (next.getTime() <= start.getTime() ? 7 : 0))
+  }
+  if (schedule.kind === "monthly") {
+    if (next.getTime() <= start.getTime()) next.setMonth(next.getMonth() + 1)
+  }
+  return next.toISOString()
+}
+
+export function taskDueAt(limitHours: number | undefined, startedAt: string) {
+  if (!limitHours) return undefined
+  const start = Date.parse(startedAt)
+  if (!Number.isFinite(start)) return undefined
+  return new Date(start + limitHours * 3600 * 1000).toISOString()
+}
+
+export function taskIsDue(task: InquiryTask, now = new Date().toISOString()) {
+  if (!task.enabled || task.status === "cancelled" || task.status === "searching") return false
+  return Boolean(task.nextRunAt && task.nextRunAt <= now)
+}
+
+export function tickInquiryTasks(state: InquiryState, now = new Date().toISOString()) {
+  let changed = false
+  const tasks = state.tasks.map((task) => {
+    if ((task.status === "searching" || task.status === "review" || task.status === "drafting") && task.dueAt && task.dueAt <= now) {
+      changed = true
+      return {
+        ...task,
+        status: "timeout" as const,
+        enabled: task.schedule.kind !== "once" && task.enabled,
+        updatedAt: now,
+        runs: [
+          ...task.runs,
+          { id: newInquiryId("run"), at: now, status: "timeout" as const, note: "已到限时，本轮停止。" },
+        ].slice(-20),
+      }
+    }
+    return task
+  })
+  const current = tasks.find((item) => item.id === state.currentId)
+  const job =
+    current && current.status !== state.job.status
+      ? {
+          status:
+            current.status === "timeout" || current.status === "cancelled" || current.status === "done"
+              ? ("paused" as const)
+              : asJobStatus(current.status),
+          brief: current.brief || state.job.brief,
+          updatedAt: now,
+        }
+      : state.job
+  if (job !== state.job) changed = true
+  return { state: { ...state, tasks, job }, changed }
+}
+
+function pushRun(task: InquiryTask, status: InquiryRunRecord["status"], note: string, now: string): InquiryTask {
+  return {
+    ...task,
+    runs: [...task.runs, { id: newInquiryId("run"), at: now, status, note }].slice(-20),
+  }
+}
+
+export function createInquiryTask(state: InquiryState, raw: Record<string, unknown>, now = new Date().toISOString()) {
+  const name = clean(raw.name, 80)
+  const instruction = clean(raw.instruction, 2000)
+  const fromDraft = Array.isArray(raw.targets)
+    ? raw.targets.flatMap((item) => {
+        const label = sanitizeTargetLabel(typeof item === "string" ? item : (item as { label?: unknown }).label)
+        return label ? [{ id: newInquiryId("tg"), label, at: now }] : []
+      })
+    : state.targets
+  if (!name) return { state, error: "empty" as const }
+  if (!fromDraft.length && !instruction) return { state, error: "empty" as const }
+  const schedule = asSchedule(raw.schedule)
+  const limitHours = typeof raw.limitHours === "number" && raw.limitHours > 0 ? Math.min(168, Math.round(raw.limitHours)) : undefined
+  const start = raw.start === true
+  const task: InquiryTask = {
+    id: newInquiryId("task"),
+    name,
+    instruction,
+    targets: fromDraft,
+    enabled: raw.enabled !== false,
+    status: start ? "searching" : "idle",
+    schedule,
+    limitHours,
+    startedAt: start ? now : undefined,
+    dueAt: start ? taskDueAt(limitHours, now) : undefined,
+    brief: fromDraft.map((item) => item.label).join("、") || instruction.slice(0, 80),
+    createdAt: now,
+    updatedAt: now,
+    lastRunAt: start ? now : undefined,
+    nextRunAt: start ? nextInquiryRunAt(schedule, now) : nextInquiryRunAt(schedule, now),
+    runs: start ? [{ id: newInquiryId("run"), at: now, status: "started", note: "同事开始这一轮询单。" }] : [],
+  }
+  const next: InquiryState = {
+    ...state,
+    targets: fromDraft.length ? fromDraft : state.targets,
+    job: start
+      ? { status: "searching", brief: task.brief, updatedAt: now }
+      : state.job,
+    tasks: [task, ...state.tasks],
+    currentId: task.id,
+  }
+  return { state: next, task, error: null }
+}
+
+export function attachTaskCase(state: InquiryState, taskId: string, caseId: string, now = new Date().toISOString()) {
+  return {
+    ...state,
+    tasks: state.tasks.map((item) => (item.id === taskId ? { ...item, caseId, updatedAt: now } : item)),
+  }
+}
+
+export function updateInquiryTask(state: InquiryState, raw: Record<string, unknown>, now = new Date().toISOString()) {
+  const id = typeof raw.id === "string" ? raw.id : ""
+  const hit = state.tasks.find((item) => item.id === id)
+  if (!hit) return { state, error: "missing" as const }
+  const next: InquiryTask = {
+    ...hit,
+    name: "name" in raw ? clean(raw.name, 80) || hit.name : hit.name,
+    instruction: "instruction" in raw ? clean(raw.instruction, 2000) : hit.instruction,
+    enabled: "enabled" in raw ? raw.enabled !== false : hit.enabled,
+    schedule: "schedule" in raw ? asSchedule(raw.schedule) : hit.schedule,
+    limitHours: "limitHours" in raw
+      ? typeof raw.limitHours === "number" && raw.limitHours > 0
+        ? Math.min(168, Math.round(raw.limitHours))
+        : undefined
+      : hit.limitHours,
+    targets: Array.isArray(raw.targets)
+      ? raw.targets.flatMap((item) => {
+          const label = sanitizeTargetLabel(typeof item === "string" ? item : (item as { label?: unknown }).label)
+          return label ? [{ id: newInquiryId("tg"), label, at: now }] : []
+        })
+      : hit.targets,
+    updatedAt: now,
+  }
+  if ("schedule" in raw) next.nextRunAt = nextInquiryRunAt(next.schedule, now)
+  return {
+    state: {
+      ...state,
+      tasks: state.tasks.map((item) => (item.id === id ? next : item)),
+      currentId: id,
+    },
+    task: next,
+    error: null,
+  }
+}
+
+export function startInquiryTask(state: InquiryState, id: string, now = new Date().toISOString()) {
+  const hit = state.tasks.find((item) => item.id === id)
+  if (!hit) return { state, error: "missing" as const }
+  if (hit.status === "cancelled") return { state, error: "cancelled" as const }
+  if (!hit.targets.length && !hit.instruction) return { state, error: "empty" as const }
+  const next = pushRun(
+    {
+      ...hit,
+      enabled: true,
+      status: "searching",
+      startedAt: now,
+      dueAt: taskDueAt(hit.limitHours, now),
+      lastRunAt: now,
+      nextRunAt: nextInquiryRunAt(hit.schedule, now),
+      brief: hit.targets.map((item) => item.label).join("、") || hit.instruction.slice(0, 80),
+      updatedAt: now,
+    },
+    "started",
+    "同事开始这一轮询单。",
+    now,
+  )
+  return {
+    state: {
+      ...state,
+      targets: next.targets.length ? next.targets : state.targets,
+      job: { status: "searching" as const, brief: next.brief, updatedAt: now },
+      tasks: state.tasks.map((item) => (item.id === id ? next : item)),
+      currentId: id,
+    },
+    task: next,
+    error: null,
+  }
+}
+
+export function cancelInquiryTask(state: InquiryState, id: string, now = new Date().toISOString()) {
+  const hit = state.tasks.find((item) => item.id === id)
+  if (!hit) return { state, error: "missing" as const }
+  const next = pushRun({ ...hit, status: "cancelled", enabled: false, updatedAt: now }, "cancelled", "同事取消了这轮询单。", now)
+  return {
+    state: {
+      ...state,
+      job: state.currentId === id ? { status: "paused" as const, brief: next.brief, updatedAt: now } : state.job,
+      tasks: state.tasks.map((item) => (item.id === id ? next : item)),
+    },
+    task: next,
+    error: null,
+  }
+}
+
+export function deleteInquiryTask(state: InquiryState, id: string) {
+  const hit = state.tasks.find((item) => item.id === id)
+  if (!hit) return { state, error: "missing" as const }
+  const tasks = state.tasks.filter((item) => item.id !== id)
+  return {
+    state: {
+      ...state,
+      tasks,
+      currentId: state.currentId === id ? tasks[0]?.id : state.currentId,
+    },
+    task: hit,
+    error: null,
+  }
+}
+
+export function buildTaskAssignMessage(task: InquiryTask) {
+  const list = task.targets.map((item) => item.label).join("、")
+  const limit = task.limitHours ? `本轮限时 ${task.limitHours} 小时。` : ""
+  const extra = task.instruction ? `补充指令：${task.instruction}` : ""
+  return [
+    list ? `按这些厂商弊端 / 对口类型去找真实厂商：${list}。` : "按同事写的指令去找真实厂商。",
+    extra,
+    "流程按 取条件 → 找来源 → 核实 → 起草稿。没有来源不要编。找到后只起草询单，不要群发。",
+    limit,
+  ]
+    .filter(Boolean)
+    .join("")
 }

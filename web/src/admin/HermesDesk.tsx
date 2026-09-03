@@ -183,6 +183,8 @@ type DeskPayload = {
   board?: ReturnType<typeof boardMetrics>
   inquiry?: InquiryState
   reply?: string
+  assignMessage?: string
+  caseId?: string
   error?: string
 }
 
@@ -712,29 +714,29 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
               inquiry={inquiry}
               busy={sending || loading}
               hermesReady={hermesReady}
-              onAdd={async (text) => {
+              ticketNoOf={(id) => {
+                const rec = cases.find((item) => item.id === id)
+                return rec ? ticketNo(rec) : ""
+              }}
+              onTask={async (op, body) => {
                 setError("")
                 try {
-                  await post({ action: "targets", add: text })
+                  return await post({ action: "task", op, ...(body || {}) })
                 } catch (err) {
-                  setError(err instanceof Error ? err.message : "设定失败")
+                  setError(err instanceof Error ? err.message : "询单任务失败")
+                  throw err
                 }
               }}
-              onRemove={async (id) => {
-                setError("")
-                try {
-                  await post({ action: "targets", remove: id })
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "设定失败")
-                }
-              }}
-              onAssign={async (message) => {
+              onStart={async (id) => {
                 setSending(true)
                 setError("")
-                if (compactBoard()) setPane("chat")
                 try {
-                  if (inquiry.targets.length) await post({ action: "job", status: "searching" })
-                  await post({ action: "coach", message })
+                  const payload = await post({ action: "task", op: "start", id })
+                  const message = payload.assignMessage || ""
+                  if (message) {
+                    if (compactBoard()) setPane("chat")
+                    await post({ action: "coach", message })
+                  }
                 } catch (err) {
                   setError(err instanceof Error ? err.message : "安排失败")
                 } finally {

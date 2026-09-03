@@ -2578,6 +2578,278 @@ body:has(.admin-shell--desk) #root {
   white-space: pre-wrap;
 }
 
+.inq-hero {
+  display: grid;
+  gap: 0.85rem;
+  justify-items: center;
+  text-align: center;
+  padding: 2.2rem 1.1rem;
+  background: #fff;
+  border: 1px solid #d2d2d7;
+  border-radius: 0.85rem;
+}
+
+.inq-hero p {
+  margin: 0;
+  max-width: 22rem;
+  color: #6e6e73;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.inq-hero .inq-go {
+  width: min(100%, 16rem);
+}
+
+.inq-mini-go {
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  background: #1d1d1f;
+  color: #fff;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inq-mini-go:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.inq-task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.inq-task {
+  width: 100%;
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  border: 1px solid #d2d2d7;
+  border-radius: 0.85rem;
+  background: #fff;
+  color: inherit;
+  padding: 0.85rem 0.95rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.inq-task strong {
+  font-size: 0.95rem;
+}
+
+.inq-task span {
+  color: #6e6e73;
+  font-size: 0.75rem;
+}
+
+.inq-edit-top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.inq-edit-top h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.inq-back {
+  border: 1px solid #d2d2d7;
+  border-radius: 999px;
+  background: #fff;
+  color: #1d1d1f;
+  padding: 0.35rem 0.7rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.inq-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.inq-toolbar > button {
+  border: 1px solid #d2d2d7;
+  border-radius: 999px;
+  background: #fff;
+  color: #1d1d1f;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.inq-toolbar > button.is-danger {
+  color: #c41c1c;
+  border-color: #f0c0c0;
+}
+
+.inq-toolbar > button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.inq-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-right: auto;
+  font-size: 0.8rem;
+}
+
+.inq-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.inq-switch i {
+  width: 2.1rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  background: #d2d2d7;
+  position: relative;
+}
+
+.inq-switch i::after {
+  content: "";
+  position: absolute;
+  top: 0.12rem;
+  left: 0.12rem;
+  width: 0.96rem;
+  height: 0.96rem;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.inq-switch.is-on i {
+  background: #1d1d1f;
+}
+
+.inq-switch.is-on i::after {
+  left: auto;
+  right: 0.12rem;
+}
+
+.inq-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.inq-field span {
+  color: #6e6e73;
+  font-size: 0.75rem;
+}
+
+.inq-field input,
+.inq-field textarea,
+.inq-field select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d2d2d7;
+  border-radius: 0.7rem;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  padding: 0.55rem 0.75rem;
+  font: inherit;
+}
+
+.inq-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.inq-choice button {
+  border: 1px solid #d2d2d7;
+  border-radius: 999px;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  padding: 0.32rem 0.7rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.inq-choice button.is-on {
+  background: #1d1d1f;
+  color: #fff;
+  border-color: #1d1d1f;
+}
+
+.inq-choice button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.inq-due {
+  margin: 0;
+  color: #c41c1c;
+  font-size: 0.78rem;
+}
+
+.inq-ticket {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.75rem;
+}
+
+.inq-ticket strong {
+  font-size: 0.92rem;
+}
+
+.inq-ticket span {
+  color: #6e6e73;
+  font-size: 0.75rem;
+}
+
+.inq-ticket button {
+  border: 0;
+  background: transparent;
+  color: #0071e3;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.inq-hist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.inq-hist li {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.inq-hist strong {
+  font-size: 0.82rem;
+}
+
+.inq-hist span,
+.inq-hist p {
+  margin: 0;
+  color: #6e6e73;
+  font-size: 0.75rem;
+}
+
 .desk-tickets {
   display: grid;
   gap: 0.75rem;
@@ -2982,5 +3254,26 @@ body:has(.admin-shell--desk) #root {
 
   .inq-run-head .inq-steps {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .inq-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+  }
+
+  .inq-toolbar > button,
+  .inq-mini-go,
+  .inq-back {
+    min-height: 2.4rem;
+  }
+
+  .inq-hero,
+  .inq-task,
+  .inq-field input,
+  .inq-field textarea,
+  .inq-field select {
+    width: 100%;
+    max-width: 100%;
   }
 }

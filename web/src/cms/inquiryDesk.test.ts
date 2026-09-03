@@ -4,14 +4,22 @@ import {
   applyInquiryState,
   applyStaffJob,
   applyTargetWrite,
+  cancelInquiryTask,
+  createInquiryTask,
+  deleteInquiryTask,
   emptyInquiry,
   extractInquiryUpdates,
   hydrateInquiryState,
   buildInquiryAssignMessage,
+  buildTaskAssignMessage,
   inquiryPromptPreview,
   inquiryRunHint,
   inquiryRunIndex,
   inquiryStepFill,
+  migrateInquiryTasks,
+  startInquiryTask,
+  taskDueAt,
+  tickInquiryTasks,
   sanitizeFinding,
 } from "./inquiryDesk"
 
@@ -98,5 +106,57 @@ describe("inquiry module on the desk", () => {
     expect(started.job.status).toBe("searching")
     expect(applyStaffJob(started.job, [{ id: "tg-1", label: "土壤板结", at: now }], "review", now).error).toBe("hermes-only")
     expect(applyStaffJob(started.job, [], "searching", now).error).toBe("empty")
+  })
+
+  it("creates, starts, cancels, and deletes an inquiry task without inventing factories", () => {
+    const created = createInquiryTask(
+      emptyInquiry(),
+      { name: "土壤板结一轮", targets: ["土壤板结"], schedule: { kind: "daily", hour: 9 }, limitHours: 24 },
+      now,
+    )
+    expect(created.error).toBeNull()
+    expect(created.task?.name).toBe("土壤板结一轮")
+    expect(created.task?.targets[0]?.label).toBe("土壤板结")
+    expect(created.state.currentId).toBe(created.task?.id)
+    const started = startInquiryTask(created.state, created.task!.id, now)
+    expect(started.error).toBeNull()
+    expect(started.state.job.status).toBe("searching")
+    expect(started.task?.dueAt).toBe(taskDueAt(24, now))
+    expect(buildTaskAssignMessage(started.task!)).toContain("土壤板结")
+    const cancelled = cancelInquiryTask(started.state, created.task!.id, now)
+    expect(cancelled.task?.status).toBe("cancelled")
+    expect(cancelled.state.job.status).toBe("paused")
+    const deleted = deleteInquiryTask(cancelled.state, created.task!.id)
+    expect(deleted.state.tasks).toHaveLength(0)
+  })
+
+  it("times out a searching task when the limit is up", () => {
+    const created = createInquiryTask(emptyInquiry(), { name: "限时一轮", instruction: "找有来源的厂", limitHours: 1 }, now)
+    const started = startInquiryTask(created.state, created.task!.id, now)
+    const later = "2026-09-03T13:05:00.000Z"
+    const ticked = tickInquiryTasks(started.state, later)
+    expect(ticked.changed).toBe(true)
+    expect(ticked.state.tasks[0]?.status).toBe("timeout")
+    expect(ticked.state.job.status).toBe("paused")
+  })
+
+  it("hydrates stored tasks and migrates a legacy job into one task", () => {
+    const state = hydrateInquiryState({
+      targets: [{ id: "tg-1", label: "茶叶基地", at: now }],
+      findings: [],
+      job: { status: "searching", brief: "茶叶基地", updatedAt: now },
+      tasks: [{ id: "task-1", name: "茶叶", instruction: "找基地", targets: [{ id: "tg-1", label: "茶叶基地", at: now }], status: "searching" }],
+      currentId: "task-1",
+    })
+    expect(state.tasks[0]?.name).toBe("茶叶")
+    expect(state.currentId).toBe("task-1")
+    const migrated = migrateInquiryTasks({
+      ...emptyInquiry(),
+      targets: [{ id: "tg-2", label: "水稻加工厂", at: now }],
+      job: { status: "searching", brief: "水稻加工厂", updatedAt: now },
+    }, now)
+    expect(migrated.changed).toBe(true)
+    expect(migrated.state.tasks).toHaveLength(1)
+    expect(migrated.state.tasks[0]?.targets[0]?.label).toBe("水稻加工厂")
   })
 })

@@ -26,7 +26,13 @@ function localGuide(): Plugin {
       memory: { shared: string; desk: string; updatedAt: string }
       health: { status: "connected" | "disconnected"; checkedAt: string; model?: string; detail?: string } | null
       images: Record<string, { mime: string; name: string; data: string }>
-      inquiry: { targets: unknown[]; findings: unknown[]; job: { status: string; brief: string; updatedAt: string } }
+      inquiry: {
+        targets: unknown[]
+        findings: unknown[]
+        job: { status: string; brief: string; updatedAt: string }
+        tasks?: unknown[]
+        currentId?: string
+      }
       ledger: { goneIds: string[]; goneLeadIds: string[]; goneVisitorIds: string[]; goneContacts: string[]; updatedAt: string }
     } = {
       cases: [],
@@ -35,7 +41,7 @@ function localGuide(): Plugin {
       memory: { shared: "", desk: "", updatedAt: "" },
       health: null,
       images: {},
-      inquiry: { targets: [], findings: [], job: { status: "idle", brief: "", updatedAt: "" } },
+      inquiry: { targets: [], findings: [], job: { status: "idle", brief: "", updatedAt: "" }, tasks: [] },
       ledger: { goneIds: [], goneLeadIds: [], goneVisitorIds: [], goneContacts: [], updatedAt: "" },
     }
     const staffOk = (req: IncomingMessage) => {
@@ -127,6 +133,9 @@ function localGuide(): Plugin {
           ].slice(-80)
         }
         if (req.method === "GET") {
+          const migrated = inquiryMod.migrateInquiryTasks(inquiryMod.hydrateInquiryState(localDesk.inquiry))
+          const ticked = inquiryMod.tickInquiryTasks(migrated.state)
+          localDesk.inquiry = ticked.state
           const url = new URL(req.url || "/", "http://local")
           const asset = url.searchParams.get("asset") || ""
           if (asset.startsWith("img-")) {
@@ -283,6 +292,27 @@ function localGuide(): Plugin {
             }
             res.statusCode = 400
             res.end(JSON.stringify({ error: "op" }))
+            return
+          }
+          if (action === "task") {
+            const now = new Date().toISOString()
+            const inquiry = inquiryMod.hydrateInquiryState(localDesk.inquiry)
+            const result = deskMod.applyInquiryTaskAction(inquiry, liveCases(), localDesk.ledger, body, now)
+            if (result.error === "missing") {
+              res.statusCode = 404
+              res.end(JSON.stringify({ error: result.error }))
+              return
+            }
+            if (result.error) {
+              res.statusCode = 400
+              res.end(JSON.stringify({ error: result.error }))
+              return
+            }
+            localDesk.inquiry = result.inquiry
+            localDesk.cases = result.cases
+            localDesk.ledger = result.ledger
+            if (result.event) pushEvent("update", result.event, result.caseId)
+            res.end(JSON.stringify({ ...pack(), assignMessage: result.assignMessage || "", caseId: result.caseId || "" }))
             return
           }
           if (action === "coach-clear") {

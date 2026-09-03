@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  applyInquiryTaskAction,
   applyMemoryPatch,
   applyResume,
   applyTakeover,
@@ -43,7 +44,7 @@ import {
   upsertFromVisit,
   type HermesCase,
 } from "./hermesDesk"
-import { extractInquiryUpdates } from "./inquiryDesk"
+import { emptyInquiry, extractInquiryUpdates } from "./inquiryDesk"
 import type { Lead } from "./leads"
 
 const now = "2026-09-03T12:00:00.000Z"
@@ -370,6 +371,40 @@ describe("desk board telemetry", () => {
     expect(deleted.cases.some((item) => item.id === "case-a")).toBe(false)
     expect(isStaffAction("cases")).toBe(true)
     expect(isStaffAction("coach-clear")).toBe(true)
+    expect(isStaffAction("task")).toBe(true)
+  })
+
+  it("creates a page-owned inquiry ticket with the task and supports cancel and delete", () => {
+    const created = applyInquiryTaskAction(
+      emptyInquiry(),
+      [],
+      emptyLedger(),
+      {
+        op: "create",
+        name: "土壤板结一轮",
+        targets: ["土壤板结"],
+        schedule: { kind: "daily", hour: 9 },
+        limitHours: 24,
+      },
+      now,
+    )
+    expect(created.error).toBeUndefined()
+    expect(created.inquiry.tasks).toHaveLength(1)
+    expect(created.cases).toHaveLength(1)
+    expect(created.cases[0]?.category).toBe("inquiry")
+    expect(created.cases[0]?.org).toBe("询单系统")
+    expect(created.inquiry.tasks[0]?.caseId).toBe(created.cases[0]?.id)
+    const started = applyInquiryTaskAction(created.inquiry, created.cases, created.ledger, { op: "start", id: created.inquiry.tasks[0]!.id }, now)
+    expect(started.inquiry.job.status).toBe("searching")
+    expect(started.assignMessage).toContain("土壤板结")
+    expect(started.cases[0]?.progress).toBe("talking")
+    const cancelled = applyInquiryTaskAction(started.inquiry, started.cases, started.ledger, { op: "cancel", id: created.inquiry.tasks[0]!.id }, now)
+    expect(cancelled.inquiry.tasks[0]?.status).toBe("cancelled")
+    expect(cancelled.cases[0]?.progress).toBe("hold")
+    const deleted = applyInquiryTaskAction(cancelled.inquiry, cancelled.cases, cancelled.ledger, { op: "delete", id: created.inquiry.tasks[0]!.id }, now)
+    expect(deleted.inquiry.tasks).toHaveLength(0)
+    expect(deleted.cases.some((item) => item.id === created.cases[0]!.id)).toBe(false)
+    expect(deleted.ledger.goneIds).toContain(created.cases[0]!.id)
   })
 
   it("keeps deleted tickets gone even if the same lead is imported again", () => {

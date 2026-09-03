@@ -18,8 +18,14 @@ import {
   writeHermesMemory,
   writeInquiryState,
 } from "../../src/cms/hermesBlobs"
-import { applyStaffJob, applyTargetWrite } from "../../src/cms/inquiryDesk"
 import {
+  applyStaffJob,
+  applyTargetWrite,
+  migrateInquiryTasks,
+  tickInquiryTasks,
+} from "../../src/cms/inquiryDesk"
+import {
+  applyInquiryTaskAction,
   applyStaffCaseUpdate,
   applyStaffCasesBatch,
   applyStaffCasesDelete,
@@ -37,6 +43,7 @@ import {
   publicAttachable,
   resolveCoachReply,
   sanitizeCoachImages,
+  type HermesCase,
   type HermesCoachTurn,
   type HermesDeskFilter,
   type HermesEvent,
@@ -49,7 +56,7 @@ import { sortLeads, type Lead } from "../../src/cms/leads"
  *
  * GET  /api/hermes-desk
  * POST /api/hermes-desk  { action }
- *   staff: health | coach | targets | job | file | attach | import | cases | coach-clear
+ *   staff: health | coach | targets | job | file | attach | import | cases | coach-clear | task
  *   Hermes-only via <desk> / <inquiry> in coach: progress, mail notes, memory, findings
  */
 
@@ -126,6 +133,13 @@ function eventOf(kind: HermesEvent["kind"], text: string, caseId?: string): Herm
   return { id: newEventId(), at: new Date().toISOString(), kind, text, caseId }
 }
 
+async function loadInquiry() {
+  const migrated = migrateInquiryTasks(await readInquiryState())
+  const ticked = tickInquiryTasks(migrated.state)
+  if (migrated.changed || ticked.changed) await writeInquiryState(ticked.state)
+  return ticked.state
+}
+
 async function loadDesk() {
   const ledger = await readHermesLedger()
   const cases = liveCases(await readHermesCases({ includeGone: true }), ledger)
@@ -155,7 +169,7 @@ async function payload(filter?: HermesDeskFilter) {
     link: hermesLinkInfo(env),
     hermesReady: hermesReady(env),
     attachable: publicAttachable(attachableLeads(cases, leads)),
-    inquiry: await readInquiryState(),
+    inquiry: await loadInquiry(),
     filter,
   })
 }
@@ -305,6 +319,23 @@ export default async (req: Request) => {
       return json(await payload())
     }
     return json({ error: "op" }, 400)
+  }
+
+  if (action === "task") {
+    const inquiry = await loadInquiry()
+    const result = applyInquiryTaskAction(inquiry, cases, ledger, body, now)
+    if (result.error === "missing") return json({ error: result.error }, 404)
+    if (result.error) return json({ error: result.error }, 400)
+    await writeInquiryState(result.inquiry)
+    for (const item of result.touched) await persistCase(item)
+    for (const item of result.gone) await persistCase(item)
+    if (result.gone.length || result.ledger !== ledger) await persistLedger(result.ledger)
+    if (result.event) await appendHermesEvent(eventOf("update", result.event, result.caseId))
+    return json({
+      ...(await payload()),
+      assignMessage: result.assignMessage || "",
+      caseId: result.caseId || "",
+    })
   }
 
   if (action === "coach-clear") {
