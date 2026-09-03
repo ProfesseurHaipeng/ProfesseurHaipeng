@@ -7,6 +7,18 @@ import "./admin.css"
 
 const LOCAL_UNLOCK = "ash-draft"
 const AUTH_KEY = "ash-admin-auth"
+const SIDE_KEY = "ash-admin-side"
+
+function readSideOpen() {
+  try {
+    const stored = sessionStorage.getItem(SIDE_KEY)
+    if (stored === "0") return false
+    if (stored === "1") return true
+  } catch {
+    /* ignore */
+  }
+  return typeof window === "undefined" || window.matchMedia("(min-width: 861px)").matches
+}
 
 function readStoredAuth(): AdminAuth | null {
   try {
@@ -28,6 +40,19 @@ export function AdminApp() {
   const [checking, setChecking] = useState(false)
   const [view, setView] = useState<AdminView>("leads")
   const [message, setMessage] = useState("")
+  const [sideOpen, setSideOpen] = useState(readSideOpen)
+
+  const toggleSide = () => {
+    setSideOpen((open) => {
+      const next = !open
+      try {
+        sessionStorage.setItem(SIDE_KEY, next ? "1" : "0")
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }
 
   useEffect(() => {
     document.title = "网站后台 · 火山灰"
@@ -109,36 +134,44 @@ export function AdminApp() {
   }
 
   return (
-    <div className={`admin-shell${view === "hermes" ? " admin-shell--desk" : ""}`}>
+    <div className={`admin-shell${view === "hermes" ? " admin-shell--desk" : ""}${sideOpen ? "" : " is-side-collapsed"}`}>
       <aside className="admin-side">
         <div className="admin-side__bar">
           <div>
             <p className="latin-kicker">Back office</p>
             <h1>网站后台</h1>
+            {!sideOpen ? (
+              <p className="admin-side__now">{view === "hermes" ? "karmenai 工作台" : "前台线索"}</p>
+            ) : null}
           </div>
           <div className="admin-side__links">
             <Link to="/">前台</Link>
             <button type="button" className="admin-logout" onClick={logout}>
               退出
             </button>
+            <button type="button" className="admin-side__fold" onClick={toggleSide} aria-expanded={sideOpen}>
+              {sideOpen ? "折叠" : "展开"}
+            </button>
           </div>
         </div>
-        <nav>
-          <button
-            type="button"
-            className={view === "leads" ? "is-active" : ""}
-            onClick={() => setView("leads")}
-          >
-            前台线索
-          </button>
-          <button
-            type="button"
-            className={view === "hermes" ? "is-active" : ""}
-            onClick={() => setView("hermes")}
-          >
-            karmenai 工作台
-          </button>
-        </nav>
+        {sideOpen ? (
+          <nav>
+            <button
+              type="button"
+              className={view === "leads" ? "is-active" : ""}
+              onClick={() => setView("leads")}
+            >
+              前台线索
+            </button>
+            <button
+              type="button"
+              className={view === "hermes" ? "is-active" : ""}
+              onClick={() => setView("hermes")}
+            >
+              karmenai 工作台
+            </button>
+          </nav>
+        ) : null}
       </aside>
       <section className={view === "hermes" ? "admin-main admin-main--desk" : "admin-main"}>
         {view === "hermes" ? <HermesDesk auth={auth} /> : <LeadsPanel auth={auth} />}
