@@ -31,7 +31,7 @@ import {
 import { emptyInquiry, type InquiryState } from "../cms/inquiryDesk"
 import { withBase } from "../lib/asset"
 import { InquiryPanel } from "./InquiryPanel"
-import { TicketsPanel } from "./TicketsPanel"
+import { TicketsPanel, TicketEditDialog } from "./TicketsPanel"
 import type { AdminAuth } from "./LeadsPanel"
 
 type LinkView = "connecting" | "connected" | "disconnected"
@@ -917,7 +917,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
             />
           )}
           {editTicketId && selected && editTicketId === selected.id ? (
-            <TicketEditOverlay
+            <TicketEditDialog
               item={selected}
               onClose={() => setEditTicketId(null)}
               onSave={async (patch) => {
@@ -928,102 +928,6 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
           ) : null}
         </aside>
       </div>
-    </div>
-  )
-}
-
-function TicketEditOverlay({
-  item,
-  onClose,
-  onSave,
-}: {
-  item: HermesCase
-  onClose: () => void
-  onSave: (patch: StaffCasePatch) => Promise<void>
-}) {
-  const [name, setName] = useState(item.name)
-  const [org, setOrg] = useState(item.org)
-  const [factory, setFactory] = useState(item.factory || "")
-  const [contact, setContact] = useState(item.contact)
-  const [place, setPlace] = useState(item.place || "")
-  const [note, setNote] = useState(item.note)
-  const [progress, setProgress] = useState(item.progress)
-  const [nextAction, setNextAction] = useState(item.nextAction || "")
-  const [saving, setSaving] = useState(false)
-
-  return (
-    <div className="desk-edit" role="dialog" aria-modal="true">
-      <form
-        className="desk-edit__card"
-        onSubmit={(event) => {
-          event.preventDefault()
-          setSaving(true)
-          void onSave({
-            name: name.trim(),
-            org: org.trim(),
-            factory: factory.trim() || undefined,
-            contact: contact.trim(),
-            place: place.trim() || undefined,
-            note: note.trim(),
-            progress,
-            nextAction: nextAction.trim() || undefined,
-          }).finally(() => setSaving(false))
-        }}
-      >
-        <header>
-          <h3>编辑 {ticketNo(item)}</h3>
-          <button type="button" className="desk-edit__close" onClick={onClose}>
-            ×
-          </button>
-        </header>
-        <label>
-          称呼
-          <input value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label>
-          公司
-          <input value={org} onChange={(e) => setOrg(e.target.value)} />
-        </label>
-        <label>
-          工厂
-          <input value={factory} onChange={(e) => setFactory(e.target.value)} />
-        </label>
-        <label>
-          联系方式
-          <input value={contact} onChange={(e) => setContact(e.target.value)} />
-        </label>
-        <label>
-          地区
-          <input value={place} onChange={(e) => setPlace(e.target.value)} />
-        </label>
-        <label>
-          进度
-          <select value={progress} onChange={(e) => setProgress(e.target.value as HermesCase["progress"])}>
-            {PROGRESS_TRACK.map((step) => (
-              <option key={step} value={step}>
-                {PROGRESS_LABEL[step]}
-              </option>
-            ))}
-            <option value="hold">{PROGRESS_LABEL.hold}</option>
-          </select>
-        </label>
-        <label>
-          线索
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
-        </label>
-        <label>
-          下一步
-          <input value={nextAction} onChange={(e) => setNextAction(e.target.value)} />
-        </label>
-        <footer>
-          <button type="button" className="is-ghost" onClick={onClose}>
-            取消
-          </button>
-          <button type="submit" disabled={saving}>
-            {saving ? "保存中…" : "保存"}
-          </button>
-        </footer>
-      </form>
     </div>
   )
 }

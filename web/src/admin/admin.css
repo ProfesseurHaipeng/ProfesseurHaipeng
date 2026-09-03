@@ -2523,6 +2523,56 @@
   cursor: pointer;
 }
 
+.desk-tickets__filters {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.desk-tickets__colors,
+.desk-tickets__cats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.desk-tickets__colors button,
+.desk-tickets__cats button {
+  border: 1px solid #d2d2d7;
+  border-radius: 999px;
+  background: #f5f5f7;
+  padding: 0.28rem 0.65rem;
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.desk-tickets__colors button.is-on,
+.desk-tickets__cats button.is-on {
+  background: #1d1d1f;
+  color: #fff;
+  border-color: #1d1d1f;
+}
+
+.desk-color {
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  background: var(--swatch) !important;
+}
+
+.desk-color.is-on {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1d1d1f;
+}
+
+.desk-ticket--red { box-shadow: inset 4px 0 0 #ff3b30; }
+.desk-ticket--orange { box-shadow: inset 4px 0 0 #ff9500; }
+.desk-ticket--yellow { box-shadow: inset 4px 0 0 #ffcc00; }
+.desk-ticket--green { box-shadow: inset 4px 0 0 #34c759; }
+.desk-ticket--blue { box-shadow: inset 4px 0 0 #007aff; }
+.desk-ticket--purple { box-shadow: inset 4px 0 0 #af52de; }
+
 .desk-tickets__views {
   display: flex;
   gap: 0.35rem;

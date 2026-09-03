@@ -7,12 +7,14 @@ import {
   readHermesEvents,
   readHermesHealth,
   readHermesImage,
+  readHermesLedger,
   readHermesMemory,
   readInquiryState,
   writeHermesCase,
   writeHermesCoach,
   writeHermesHealth,
   writeHermesImage,
+  writeHermesLedger,
   writeHermesMemory,
   writeInquiryState,
 } from "../../src/cms/hermesBlobs"
@@ -22,6 +24,8 @@ import {
   applyStaffCasesBatch,
   applyStaffCasesDelete,
   attachLead,
+  liveCases,
+  markGoneOnLedger,
   attachableLeads,
   decorateDeskPayload,
   emptyMemory,
@@ -122,19 +126,26 @@ function eventOf(kind: HermesEvent["kind"], text: string, caseId?: string): Herm
   return { id: newEventId(), at: new Date().toISOString(), kind, text, caseId }
 }
 
-async function syncLeadCases() {
-  const cases = await readHermesCases()
+async function loadDesk() {
+  const ledger = await readHermesLedger()
+  const cases = liveCases(await readHermesCases({ includeGone: true }), ledger)
   const leads = await loadLeads()
-  const next = importLeads(cases, leads)
-  for (const item of next) {
-    if (!cases.some((row) => row.id === item.id)) await writeHermesCase(item)
-  }
-  return { cases: next, leads }
+  return { cases, leads, ledger }
+}
+
+async function persistCase(item: HermesCase) {
+  const ok = await writeHermesCase(item)
+  if (!ok) throw new Error("persist")
+}
+
+async function persistLedger(ledger: Awaited<ReturnType<typeof readHermesLedger>>) {
+  const ok = await writeHermesLedger(ledger)
+  if (!ok) throw new Error("persist")
 }
 
 async function payload(filter?: HermesDeskFilter) {
   const env = envBag()
-  const { cases, leads } = await syncLeadCases()
+  const { cases, leads } = await loadDesk()
   return decorateDeskPayload({
     cases,
     coach: await readHermesCoach(),
@@ -185,7 +196,8 @@ export default async (req: Request) => {
   if (action && !isStaffAction(action)) {
     return json({ error: "hermes-only" }, 403)
   }
-  let { cases } = await syncLeadCases()
+  try {
+  let { cases, ledger } = await loadDesk()
   const now = new Date().toISOString()
 
   if (action === "health") {
@@ -230,7 +242,7 @@ export default async (req: Request) => {
     const result = fileFinding(inquiry, cases, findingId, now)
     if (result.error) return json({ error: result.error }, 400)
     await writeInquiryState(result.inquiry)
-    if (result.case) await writeHermesCase(result.case)
+    if (result.case) await persistCase(result.case)
     await appendHermesEvent(eventOf("update", `询单：建档 ${result.case?.org || ""}`.trim(), result.case?.id))
     return json(await payload())
   }
@@ -238,15 +250,22 @@ export default async (req: Request) => {
   if (action === "attach") {
     const leadId = typeof body.leadId === "string" ? body.leadId : ""
     const leads = await loadLeads()
-    const result = attachLead(cases, leads, leadId, now)
+    const result = attachLead(cases, leads, leadId, now, ledger)
     if (result.error === "missing") return json({ error: "missing" }, 400)
-    if (result.case && result.error !== "exists") await writeHermesCase(result.case)
+    if (result.case && result.error !== "exists") {
+      await persistCase(result.case)
+      await persistLedger(result.ledger)
+    }
     await appendHermesEvent(eventOf("update", `接入线索 ${result.case?.name || leadId}`, result.case?.id))
     return json(await payload())
   }
 
   if (action === "import") {
-    const { cases: next } = await syncLeadCases()
+    const leads = await loadLeads()
+    const next = importLeads(cases, leads, now, ledger)
+    for (const item of next) {
+      if (!cases.some((row) => row.id === item.id)) await persistCase(item)
+    }
     await appendHermesEvent(eventOf("update", `接入前台线索 ${Math.max(0, next.length - cases.length)} 条`))
     return json(await payload())
   }
@@ -257,10 +276,12 @@ export default async (req: Request) => {
       const ids = Array.isArray(body.ids) ? body.ids.filter((item): item is string => typeof item === "string") : []
       const result = applyStaffCasesDelete(cases, ids, now)
       if (result.error) return json({ error: result.error }, 400)
-      for (const id of ids) {
-        const hit = cases.find((item) => item.id === id)
-        if (hit) await writeHermesCase({ ...hit, gone: true, updatedAt: now })
+      let nextLedger = ledger
+      for (const item of result.gone) {
+        await persistCase(item)
+        nextLedger = markGoneOnLedger(nextLedger, item, now)
       }
+      await persistLedger(nextLedger)
       await appendHermesEvent(eventOf("update", `删除 ${result.count} 张工单`))
       return json(await payload())
     }
@@ -270,7 +291,7 @@ export default async (req: Request) => {
       const result = applyStaffCaseUpdate(cases, id, patch, now)
       if (result.error === "empty") return json({ error: "empty" }, 400)
       if (result.error === "missing") return json({ error: "missing" }, 404)
-      if (result.case) await writeHermesCase(result.case)
+      if (result.case) await persistCase(result.case)
       await appendHermesEvent(eventOf("update", `编辑工单 ${result.case?.name || id}`, result.case?.id))
       return json(await payload())
     }
@@ -279,7 +300,7 @@ export default async (req: Request) => {
       const patch = body.patch && typeof body.patch === "object" ? (body.patch as Record<string, unknown>) : {}
       const result = applyStaffCasesBatch(cases, ids, patch, now)
       if (result.error) return json({ error: result.error }, 400)
-      for (const item of result.cases.filter((row) => ids.includes(row.id))) await writeHermesCase(item)
+      for (const item of result.cases.filter((row) => ids.includes(row.id))) await persistCase(item)
       await appendHermesEvent(eventOf("update", `批量编辑 ${result.count} 张工单`))
       return json(await payload())
     }
@@ -340,6 +361,10 @@ export default async (req: Request) => {
   }
 
   return json({ error: "action" }, 400)
+  } catch (err) {
+    if (err instanceof Error && err.message === "persist") return json({ error: "persist" }, 503)
+    throw err
+  }
 }
 
 export const config: Config = {

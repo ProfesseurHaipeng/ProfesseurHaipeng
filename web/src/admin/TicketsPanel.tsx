@@ -1,5 +1,8 @@
-import { useMemo, useState, type FormEvent } from "react"
+import { useMemo, useState, type CSSProperties, type FormEvent } from "react"
 import {
+  CASE_CATEGORIES,
+  CASE_CATEGORY_LABEL,
+  CASE_COLORS,
   PROGRESS_LABEL,
   PROGRESS_TRACK,
   customerArchives,
@@ -10,6 +13,8 @@ import {
   normalizeCase,
   ticketNo,
   ticketsForCustomer,
+  type CaseCategory,
+  type CaseColor,
   type HermesCase,
   type HermesProgress,
   type StaffCasePatch,
@@ -56,9 +61,16 @@ export function TicketsPanel({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editId, setEditId] = useState<string | null>(null)
   const [batchProgress, setBatchProgress] = useState<HermesProgress>("talking")
+  const [batchColor, setBatchColor] = useState<CaseColor>("none")
+  const [batchCategory, setBatchCategory] = useState<CaseCategory>("unset")
+  const [color, setColor] = useState<"all" | CaseColor>("all")
+  const [category, setCategory] = useState<"all" | CaseCategory>("all")
 
   const live = useMemo(() => filterHermesCases(cases, { origin: "live" }).map(normalizeCase), [cases])
-  const visible = useMemo(() => filterHermesCases(cases, { origin: "live", query }).map(normalizeCase), [cases, query])
+  const visible = useMemo(
+    () => filterHermesCases(cases, { origin: "live", query, color, category }).map(normalizeCase),
+    [cases, query, color, category],
+  )
   const customers = useMemo(() => customerArchives(visible), [visible])
   const factories = useMemo(() => factoryArchives(visible), [visible])
   const editing = editId ? live.find((item) => item.id === editId) || null : null
@@ -96,13 +108,20 @@ export function TicketsPanel({
     clearSelection()
   }
 
+  const applyBatchTag = async () => {
+    const ids = [...selected]
+    if (!ids.length) return
+    await onBatchUpdate(ids, { color: batchColor, category: batchCategory })
+    clearSelection()
+  }
+
   return (
     <div className="desk-tickets">
       <header className="desk-tickets__head">
         <div>
           <h2>工单档案</h2>
           <p className="desk-tickets__hint">
-            {visible.length ? `当前 ${visible.length} 张工单` : "还没有工单"} · 可搜索、编辑、批量删除
+            {visible.length ? `当前 ${visible.length} 张` : "还没有工单"} · 存在站点存储里，删除后不会被线索自动建回
           </p>
         </div>
       </header>
@@ -115,6 +134,39 @@ export function TicketsPanel({
         />
         <button type="submit">搜索</button>
       </form>
+
+      <div className="desk-tickets__filters" aria-label="归类筛选">
+        <div className="desk-tickets__colors">
+          <button type="button" className={color === "all" ? "is-on" : ""} onClick={() => setColor("all")}>
+            全部颜色
+          </button>
+          {CASE_COLORS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={`desk-color${color === item.key ? " is-on" : ""}`}
+              style={{ "--swatch": item.swatch } as CSSProperties}
+              onClick={() => setColor(item.key)}
+              aria-label={item.label}
+            />
+          ))}
+        </div>
+        <div className="desk-tickets__cats">
+          <button type="button" className={category === "all" ? "is-on" : ""} onClick={() => setCategory("all")}>
+            全部分类
+          </button>
+          {CASE_CATEGORIES.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={category === item.key ? "is-on" : ""}
+              onClick={() => setCategory(item.key)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <nav className="desk-tickets__views" aria-label="档案视图">
         <button type="button" className={view === "tickets" ? "is-on" : ""} onClick={() => setView("tickets")}>
@@ -147,6 +199,23 @@ export function TicketsPanel({
               <button type="button" onClick={() => void applyBatchProgress()}>
                 批量改进度
               </button>
+              <select value={batchColor} onChange={(event) => setBatchColor(event.target.value as CaseColor)}>
+                {CASE_COLORS.map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+              <select value={batchCategory} onChange={(event) => setBatchCategory(event.target.value as CaseCategory)}>
+                {CASE_CATEGORIES.map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={() => void applyBatchTag()}>
+                批量打标
+              </button>
               <button type="button" className="is-danger" onClick={() => void confirmDelete([...selected])}>
                 删除选中
               </button>
@@ -165,13 +234,14 @@ export function TicketsPanel({
               <label className="desk-tickets__check">
                 <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggle(item.id)} />
               </label>
-              <button type="button" className="desk-ticket" onClick={() => onOpenTicket(item.id)}>
+              <button type="button" className={`desk-ticket desk-ticket--${item.color || "none"}`} onClick={() => onOpenTicket(item.id)}>
                 <div className="desk-ticket__body">
                   <em>{ticketNo(item)}</em>
                   <strong>{item.name}</strong>
                   <span>{item.org || "公司尚无"}</span>
                   <span>
                     {PROGRESS_LABEL[item.progress]}
+                    {item.category && item.category !== "unset" ? ` · ${CASE_CATEGORY_LABEL[item.category]}` : ""}
                     {factoryName(item) ? ` · ${factoryName(item)}` : ""}
                   </span>
                   <time dateTime={item.updatedAt}>{formatTime(item.updatedAt)}</time>
@@ -254,7 +324,7 @@ export function TicketsPanel({
   )
 }
 
-function TicketEditDialog({
+export function TicketEditDialog({
   item,
   onClose,
   onSave,
@@ -271,6 +341,8 @@ function TicketEditDialog({
   const [note, setNote] = useState(item.note)
   const [progress, setProgress] = useState(item.progress)
   const [nextAction, setNextAction] = useState(item.nextAction || "")
+  const [tagColor, setTagColor] = useState<CaseColor>(item.color || "none")
+  const [tagCategory, setTagCategory] = useState<CaseCategory>(item.category || "unset")
   const [saving, setSaving] = useState(false)
 
   const submit = async (event: FormEvent) => {
@@ -286,6 +358,8 @@ function TicketEditDialog({
         note: note.trim(),
         progress,
         nextAction: nextAction.trim() || undefined,
+        color: tagColor,
+        category: tagCategory,
       })
     } finally {
       setSaving(false)
@@ -327,6 +401,26 @@ function TicketEditDialog({
             {[...PROGRESS_TRACK, "hold" as const].map((step) => (
               <option key={step} value={step}>
                 {PROGRESS_LABEL[step]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          颜色标签
+          <select value={tagColor} onChange={(event) => setTagColor(event.target.value as CaseColor)}>
+            {CASE_COLORS.map((row) => (
+              <option key={row.key} value={row.key}>
+                {row.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          分类
+          <select value={tagCategory} onChange={(event) => setTagCategory(event.target.value as CaseCategory)}>
+            {CASE_CATEGORIES.map((row) => (
+              <option key={row.key} value={row.key}>
+                {row.label}
               </option>
             ))}
           </select>

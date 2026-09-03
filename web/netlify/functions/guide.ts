@@ -9,13 +9,14 @@ import {
   visitorLang,
 } from "../../src/cms/greeting"
 import { resolveGuideReply } from "../../src/cms/guideRuntime"
-import { readHermesCases, readHermesMemory, writeHermesCase } from "../../src/cms/hermesBlobs"
+import { readHermesCases, readHermesLedger, readHermesMemory, writeHermesCase } from "../../src/cms/hermesBlobs"
 import { hermesHandoffHint, hermesReady, type AdvisorId } from "../../src/cms/hermes"
 import {
   findHermesCase,
   frontHermesExtra,
   humanTakenOverReply,
   isHumanOwned,
+  isVisitorSuppressed,
   upsertFromTicket,
   upsertFromVisit,
 } from "../../src/cms/hermesDesk"
@@ -195,17 +196,20 @@ export default async (req: Request, context: Context) => {
     ticketFiled = await fileTicket(result.ticket, placeZh)
   }
   if (result.advisor === "hermes") {
-    const seeded = visitorId
-      ? upsertFromVisit(deskCases, visitorId, lastUser?.content || result.ticket?.note || "")
-      : { cases: deskCases, case: null }
-    const withTicket = result.ticket
-      ? upsertFromTicket(seeded.cases, result.ticket, {
-          visitorId: visitorId || undefined,
-          place: placeZh || undefined,
-          following: true,
-        })
-      : seeded
-    if (withTicket.case) await writeHermesCase(withTicket.case)
+    const ledger = await readHermesLedger()
+    if (!isVisitorSuppressed(visitorId, ledger)) {
+      const seeded = visitorId
+        ? upsertFromVisit(deskCases, visitorId, lastUser?.content || result.ticket?.note || "")
+        : { cases: deskCases, case: null }
+      const withTicket = result.ticket
+        ? upsertFromTicket(seeded.cases, result.ticket, {
+            visitorId: visitorId || undefined,
+            place: placeZh || undefined,
+            following: true,
+          })
+        : seeded
+      if (withTicket.case) await writeHermesCase(withTicket.case)
+    }
   }
   return json({
     reply: result.reply,

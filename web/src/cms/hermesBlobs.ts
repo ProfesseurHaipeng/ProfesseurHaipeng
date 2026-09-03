@@ -1,10 +1,14 @@
 import { emptyInquiry, hydrateInquiryState, type InquiryState } from "./inquiryDesk"
 import {
+  emptyLedger,
   emptyMemory,
+  hydrateLedger,
+  liveCases,
   sortHermesCases,
   type HermesCase,
   type HermesCoachTurn,
   type HermesEvent,
+  type HermesLedger,
   type HermesMemory,
 } from "./hermesDesk"
 import type { HermesHealth } from "./hermes"
@@ -27,9 +31,23 @@ async function store(name: string): Promise<BlobStore | null> {
   }
 }
 
-export async function readHermesCases(): Promise<HermesCase[]> {
+export async function readHermesLedger(): Promise<HermesLedger> {
+  const blobs = await store("ash-hermes")
+  if (!blobs) return emptyLedger()
+  return hydrateLedger(await blobs.get("ledger", { type: "json" }))
+}
+
+export async function writeHermesLedger(ledger: HermesLedger) {
+  const blobs = await store("ash-hermes")
+  if (!blobs) return false
+  await blobs.setJSON("ledger", ledger)
+  return true
+}
+
+export async function readHermesCases(options: { includeGone?: boolean } = {}): Promise<HermesCase[]> {
   const blobs = await store("ash-hermes")
   if (!blobs) return []
+  const ledger = await readHermesLedger()
   const { blobs: keys } = await blobs.list()
   const rows = await Promise.all(
     keys
@@ -38,10 +56,11 @@ export async function readHermesCases(): Promise<HermesCase[]> {
         const value = await blobs.get(key, { type: "json" })
         if (!value || typeof value !== "object") return null
         const row = value as HermesCase
-        return row.id && !row.gone ? row : null
+        return row.id ? row : null
       }),
   )
-  return sortHermesCases(rows.filter((item): item is HermesCase => Boolean(item?.id)))
+  const all = sortHermesCases(rows.filter((item): item is HermesCase => Boolean(item?.id)))
+  return options.includeGone ? all : liveCases(all, ledger)
 }
 
 export async function writeHermesCase(item: HermesCase) {
@@ -74,12 +93,9 @@ export async function writeHermesCoach(turns: HermesCoachTurn[]) {
 export async function deleteHermesCase(id: string) {
   const blobs = await store("ash-hermes")
   if (!blobs || !id.startsWith("case-")) return false
-  await blobs.setJSON(id, { id, gone: true, updatedAt: new Date().toISOString() })
-  try {
-    if (blobs.delete) await blobs.delete(id)
-  } catch {
-    /* tombstone is enough for reads */
-  }
+  const existing = await blobs.get(id, { type: "json" })
+  const row = existing && typeof existing === "object" ? (existing as HermesCase) : { id }
+  await blobs.setJSON(id, { ...row, id, gone: true, updatedAt: new Date().toISOString() })
   return true
 }
 

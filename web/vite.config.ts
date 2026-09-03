@@ -27,6 +27,7 @@ function localGuide(): Plugin {
       health: { status: "connected" | "disconnected"; checkedAt: string; model?: string; detail?: string } | null
       images: Record<string, { mime: string; name: string; data: string }>
       inquiry: { targets: unknown[]; findings: unknown[]; job: { status: string; brief: string; updatedAt: string } }
+      ledger: { goneIds: string[]; goneLeadIds: string[]; goneVisitorIds: string[]; goneContacts: string[]; updatedAt: string }
     } = {
       cases: [],
       coach: [],
@@ -35,6 +36,7 @@ function localGuide(): Plugin {
       health: null,
       images: {},
       inquiry: { targets: [], findings: [], job: { status: "idle", brief: "", updatedAt: "" } },
+      ledger: { goneIds: [], goneLeadIds: [], goneVisitorIds: [], goneContacts: [], updatedAt: "" },
     }
     const staffOk = (req: IncomingMessage) => {
       const user = env.ADMIN_USER || "admin"
@@ -103,11 +105,9 @@ function localGuide(): Plugin {
         const deskMod = await server.ssrLoadModule("/src/cms/hermesDesk.ts")
         const hermesMod = await server.ssrLoadModule("/src/cms/hermes.ts")
         const inquiryMod = await server.ssrLoadModule("/src/cms/inquiryDesk.ts")
-        const syncLeads = () => {
-          localDesk.cases = deskMod.importLeads(localDesk.cases, localLeads)
-        }
+        const liveCases = () => deskMod.liveCases(localDesk.cases, localDesk.ledger)
         const pack = () => {
-          syncLeads()
+          localDesk.cases = liveCases()
           return deskMod.decorateDeskPayload({
             cases: localDesk.cases,
             coach: localDesk.coach,
@@ -211,20 +211,21 @@ function localGuide(): Plugin {
           }
           if (action === "attach") {
             const leadId = typeof body.leadId === "string" ? body.leadId : ""
-            const result = deskMod.attachLead(localDesk.cases, localLeads, leadId)
+            const result = deskMod.attachLead(localDesk.cases, localLeads, leadId, undefined, localDesk.ledger)
             if (result.error === "missing") {
               res.statusCode = 400
               res.end(JSON.stringify({ error: "missing" }))
               return
             }
             localDesk.cases = result.cases
+            localDesk.ledger = result.ledger
             pushEvent("update", `接入线索 ${result.case?.name || leadId}`, result.case?.id)
             res.end(JSON.stringify(pack()))
             return
           }
           if (action === "import") {
             const before = localDesk.cases.length
-            syncLeads()
+            localDesk.cases = deskMod.importLeads(localDesk.cases, localLeads, undefined, localDesk.ledger)
             pushEvent("update", `接入前台线索 ${Math.max(0, localDesk.cases.length - before)} 条`)
             res.end(JSON.stringify(pack()))
             return
@@ -240,6 +241,9 @@ function localGuide(): Plugin {
                 return
               }
               localDesk.cases = result.cases
+              for (const item of result.gone || []) {
+                localDesk.ledger = deskMod.markGoneOnLedger(localDesk.ledger, item)
+              }
               pushEvent("update", `删除 ${result.count} 张工单`)
               res.end(JSON.stringify(pack()))
               return
@@ -447,7 +451,7 @@ function localGuide(): Plugin {
             })
             ticketFiled = true
           }
-          if (result.advisor === "hermes") {
+          if (result.advisor === "hermes" && !deskMod.isVisitorSuppressed(visitorId, localDesk.ledger)) {
             const seeded = visitorId
               ? deskMod.upsertFromVisit(localDesk.cases, visitorId, lastUser?.content || result.ticket?.note || "")
               : { cases: localDesk.cases, case: null }

@@ -7,10 +7,13 @@ import {
   applyStaffCasesBatch,
   applyStaffCasesDelete,
   attachLead,
+  caseFromLead,
+  dedupeHermesCases,
+  emptyLedger,
+  markGoneOnLedger,
   fileFinding,
   boardMetrics,
   buildCoachMessages,
-  caseFromLead,
   decorateDeskPayload,
   customerArchives,
   customerKey,
@@ -367,5 +370,31 @@ describe("desk board telemetry", () => {
     expect(deleted.cases.some((item) => item.id === "case-a")).toBe(false)
     expect(isStaffAction("cases")).toBe(true)
     expect(isStaffAction("coach-clear")).toBe(true)
+  })
+
+  it("keeps deleted tickets gone even if the same lead is imported again", () => {
+    const lead: Lead = {
+      id: "lead-chen",
+      at: now,
+      name: "陈经理",
+      org: "江西绿田农业",
+      email: "chen@example.com",
+      note: "测试",
+      source: "form",
+    }
+    const created = caseFromLead(lead, now)
+    const deleted = applyStaffCasesDelete([created], [created.id], now)
+    expect(deleted.count).toBe(1)
+    const ledger = markGoneOnLedger(emptyLedger(), deleted.gone[0]!, now)
+    const revived = importLeads(deleted.cases, [lead], now, ledger)
+    expect(revived).toHaveLength(0)
+    const attached = attachLead(deleted.cases, [lead], "lead-chen", now, ledger)
+    expect(attached.case?.name).toBe("陈经理")
+    expect(attached.ledger.goneLeadIds).not.toContain("lead-chen")
+    const tagged = applyStaffCaseUpdate([created], created.id, { color: "red", category: "test" }, now)
+    expect(tagged.case?.color).toBe("red")
+    expect(tagged.case?.category).toBe("test")
+    expect(filterHermesCases([tagged.case!], { color: "red", category: "test" })).toHaveLength(1)
+    expect(dedupeHermesCases([created, { ...created, id: "case-copy", updatedAt: "2026-09-01T00:00:00.000Z" }])).toHaveLength(1)
   })
 })

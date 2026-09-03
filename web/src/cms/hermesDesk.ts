@@ -16,6 +16,8 @@ export type HermesProgress = "new" | "contacted" | "talking" | "sample" | "negot
 export type HermesMailStatus = "none" | "queued" | "sent" | "failed"
 export type HermesMailTrack = "none" | "on" | "opened" | "clicked"
 export type HermesChannel = "chat" | "email" | "form" | "unset"
+export type CaseColor = "none" | "red" | "orange" | "yellow" | "green" | "blue" | "purple"
+export type CaseCategory = "unset" | "lead" | "inquiry" | "partner" | "sample" | "test" | "other"
 
 export type HermesCase = {
   id: string
@@ -37,6 +39,8 @@ export type HermesCase = {
   evaluation: string
   energy: HermesEnergy
   source: "ai" | "form" | "manual"
+  color?: CaseColor
+  category?: CaseCategory
   gone?: boolean
   mailStatus?: HermesMailStatus
   mailSentAt?: string
@@ -70,6 +74,8 @@ export type HermesDeskFilter = {
   energy?: "all" | HermesEnergy
   origin?: "all" | "live"
   query?: string
+  color?: "all" | CaseColor
+  category?: "all" | CaseCategory
 }
 
 export type HermesMemory = {
@@ -156,6 +162,126 @@ export const CHANNEL_LABEL: Record<HermesChannel, string> = {
   unset: "未知",
 }
 
+export const CASE_COLORS: { key: CaseColor; label: string; swatch: string }[] = [
+  { key: "none", label: "无色", swatch: "#d2d2d7" },
+  { key: "red", label: "红", swatch: "#ff3b30" },
+  { key: "orange", label: "橙", swatch: "#ff9500" },
+  { key: "yellow", label: "黄", swatch: "#ffcc00" },
+  { key: "green", label: "绿", swatch: "#34c759" },
+  { key: "blue", label: "蓝", swatch: "#007aff" },
+  { key: "purple", label: "紫", swatch: "#af52de" },
+]
+
+export const CASE_CATEGORIES: { key: CaseCategory; label: string }[] = [
+  { key: "unset", label: "未分类" },
+  { key: "lead", label: "线索" },
+  { key: "inquiry", label: "询单" },
+  { key: "partner", label: "合作" },
+  { key: "sample", label: "样品" },
+  { key: "test", label: "测试" },
+  { key: "other", label: "其他" },
+]
+
+export const CASE_COLOR_LABEL: Record<CaseColor, string> = Object.fromEntries(
+  CASE_COLORS.map((item) => [item.key, item.label]),
+) as Record<CaseColor, string>
+
+export const CASE_CATEGORY_LABEL: Record<CaseCategory, string> = Object.fromEntries(
+  CASE_CATEGORIES.map((item) => [item.key, item.label]),
+) as Record<CaseCategory, string>
+
+export type HermesLedger = {
+  goneIds: string[]
+  goneLeadIds: string[]
+  goneVisitorIds: string[]
+  goneContacts: string[]
+  updatedAt: string
+}
+
+export function emptyLedger(): HermesLedger {
+  return { goneIds: [], goneLeadIds: [], goneVisitorIds: [], goneContacts: [], updatedAt: "" }
+}
+
+function uniqueIds(values: string[]) {
+  return [...new Set(values.filter(Boolean))]
+}
+
+export function hydrateLedger(raw: unknown): HermesLedger {
+  const base = emptyLedger()
+  if (!raw || typeof raw !== "object") return base
+  const row = raw as Record<string, unknown>
+  const list = (value: unknown) =>
+    Array.isArray(value) ? uniqueIds(value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()))) : []
+  return {
+    goneIds: list(row.goneIds),
+    goneLeadIds: list(row.goneLeadIds),
+    goneVisitorIds: list(row.goneVisitorIds),
+    goneContacts: list(row.goneContacts),
+    updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : "",
+  }
+}
+
+export function markGoneOnLedger(ledger: HermesLedger, item: HermesCase, now = new Date().toISOString()): HermesLedger {
+  return {
+    goneIds: uniqueIds([...ledger.goneIds, item.id]),
+    goneLeadIds: item.leadId ? uniqueIds([...ledger.goneLeadIds, item.leadId]) : ledger.goneLeadIds,
+    goneVisitorIds: item.visitorId ? uniqueIds([...ledger.goneVisitorIds, item.visitorId]) : ledger.goneVisitorIds,
+    goneContacts: item.contact && item.contact.trim().length >= 5 ? uniqueIds([...ledger.goneContacts, item.contact.trim()]) : ledger.goneContacts,
+    updatedAt: now,
+  }
+}
+
+export function reviveOnLedger(ledger: HermesLedger, item: Pick<HermesCase, "id" | "leadId" | "visitorId" | "contact">, now = new Date().toISOString()): HermesLedger {
+  const contact = (item.contact || "").trim()
+  return {
+    goneIds: ledger.goneIds.filter((id) => id !== item.id),
+    goneLeadIds: item.leadId ? ledger.goneLeadIds.filter((id) => id !== item.leadId) : ledger.goneLeadIds,
+    goneVisitorIds: item.visitorId ? ledger.goneVisitorIds.filter((id) => id !== item.visitorId) : ledger.goneVisitorIds,
+    goneContacts: contact.length >= 5 ? ledger.goneContacts.filter((row) => row !== contact) : ledger.goneContacts,
+    updatedAt: now,
+  }
+}
+
+export function isCaseSuppressed(item: HermesCase, ledger: HermesLedger) {
+  if (item.gone) return true
+  if (ledger.goneIds.includes(item.id)) return true
+  if (item.leadId && ledger.goneLeadIds.includes(item.leadId)) return true
+  if (item.visitorId && ledger.goneVisitorIds.includes(item.visitorId)) return true
+  const contact = (item.contact || "").trim()
+  return contact.length >= 5 && ledger.goneContacts.includes(contact)
+}
+
+export function isLeadSuppressed(lead: Lead, ledger: HermesLedger) {
+  if (ledger.goneLeadIds.includes(lead.id)) return true
+  const contact = (lead.contact || lead.email || "").trim()
+  return contact.length >= 5 && ledger.goneContacts.includes(contact)
+}
+
+export function isVisitorSuppressed(visitorId: string, ledger: HermesLedger) {
+  return Boolean(visitorId) && ledger.goneVisitorIds.includes(visitorId)
+}
+
+export function liveCases(cases: HermesCase[], ledger: HermesLedger = emptyLedger()) {
+  return sortHermesCases(dedupeHermesCases(cases.filter((item) => !isCaseSuppressed(item, ledger))))
+}
+
+export function dedupeHermesCases(cases: HermesCase[]) {
+  const seen = new Set<string>()
+  const next: HermesCase[] = []
+  for (const item of sortHermesCases(cases)) {
+    const keys = [
+      item.id,
+      item.ticketNo ? `ticket:${item.ticketNo}` : "",
+      item.leadId ? `lead:${item.leadId}` : "",
+      item.visitorId ? `visitor:${item.visitorId}` : "",
+    ].filter(Boolean)
+    if (keys.some((key) => seen.has(key))) continue
+    for (const key of keys) seen.add(key)
+    next.push(item)
+  }
+  return next
+}
+
 export const STAFF_ACTIONS = ["health", "coach", "targets", "job", "file", "attach", "import", "cases", "coach-clear"] as const
 
 export const STAFF_CASE_FIELDS = [
@@ -170,6 +296,8 @@ export const STAFF_CASE_FIELDS = [
   "following",
   "energy",
   "nextAction",
+  "color",
+  "category",
 ] as const
 
 export type StaffCasePatch = Partial<Pick<HermesCase, (typeof STAFF_CASE_FIELDS)[number]>>
@@ -225,14 +353,15 @@ export function applyStaffCasesBatch(
 
 export function applyStaffCasesDelete(cases: HermesCase[], ids: string[], now = new Date().toISOString()) {
   const wanted = new Set(ids.filter((item) => item.startsWith("case-")))
-  if (!wanted.size) return { cases, count: 0, error: "empty" as const }
-  let count = 0
+  if (!wanted.size) return { cases, gone: [] as HermesCase[], count: 0, error: "empty" as const }
+  const gone: HermesCase[] = []
   const next = cases.map((item) => {
     if (!wanted.has(item.id) || item.gone) return item
-    count += 1
-    return { ...item, gone: true, updatedAt: now }
+    const row = { ...item, gone: true, updatedAt: now }
+    gone.push(row)
+    return row
   })
-  return { cases: sortHermesCases(next.filter((item) => !item.gone)), count, error: null }
+  return { cases: sortHermesCases(next.filter((item) => !item.gone)), gone, count: gone.length, error: null }
 }
 
 export function progressRatio(progress: HermesProgress) {
@@ -390,6 +519,8 @@ export function normalizeCase(item: HermesCase): HermesCase {
     nextAction: typeof item.nextAction === "string" ? item.nextAction : "",
     lastChannel:
       item.lastChannel === "chat" || item.lastChannel === "email" || item.lastChannel === "form" ? item.lastChannel : "unset",
+    color: asColor(item.color),
+    category: asCategory(item.category),
   }
 }
 
@@ -509,6 +640,18 @@ function asOwner(value: unknown): HermesOwner {
   return value === "human" ? "human" : "hermes"
 }
 
+export function asColor(value: unknown): CaseColor {
+  return value === "red" || value === "orange" || value === "yellow" || value === "green" || value === "blue" || value === "purple"
+    ? value
+    : "none"
+}
+
+export function asCategory(value: unknown): CaseCategory {
+  return value === "lead" || value === "inquiry" || value === "partner" || value === "sample" || value === "test" || value === "other"
+    ? value
+    : "unset"
+}
+
 export function sortHermesCases(cases: HermesCase[]) {
   return [...cases].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))
 }
@@ -521,6 +664,8 @@ export function filterHermesCases(cases: HermesCase[], filter: HermesDeskFilter 
     if (filter.follow === "idle" && item.following) return false
     if (filter.owner && filter.owner !== "all" && item.owner !== filter.owner) return false
     if (filter.energy && filter.energy !== "all" && item.energy !== filter.energy) return false
+    if (filter.color && filter.color !== "all" && (item.color || "none") !== filter.color) return false
+    if (filter.category && filter.category !== "all" && (item.category || "unset") !== filter.category) return false
     return matchDeskSearch(item, query)
   })
 }
@@ -564,13 +709,25 @@ export function publicAttachable(leads: Lead[]) {
   }))
 }
 
-export function attachLead(cases: HermesCase[], leads: Lead[], leadId: string, now = new Date().toISOString()) {
+export function attachLead(
+  cases: HermesCase[],
+  leads: Lead[],
+  leadId: string,
+  now = new Date().toISOString(),
+  ledger: HermesLedger = emptyLedger(),
+) {
   const lead = leads.find((item) => item.id === leadId)
-  if (!lead) return { cases, case: null as HermesCase | null, error: "missing" as const }
-  const hit = findHermesCase(cases, { leadId: lead.id, contact: lead.contact || lead.email })
-  if (hit) return { cases, case: hit, error: "exists" as const }
-  const created = caseFromLead(lead, now, cases)
-  return { cases: sortHermesCases([created, ...cases]), case: created, error: null }
+  if (!lead) return { cases, case: null as HermesCase | null, ledger, error: "missing" as const }
+  const live = liveCases(cases, ledger)
+  const hit = findHermesCase(live, { leadId: lead.id, contact: lead.contact || lead.email })
+  if (hit) return { cases: live, case: hit, ledger, error: "exists" as const }
+  const created = caseFromLead(lead, now, live)
+  return {
+    cases: sortHermesCases([created, ...live]),
+    case: created,
+    ledger: reviveOnLedger(ledger, created, now),
+    error: null,
+  }
 }
 
 /** Frontend Hermes only. Never include desk memory, evaluations, or other customers. */
@@ -729,6 +886,8 @@ export function patchHermesCase(item: HermesCase, raw: Record<string, unknown>, 
     next.chatTurns = Math.min(9999, Math.round(raw.chatTurns))
   }
   if ("nextAction" in raw) next.nextAction = clean(raw.nextAction, 200)
+  if ("color" in raw) next.color = asColor(raw.color)
+  if ("category" in raw) next.category = asCategory(raw.category)
   if ("lastChannel" in raw) {
     next.lastChannel =
       raw.lastChannel === "chat" || raw.lastChannel === "email" || raw.lastChannel === "form" ? raw.lastChannel : next.lastChannel
@@ -757,6 +916,7 @@ export function caseFromLead(lead: Lead, now = new Date().toISOString(), cases: 
     evaluation: "",
     energy: "unset",
     source: lead.source === "ai" ? "ai" : "form",
+    category: "lead",
     ...emptyTelemetry(),
     lastChannel: lead.source === "ai" ? "chat" : "form",
   }
@@ -863,9 +1023,10 @@ export function upsertFromVisit(
   return { cases: [created, ...cases], case: created }
 }
 
-export function importLeads(cases: HermesCase[], leads: Lead[], now = new Date().toISOString()) {
-  let next = cases
+export function importLeads(cases: HermesCase[], leads: Lead[], now = new Date().toISOString(), ledger: HermesLedger = emptyLedger()) {
+  let next = liveCases(cases, ledger)
   for (const lead of leads) {
+    if (isLeadSuppressed(lead, ledger)) continue
     const hit = findHermesCase(next, { leadId: lead.id, contact: lead.contact || lead.email })
     if (hit) continue
     next = [caseFromLead(lead, now, next), ...next]
@@ -916,6 +1077,7 @@ export function fileFinding(
         evaluation: "",
         energy: "unset" as const,
         source: "manual" as const,
+        category: "inquiry" as const,
         ...emptyTelemetry(),
         lastChannel: "unset" as const,
       }
