@@ -191,7 +191,21 @@ export default async (req: Request) => {
     if (removed.length) {
       await appendHermesEvent(eventOf("note", `清理了 ${removed.length} 条没有真实对话的表单卡`))
     }
-    return json({ ...(await payload()), removed: removed.length })
+    const env = envBag()
+    const leads = await loadLeads()
+    return json({
+      ...decorateDeskPayload({
+        cases: next,
+        coach: await readHermesCoach(),
+        events: await readHermesEvents(),
+        memory: await readHermesMemory(),
+        health: await readHermesHealth(),
+        link: hermesLinkInfo(env),
+        hermesReady: hermesReady(env),
+        attachable: publicAttachable(attachableLeads(next, leads)),
+      }),
+      removed: removed.length,
+    })
   }
 
   if (action === "memory") {

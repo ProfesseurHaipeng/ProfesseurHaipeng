@@ -24,6 +24,7 @@ export type HermesCase = {
   evaluation: string
   energy: HermesEnergy
   source: "ai" | "form" | "manual"
+  gone?: boolean
 }
 
 export type HermesCoachTurn = {

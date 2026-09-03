@@ -33,7 +33,9 @@ export async function readHermesCases(): Promise<HermesCase[]> {
       .filter((item) => item.key.startsWith("case-"))
       .map(async ({ key }) => {
         const value = await blobs.get(key, { type: "json" })
-        return value && typeof value === "object" ? (value as HermesCase) : null
+        if (!value || typeof value !== "object") return null
+        const row = value as HermesCase
+        return row.id && !row.gone ? row : null
       }),
   )
   return sortHermesCases(rows.filter((item): item is HermesCase => Boolean(item?.id)))
@@ -68,8 +70,13 @@ export async function writeHermesCoach(turns: HermesCoachTurn[]) {
 
 export async function deleteHermesCase(id: string) {
   const blobs = await store("ash-hermes")
-  if (!blobs?.delete || !id.startsWith("case-")) return false
-  await blobs.delete(id)
+  if (!blobs || !id.startsWith("case-")) return false
+  await blobs.setJSON(id, { id, gone: true, updatedAt: new Date().toISOString() })
+  try {
+    if (blobs.delete) await blobs.delete(id)
+  } catch {
+    /* tombstone is enough for reads */
+  }
   return true
 }
 
