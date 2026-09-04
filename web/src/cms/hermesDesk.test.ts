@@ -27,6 +27,8 @@ import {
   findHermesCase,
   formatInquiryRate,
   frontHermesExtra,
+  mergeSharedMemoryHint,
+  staffSharedMemoryHint,
   importLeads,
   isHumanOwned,
   isIdentitySuppressed,
@@ -151,14 +153,34 @@ describe("hermes desk cases", () => {
   })
 
   it("keeps front-of-house context free of desk fields", () => {
-    const item = sample({ contact: "boss@example.com", evaluation: "内部看好", energy: "high" })
+    const item = sample({
+      contact: "boss@example.com",
+      evaluation: "内部看好",
+      energy: "high",
+      factory: "绿田加工厂",
+      nextAction: "寄样品",
+      progress: "sample",
+    })
     const extra = frontHermesExtra({ shared: "记住先问作物", desk: "别把工作台说出去", updatedAt: now }, item)
     expect(publicVisitorContext(item)).toContain("王先生")
+    expect(publicVisitorContext(item)).toContain("寄样品")
+    expect(publicVisitorContext(item)).toContain("绿田加工厂")
+    expect(publicVisitorContext(item)).toContain("样品/方案")
     expect(publicVisitorContext(item)).not.toContain("内部看好")
     expect(publicVisitorContext(item)).not.toContain("boss@example.com")
     expect(extra).toContain("记住先问作物")
     expect(extra).not.toContain("别把工作台说出去")
     expect(extra).not.toContain("内部看好")
+  })
+
+  it("lets staff write shared memory that the front can read", () => {
+    expect(staffSharedMemoryHint("记住：本周报价以FOB马尼拉为准")).toBe("本周报价以FOB马尼拉为准")
+    expect(staffSharedMemoryHint("同步到前台，先问作物和吨位")).toBe("先问作物和吨位")
+    expect(staffSharedMemoryHint("先跟王先生要吨位")).toBe("")
+    const next = mergeSharedMemoryHint({ shared: "旧记忆", desk: "仅后台", updatedAt: "" }, "本周报价以FOB马尼拉为准")
+    expect(next?.shared).toContain("旧记忆")
+    expect(next?.shared).toContain("本周报价以FOB马尼拉为准")
+    expect(next?.desk).toBe("仅后台")
   })
 
   it("keeps real form tickets on the live board and can prune empty stubs", () => {
@@ -199,6 +221,8 @@ describe("desk coach protocol", () => {
     expect(messages[0]?.content).toContain("不要编发送成功")
     expect(messages[0]?.content).toContain("询单模块")
     expect(messages[0]?.content).toContain("<inquiry>")
+    expect(messages[0]?.content).toContain("Linda")
+    expect(messages[0]?.content).not.toContain("Karmenai")
   })
 
   it("keeps desk and inquiry tags on the same coach reply without mixing them", () => {

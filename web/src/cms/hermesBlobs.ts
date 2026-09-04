@@ -13,6 +13,12 @@ import {
   type HermesMemory,
 } from "./hermesDesk"
 import type { HermesHealth } from "./hermes"
+import {
+  guideIpBlobKey,
+  guideSessionBlobKey,
+  hydrateGuideSession,
+  type GuideSession,
+} from "./guideSession"
 
 type BlobStore = {
   get: (key: string, options: { type: "json" }) => Promise<unknown>
@@ -182,6 +188,41 @@ export async function writeInquiryState(inquiry: InquiryState) {
   const blobs = await store("ash-hermes")
   if (!blobs) return false
   await blobs.setJSON("inquiry", inquiry)
+  return true
+}
+
+export async function readGuideChatSession(visitorId: string): Promise<GuideSession | null> {
+  const key = guideSessionBlobKey(visitorId)
+  const blobs = await store("ash-hermes")
+  if (!blobs || !key) return null
+  return hydrateGuideSession(await blobs.get(key, { type: "json" }), visitorId)
+}
+
+export async function writeGuideChatSession(session: GuideSession) {
+  const next = hydrateGuideSession(session, session.visitorId)
+  const key = next ? guideSessionBlobKey(next.visitorId) : ""
+  const blobs = await store("ash-hermes")
+  if (!blobs || !next || !key) return false
+  await blobs.setJSON(key, next)
+  return true
+}
+
+export async function readGuideIpVisitor(ipHash: string): Promise<{ visitorId: string; at: string } | null> {
+  const key = guideIpBlobKey(ipHash)
+  const blobs = await store("ash-hermes")
+  if (!blobs || !key) return null
+  const raw = await blobs.get(key, { type: "json" })
+  if (!raw || typeof raw !== "object") return null
+  const row = raw as { visitorId?: unknown; at?: unknown }
+  if (typeof row.visitorId !== "string" || !row.visitorId.trim()) return null
+  return { visitorId: row.visitorId.trim().slice(0, 80), at: typeof row.at === "string" ? row.at : "" }
+}
+
+export async function writeGuideIpVisitor(ipHash: string, visitorId: string) {
+  const key = guideIpBlobKey(ipHash)
+  const blobs = await store("ash-hermes")
+  if (!blobs || !key || !visitorId.trim()) return false
+  await blobs.setJSON(key, { visitorId: visitorId.trim().slice(0, 80), at: new Date().toISOString() })
   return true
 }
 

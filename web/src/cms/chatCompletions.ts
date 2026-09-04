@@ -80,25 +80,36 @@ function withImages(
   })
 }
 
+type CompletionExtras = {
+  headers?: Record<string, string>
+  body?: Record<string, unknown>
+  lean?: boolean
+}
+
 async function completeOnce(
   env: ChatCompletionsEnv,
   messages: GuideMessage[],
   images?: { mime: string; data: string }[],
+  timeoutMs = 20_000,
+  extras?: CompletionExtras,
 ) {
   const endpoint = new URL(`${env.baseUrl}/chat/completions`)
   if (env.groupId) endpoint.searchParams.set("GroupId", env.groupId)
 
+  const packed = withImages(messages, images)
   const response = await fetch(endpoint.toString(), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.apiKey}`,
+      ...extras?.headers,
     },
+    signal: AbortSignal.timeout(timeoutMs),
     body: JSON.stringify({
       model: env.model,
-      temperature: 0.3,
-      max_tokens: 1200,
-      messages: withImages(messages, images),
+      messages: packed,
+      ...(extras?.lean ? {} : { temperature: 0.3, max_tokens: 1200 }),
+      ...extras?.body,
     }),
   })
 
@@ -134,21 +145,92 @@ function isHostAuthError(error: unknown) {
   return /invalid api key|authorized_error|401/i.test(error.message)
 }
 
+function shouldRetryIdentity(error: unknown) {
+  if (!(error instanceof Error)) return false
+  return /isolated conversation identity|conversation identity is required|conversation id required|unknown field/i.test(
+    error.message,
+  )
+}
+
+type IdentityShape = {
+  name: string
+  extras: (id: string, signed?: Record<string, string>) => CompletionExtras
+}
+
+function identityHeaderBag(id: string, signedHeaders?: Record<string, string>): Record<string, string> {
+  return {
+    "X-Conversation-Id": id,
+    "X-Conversation-Identity": id,
+    "X-Isolated-Conversation-Identity": id,
+    "X-Advisor-Case-Id": id,
+    "X-Advisor-Identity": id,
+    "X-Case-Id": id,
+    ...signedHeaders,
+  }
+}
+
+function identityShapes(signed?: Record<string, string>, lean?: boolean): IdentityShape[] {
+  return [
+    { name: "user-only", extras: (id) => ({ lean, body: { user: id } }) },
+    { name: "signed-headers", extras: (id) => ({ lean, headers: identityHeaderBag(id, signed) }) },
+    {
+      name: "user+headers",
+      extras: (id) => ({ lean, body: { user: id }, headers: identityHeaderBag(id, signed) }),
+    },
+  ]
+}
+
+let workingIdentityShape: string | null = null
+
 export async function completeChatCompletions(
   env: ChatCompletionsEnv,
   messages: GuideMessage[],
-  options?: { hosts?: "minimax-alt" | "exact"; images?: { mime: string; data: string }[] },
+  options?: {
+    hosts?: "minimax-alt" | "exact"
+    images?: { mime: string; data: string }[]
+    timeoutMs?: number
+    conversationId?: string
+    conversationIds?: string[]
+    identityHeaders?: Record<string, string>
+    lean?: boolean
+  },
 ) {
   const bases = options?.hosts === "exact" ? [env.baseUrl.replace(/\/$/, "")] : alternateMinimaxBases(env.baseUrl)
+  const conversationIds = [...new Set((options?.conversationIds || [options?.conversationId]).filter((item): item is string => Boolean(item)))]
+  const conversationId = conversationIds[0]
+  const shapes = conversationId
+    ? workingIdentityShape
+      ? identityShapes(options?.identityHeaders, options?.lean).filter((item) => item.name === workingIdentityShape).concat(
+          identityShapes(options?.identityHeaders, options?.lean).filter((item) => item.name !== workingIdentityShape),
+        )
+      : identityShapes(options?.identityHeaders, options?.lean)
+    : [{ name: "none", extras: () => ({ lean: options?.lean }) }]
   let lastError: unknown
   for (const baseUrl of bases) {
-    try {
-      return await completeOnce({ ...env, baseUrl }, messages, options?.hosts === "exact" ? options.images : undefined)
-    } catch (error) {
-      lastError = error
-      if (options?.hosts === "exact" || !isHostAuthError(error) || bases.indexOf(baseUrl) === bases.length - 1) {
-        throw error
+    const ids = conversationIds.length ? conversationIds : [""]
+    for (const id of ids) {
+    for (const shape of shapes) {
+      try {
+        const reply = await completeOnce(
+          { ...env, baseUrl },
+          messages,
+          options?.hosts === "exact" ? options.images : undefined,
+          options?.timeoutMs,
+          id ? shape.extras(id, options?.identityHeaders) : { lean: options?.lean },
+        )
+        if (id && shape.name !== "none") workingIdentityShape = shape.name
+        return reply
+      } catch (error) {
+        lastError = error
+        if (id && shouldRetryIdentity(error)) {
+          console.error("ash-guide senior advisor", shape.name, error instanceof Error ? error.message : error)
+          continue
+        }
+        if (options?.hosts === "exact" || !isHostAuthError(error) || bases.indexOf(baseUrl) === bases.length - 1) {
+          throw error
+        }
       }
+    }
     }
   }
   throw lastError instanceof Error ? lastError : new Error("minimax failed")

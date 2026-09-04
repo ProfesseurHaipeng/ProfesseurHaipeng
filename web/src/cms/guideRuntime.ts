@@ -11,6 +11,7 @@ export type GuideResult = {
   source: "minimax" | "custom" | "local" | "hermes"
   ticket: TicketDraft | null
   advisor: AdvisorId
+  reconnecting?: boolean
 }
 
 export async function resolveGuideReply(
@@ -18,7 +19,15 @@ export async function resolveGuideReply(
   knowledge: string,
   env: GuideEnvBag,
   extraSystem?: string,
-  options?: { advisor?: AdvisorId; escalate?: boolean; lang?: "zh" | "en" },
+  options?: {
+    advisor?: AdvisorId
+    escalate?: boolean
+    lang?: "zh" | "en"
+    conversationId?: string
+    conversationIds?: string[]
+    identityHeaders?: Record<string, string>
+    visitorId?: string
+  },
 ): Promise<GuideResult> {
   // Ticket markers are a model-only protocol; never accept them from users.
   const cleanedHistory = history.map((item) =>
@@ -30,8 +39,12 @@ export async function resolveGuideReply(
   if (advisor === "hermes") {
     const hermes = await resolveHermesReply(cleanedHistory, knowledge, env, extraSystem, options?.lang || "zh", {
       escalate: options?.escalate === true,
+      conversationId: options?.conversationId,
+      conversationIds: options?.conversationIds,
+      identityHeaders: options?.identityHeaders,
+      visitorId: options?.visitorId,
     })
-    return { ...hermes, advisor: "hermes" }
+    return { ...hermes, advisor: "hermes", reconnecting: hermes.reconnecting === true }
   }
   const messages = buildGuideMessages(cleanedHistory, knowledge, extraSystem)
 

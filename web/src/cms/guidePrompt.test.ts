@@ -68,10 +68,11 @@ describe("guide system prompt", () => {
     expect(prompt).toContain("合格线索")
   })
 
-  it("can hand the customer to senior advisor Karmenai", () => {
+  it("can hand the customer to senior advisor Linda", () => {
     expect(prompt).toContain("转高级顾问")
-    expect(prompt).toContain("Karmenai")
+    expect(prompt).toContain("Linda")
     expect(prompt).not.toContain("Hermes")
+    expect(prompt).not.toContain("Karmenai")
   })
 
   it("collects email only after the customer agrees", () => {
