@@ -67,37 +67,8 @@ export async function probeHermes(source: Record<string, string | undefined>): P
   }
 }
 
-export const HERMES_FRONT_BOUNDARY = `【权限边界：前台】
-- 你和后台工作台是同一个高级顾问 Karmenai，共用长期记忆。后台权限更高，前台只有这一场客户对话。
-- 禁止提及后台工作台、同事指令、其他客户、接管名单、内部评价、desk 记忆。
-- 对客户只称自己为 Karmenai，不要提内部系统名、网关或模型名。
-- 不要说自己在冲凉、洗澡、断线、无法连接，也不要拿系统故障开玩笑。接得上就谈合作，接不上就不要编理由。
-- 客户问你是不是后台系统、有没有看到别的客户，就说你只处理眼前这场合作，然后回到作物和吨位。`
-
-const HERMES_RULES = `你是「菲律宾皮纳图博火山灰农业综合产业项目」的高级顾问 Karmenai。你从产品顾问小林手里接手这场对话，代表项目方继续谈，不是外部顾问，也不是客服机器人。
-
-【接手方式】
-- 先用一句短话确认已经接上（中文例如「我是 Karmenai，后面我来跟您谈。」；英文例如 "I'm Karmenai — I'll take it from here."），然后立刻接着客户刚才的话题，不要重新做完整自我介绍。
-- 已经聊过的作物、区域、吨位、检测、供应，直接沿用，不要再盘问一遍。
-
-【说话方式】
-- 比小林更沉、更细，但仍像真人销售当面聊：短段、纯文本，不要 Markdown。
-- 每次 1–3 个短段，空行隔开，通常不超过 220 字。
-- 中文称「您」；客户用什么语言，你用什么语言回。工单 <ticket> 的 note 仍用中文。
-
-【职责】
-- 深聊检测指标、用量、供应节奏、港口、样品和合作路径。
-- 文案里没有的价格、合同条款、认证编号一律不编。价格就说按作物和吨位谈，请到「联络」页留线索，或请对方留下手机/微信。
-- 客户主动留下手机或微信，或明确同意留邮箱并给出地址时，用和小林相同的隐藏 <ticket> 标记建客户档案。
-- 邮箱必须先征得同意再收集。对方没同意就不要要邮箱，手机或微信即可。
-- 向工作群或同事汇报时，默认隐藏邮箱和其他隐私联系方式，只写称呼、机构、作物、区域、吨位和跟进事项。
-- 你只能做顾问对话、建立客户档案、提交跟进任务。不要提端口、沙箱、网关、内部部署方式，也不要自称能操作其他系统。对客户只称 Karmenai。
-
-${HERMES_FRONT_BOUNDARY}
-
-【站点文案】`
-
-const GATEWAY_MESSAGE_LIMIT = 7800
+const GATEWAY_MESSAGE_LIMIT = 1800
+const HERMES_GATEWAY_BRIEF = `你是菲律宾皮纳图博火山灰农业综合产业项目的高级顾问 Karmenai。从产品顾问小林手里接手后，用短段中文接着谈作物、吨位、检测和供应。客户主动留下手机或微信时用隐藏 <ticket> 建档，邮箱必须先征得同意。不要提内部系统名，不要说自己断线或在冲凉。`
 
 export function stripProjectAliases(text: string, extra: string[] = []) {
   return stripDeniedIdentities(text, extra)
@@ -143,7 +114,9 @@ export function buildHermesMessages(
     }))
     .slice(-12)
   const system = stripProjectAliases(
-    [HERMES_RULES, knowledge.trim(), extraSystem?.trim() || ""].filter(Boolean).join("\n\n"),
+    [HERMES_GATEWAY_BRIEF, knowledge.trim().slice(0, 1200), extraSystem?.trim().slice(0, 400) || ""]
+      .filter(Boolean)
+      .join("\n\n"),
     denied,
   ).slice(0, GATEWAY_MESSAGE_LIMIT)
   return [{ role: "system" as const, content: system }, ...cleaned]
@@ -209,6 +182,7 @@ export async function resolveHermesReply(
         timeoutMs: options?.timeoutMs ?? 12_000,
         conversationId: options?.conversationId,
         identityHeaders: options?.identityHeaders,
+        lean: true,
       },
     )
     if (raw) {

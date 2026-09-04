@@ -83,6 +83,7 @@ function withImages(
 type CompletionExtras = {
   headers?: Record<string, string>
   body?: Record<string, unknown>
+  lean?: boolean
 }
 
 async function completeOnce(
@@ -106,9 +107,8 @@ async function completeOnce(
     signal: AbortSignal.timeout(timeoutMs),
     body: JSON.stringify({
       model: env.model,
-      temperature: 0.3,
-      max_tokens: 1200,
       messages: packed,
+      ...(extras?.lean ? {} : { temperature: 0.3, max_tokens: 1200 }),
       ...extras?.body,
     }),
   })
@@ -169,13 +169,13 @@ function identityHeaderBag(id: string, signedHeaders?: Record<string, string>): 
   }
 }
 
-function identityShapes(signed?: Record<string, string>): IdentityShape[] {
+function identityShapes(signed?: Record<string, string>, lean?: boolean): IdentityShape[] {
   return [
-    { name: "plain", extras: () => ({}) },
-    { name: "signed-headers", extras: (id) => ({ headers: identityHeaderBag(id, signed) }) },
+    { name: "plain", extras: () => ({ lean }) },
+    { name: "signed-headers", extras: (id) => ({ lean, headers: identityHeaderBag(id, signed) }) },
     {
       name: "user+headers",
-      extras: (id) => ({ body: { user: id }, headers: identityHeaderBag(id, signed) }),
+      extras: (id) => ({ lean, body: { user: id }, headers: identityHeaderBag(id, signed) }),
     },
   ]
 }
@@ -191,17 +191,18 @@ export async function completeChatCompletions(
     timeoutMs?: number
     conversationId?: string
     identityHeaders?: Record<string, string>
+    lean?: boolean
   },
 ) {
   const bases = options?.hosts === "exact" ? [env.baseUrl.replace(/\/$/, "")] : alternateMinimaxBases(env.baseUrl)
   const conversationId = options?.conversationId
   const shapes = conversationId
     ? workingIdentityShape
-      ? identityShapes(options?.identityHeaders).filter((item) => item.name === workingIdentityShape).concat(
-          identityShapes(options?.identityHeaders).filter((item) => item.name !== workingIdentityShape),
+      ? identityShapes(options?.identityHeaders, options?.lean).filter((item) => item.name === workingIdentityShape).concat(
+          identityShapes(options?.identityHeaders, options?.lean).filter((item) => item.name !== workingIdentityShape),
         )
-      : identityShapes(options?.identityHeaders)
-    : [{ name: "none", extras: () => ({}) }]
+      : identityShapes(options?.identityHeaders, options?.lean)
+    : [{ name: "none", extras: () => ({ lean: options?.lean }) }]
   let lastError: unknown
   for (const baseUrl of bases) {
     for (const shape of shapes) {

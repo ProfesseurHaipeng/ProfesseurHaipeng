@@ -69,12 +69,10 @@ describe("hermes prompt", () => {
     expect(messages[0]?.content).toContain("小林")
     expect(messages[0]?.content).toContain("<ticket>")
     expect(messages[0]?.content).toContain("邮箱必须先征得同意")
-    expect(messages[0]?.content).toContain("工作群")
-    expect(messages[0]?.content).toContain("不要提端口")
-    expect(messages[0]?.content).toContain("工作台")
-    expect(messages[0]?.content).toContain("权限边界")
+    expect(messages[0]?.content).not.toContain("工作台")
+    expect(messages[0]?.content).not.toContain("权限边界")
     expect(messages.at(-1)?.content).toContain("水稻")
-    expect(messages[0]?.content.length).toBeLessThanOrEqual(7800)
+    expect(messages[0]?.content.length).toBeLessThanOrEqual(1800)
   })
 
   it("repeats the visitor question when escalating from an assistant greeting", () => {
