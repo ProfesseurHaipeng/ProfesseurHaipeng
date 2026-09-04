@@ -8,6 +8,7 @@ import {
   hermesLinkInfo,
   hermesReady,
   hermesHandoffGreeting,
+  hermesHistoryForGateway,
   hermesReconnectingReply,
   hermesUnavailableReply,
   isAdvisorOutageJoke,
@@ -73,6 +74,13 @@ describe("hermes prompt", () => {
     expect(messages[0]?.content).toContain("工作台")
     expect(messages[0]?.content).toContain("权限边界")
     expect(messages.at(-1)?.content).toContain("水稻")
+    expect(messages[0]?.content.length).toBeLessThanOrEqual(7800)
+  })
+
+  it("appends a user turn when escalating from an assistant greeting", () => {
+    const history = hermesHistoryForGateway([{ role: "assistant", content: "您好，我是小林。" }], "zh", true)
+    expect(history.at(-1)).toEqual({ role: "user", content: "请高级顾问接手这场对话。" })
+    expect(hermesHistoryForGateway([{ role: "user", content: "你好" }], "zh", true).at(-1)?.role).toBe("user")
   })
 
   it("explains the handoff without leaking deploy details", () => {

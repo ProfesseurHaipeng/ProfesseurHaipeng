@@ -96,6 +96,23 @@ ${HERMES_FRONT_BOUNDARY}
 
 【站点文案】`
 
+const GATEWAY_MESSAGE_LIMIT = 7800
+
+export function hermesHistoryForGateway(
+  history: GuideMessage[],
+  lang: "zh" | "en",
+  escalate?: boolean,
+): GuideMessage[] {
+  if (!escalate || history.at(-1)?.role === "user") return history
+  return [
+    ...history,
+    {
+      role: "user",
+      content: lang === "en" ? "Please take over this conversation." : "请高级顾问接手这场对话。",
+    },
+  ]
+}
+
 export function buildHermesMessages(
   history: GuideMessage[],
   knowledge: string,
@@ -109,9 +126,9 @@ export function buildHermesMessages(
     }))
     .slice(-12)
   const system: GuideMessage[] = [
-    { role: "system", content: `${HERMES_RULES}\n${knowledge.trim().slice(0, 24000)}` },
+    { role: "system", content: `${HERMES_RULES}\n${knowledge.trim()}`.slice(0, GATEWAY_MESSAGE_LIMIT) },
   ]
-  if (extraSystem?.trim()) system.push({ role: "system", content: extraSystem.trim() })
+  if (extraSystem?.trim()) system.push({ role: "system", content: extraSystem.trim().slice(0, GATEWAY_MESSAGE_LIMIT) })
   return [...system, ...cleaned]
 }
 
@@ -161,10 +178,14 @@ export async function resolveHermesReply(
     return { reply: unconfigured, source: "local" as const, ticket: null, reconnecting: false }
   }
   try {
-    const raw = await completeChatCompletions(hermes, buildHermesMessages(history, knowledge, extraSystem), {
-      hosts: "exact",
-      timeoutMs: options?.timeoutMs ?? 12_000,
-    })
+    const raw = await completeChatCompletions(
+      hermes,
+      buildHermesMessages(hermesHistoryForGateway(history, lang, options?.escalate), knowledge, extraSystem),
+      {
+        hosts: "exact",
+        timeoutMs: options?.timeoutMs ?? 12_000,
+      },
+    )
     if (raw) {
       const { reply, ticket } = extractTicket(raw)
       if (reply && isAdvisorOutageJoke(reply)) {
