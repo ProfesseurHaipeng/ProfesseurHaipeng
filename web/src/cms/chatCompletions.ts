@@ -80,11 +80,17 @@ function withImages(
   })
 }
 
+type CompletionExtras = {
+  headers?: Record<string, string>
+  body?: Record<string, unknown>
+}
+
 async function completeOnce(
   env: ChatCompletionsEnv,
   messages: GuideMessage[],
   images?: { mime: string; data: string }[],
   timeoutMs = 20_000,
+  extras?: CompletionExtras,
 ) {
   const endpoint = new URL(`${env.baseUrl}/chat/completions`)
   if (env.groupId) endpoint.searchParams.set("GroupId", env.groupId)
@@ -94,6 +100,7 @@ async function completeOnce(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.apiKey}`,
+      ...extras?.headers,
     },
     signal: AbortSignal.timeout(timeoutMs),
     body: JSON.stringify({
@@ -101,6 +108,7 @@ async function completeOnce(
       temperature: 0.3,
       max_tokens: 1200,
       messages: withImages(messages, images),
+      ...extras?.body,
     }),
   })
 
@@ -136,25 +144,77 @@ function isHostAuthError(error: unknown) {
   return /invalid api key|authorized_error|401/i.test(error.message)
 }
 
+function isConversationIdentityError(error: unknown) {
+  if (!(error instanceof Error)) return false
+  return /isolated conversation identity|conversation identity is required|conversation id required/i.test(error.message)
+}
+
+type IdentityShape = {
+  name: string
+  extras: (id: string) => CompletionExtras
+}
+
+const IDENTITY_SHAPES: IdentityShape[] = [
+  {
+    name: "user",
+    extras: (id) => ({
+      body: { user: id },
+      headers: { "X-Conversation-Id": id },
+    }),
+  },
+  {
+    name: "conversation_id",
+    extras: (id) => ({ body: { conversation_id: id } }),
+  },
+  {
+    name: "conversation_identity",
+    extras: (id) => ({ body: { conversation_identity: id } }),
+  },
+  {
+    name: "isolated_header",
+    extras: (id) => ({ headers: { "X-Isolated-Conversation-Identity": id } }),
+  },
+]
+
+let workingIdentityShape: string | null = null
+
 export async function completeChatCompletions(
   env: ChatCompletionsEnv,
   messages: GuideMessage[],
-  options?: { hosts?: "minimax-alt" | "exact"; images?: { mime: string; data: string }[]; timeoutMs?: number },
+  options?: {
+    hosts?: "minimax-alt" | "exact"
+    images?: { mime: string; data: string }[]
+    timeoutMs?: number
+    conversationId?: string
+  },
 ) {
   const bases = options?.hosts === "exact" ? [env.baseUrl.replace(/\/$/, "")] : alternateMinimaxBases(env.baseUrl)
+  const shapes = options?.conversationId
+    ? workingIdentityShape
+      ? IDENTITY_SHAPES.filter((item) => item.name === workingIdentityShape).concat(
+          IDENTITY_SHAPES.filter((item) => item.name !== workingIdentityShape),
+        )
+      : IDENTITY_SHAPES
+    : [{ name: "none", extras: () => ({}) }]
   let lastError: unknown
   for (const baseUrl of bases) {
-    try {
-      return await completeOnce(
-        { ...env, baseUrl },
-        messages,
-        options?.hosts === "exact" ? options.images : undefined,
-        options?.timeoutMs,
-      )
-    } catch (error) {
-      lastError = error
-      if (options?.hosts === "exact" || !isHostAuthError(error) || bases.indexOf(baseUrl) === bases.length - 1) {
-        throw error
+    for (const shape of shapes) {
+      try {
+        const reply = await completeOnce(
+          { ...env, baseUrl },
+          messages,
+          options?.hosts === "exact" ? options.images : undefined,
+          options?.timeoutMs,
+          options?.conversationId ? shape.extras(options.conversationId) : undefined,
+        )
+        if (options?.conversationId && shape.name !== "none") workingIdentityShape = shape.name
+        return reply
+      } catch (error) {
+        lastError = error
+        if (options?.conversationId && isConversationIdentityError(error)) continue
+        if (options?.hosts === "exact" || !isHostAuthError(error) || bases.indexOf(baseUrl) === bases.length - 1) {
+          throw error
+        }
       }
     }
   }

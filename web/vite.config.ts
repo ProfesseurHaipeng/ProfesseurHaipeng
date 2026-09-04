@@ -3,6 +3,21 @@ import type { IncomingMessage, ServerResponse } from "node:http"
 import react from "@vitejs/plugin-react"
 import { defineConfig, loadEnv, type Plugin, type ViteDevServer } from "vite"
 
+function localConversationId(seed: string, secret: string) {
+  const clean = (seed || "anon").trim().slice(0, 120) || "anon"
+  if (!secret.trim()) return `karmenai:${clean}`
+  let a = 2166136261
+  let b = 2246822519
+  const material = `karmenai:${clean}:${secret}`
+  for (let i = 0; i < material.length; i += 1) {
+    const code = material.charCodeAt(i)
+    a ^= code
+    a = Math.imul(a, 16777619)
+    b = Math.imul(b ^ code, 3266489917) >>> 0
+  }
+  return `${(a >>> 0).toString(16).padStart(8, "0")}${(b >>> 0).toString(16).padStart(8, "0")}`
+}
+
 function readBody(req: IncomingMessage) {
   return new Promise<string>((resolve, reject) => {
     const chunks: Buffer[] = []
@@ -350,6 +365,7 @@ function localGuide(): Plugin {
               localDesk.memory,
               images.map((image: { mime: string; data: string }) => ({ mime: image.mime, data: image.data })),
               localDesk.inquiry,
+              localConversationId("desk:karmenai-workbench", env.ADVISOR_CASE_ID_SECRET || ""),
             )
             const replyTurn = {
               id: deskMod.newCoachTurnId(Date.now() + 1),
@@ -464,7 +480,12 @@ function localGuide(): Plugin {
             knowledgeMod.flattenKnowledge(contentMod.defaultContent),
             env,
             extra,
-            { advisor, escalate, lang: turnLang },
+            {
+              advisor,
+              escalate,
+              lang: turnLang,
+              conversationId: localConversationId(visitorId || "anon-front", env.ADVISOR_CASE_ID_SECRET || ""),
+            },
           )
           const suppressed = deskMod.isIdentitySuppressed(
             { visitorId: visitorId || undefined, contact: result.ticket?.contact },

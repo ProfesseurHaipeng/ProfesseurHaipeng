@@ -1,5 +1,6 @@
 import { completeChatCompletions, type ChatCompletionsEnv } from "./chatCompletions"
 import type { GuideMessage } from "./guidePrompt"
+import { parseProjectIdentityDenylist, stripDeniedIdentities } from "./projectIdentity"
 import { extractTicket, stripTicketTags } from "./ticket"
 
 export type AdvisorId = "lin" | "hermes"
@@ -97,10 +98,15 @@ ${HERMES_FRONT_BOUNDARY}
 【站点文案】`
 
 const GATEWAY_MESSAGE_LIMIT = 7800
-const PROJECT_ALIAS_RE = /\b(hermes|linda|weho|minimax|nas)\b/gi
 
-export function stripProjectAliases(text: string) {
-  return text.replace(PROJECT_ALIAS_RE, "Karmenai").replace(/Karmenai(、|,)?\s*Karmenai/g, "Karmenai")
+export function stripProjectAliases(text: string, extra: string[] = []) {
+  return stripDeniedIdentities(text, extra)
+}
+
+function inScopeTakeover(lang: "zh" | "en") {
+  return lang === "en"
+    ? "Please continue this Pinatubo volcanic ash project conversation about crops, tonnage, testing, or supply."
+    : "请基于菲律宾皮纳图博火山灰农业综合产业项目，接着谈作物、吨位、检测或供应。"
 }
 
 export function hermesHistoryForGateway(
@@ -109,11 +115,12 @@ export function hermesHistoryForGateway(
   escalate?: boolean,
 ): GuideMessage[] {
   if (!escalate || history.at(-1)?.role === "user") return history
+  const lastUser = [...history].reverse().find((item) => item.role === "user" && item.content.trim())
   return [
     ...history,
     {
       role: "user",
-      content: lang === "en" ? "Please take over this conversation." : "请高级顾问接手这场对话。",
+      content: lastUser?.content.trim() || inScopeTakeover(lang),
     },
   ]
 }
@@ -122,22 +129,30 @@ export function buildHermesMessages(
   history: GuideMessage[],
   knowledge: string,
   extraSystem?: string,
+  deniedTerms?: string[],
 ): GuideMessage[] {
+  const denied = deniedTerms || []
   const cleaned = history
     .filter((item) => item.role === "user" || item.role === "assistant")
     .map((item) => ({
       role: item.role,
-      content: (item.role === "user" ? stripTicketTags(item.content) : item.content).slice(0, 4000),
+      content: stripProjectAliases(
+        (item.role === "user" ? stripTicketTags(item.content) : item.content).slice(0, 4000),
+        denied,
+      ),
     }))
     .slice(-12)
   const system: GuideMessage[] = [
     {
       role: "system",
-      content: stripProjectAliases(`${HERMES_RULES}\n${knowledge.trim()}`).slice(0, GATEWAY_MESSAGE_LIMIT),
+      content: stripProjectAliases(`${HERMES_RULES}\n${knowledge.trim()}`, denied).slice(0, GATEWAY_MESSAGE_LIMIT),
     },
   ]
   if (extraSystem?.trim()) {
-    system.push({ role: "system", content: stripProjectAliases(extraSystem.trim()).slice(0, GATEWAY_MESSAGE_LIMIT) })
+    system.push({
+      role: "system",
+      content: stripProjectAliases(extraSystem.trim(), denied).slice(0, GATEWAY_MESSAGE_LIMIT),
+    })
   }
   return [...system, ...cleaned]
 }
@@ -180,7 +195,7 @@ export async function resolveHermesReply(
   env: Record<string, string | undefined>,
   extraSystem: string | undefined,
   lang: "zh" | "en",
-  options?: { escalate?: boolean; timeoutMs?: number },
+  options?: { escalate?: boolean; timeoutMs?: number; conversationId?: string },
 ) {
   const hermes = hermesEnvFrom(env)
   const unconfigured = options?.escalate ? hermesHandoffGreeting(lang) : hermesUnavailableReply(lang)
@@ -188,12 +203,19 @@ export async function resolveHermesReply(
     return { reply: unconfigured, source: "local" as const, ticket: null, reconnecting: false }
   }
   try {
+    const denied = parseProjectIdentityDenylist(env.PROJECT_IDENTITY_DENYLIST)
     const raw = await completeChatCompletions(
       hermes,
-      buildHermesMessages(hermesHistoryForGateway(history, lang, options?.escalate), knowledge, extraSystem),
+      buildHermesMessages(
+        hermesHistoryForGateway(history, lang, options?.escalate),
+        knowledge,
+        extraSystem,
+        denied,
+      ),
       {
         hosts: "exact",
         timeoutMs: options?.timeoutMs ?? 12_000,
+        conversationId: options?.conversationId,
       },
     )
     if (raw) {
@@ -204,7 +226,7 @@ export async function resolveHermesReply(
       if (reply) return { reply, source: "hermes" as const, ticket, reconnecting: false }
     }
   } catch (error) {
-    console.error("ash-guide hermes", error)
+    console.error("ash-guide senior advisor", error)
   }
   return { reply: hermesReconnectingReply(lang), source: "local" as const, ticket: null, reconnecting: true }
 }

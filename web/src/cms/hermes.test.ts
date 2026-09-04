@@ -77,10 +77,31 @@ describe("hermes prompt", () => {
     expect(messages[0]?.content.length).toBeLessThanOrEqual(7800)
   })
 
-  it("appends a user turn when escalating from an assistant greeting", () => {
-    const history = hermesHistoryForGateway([{ role: "assistant", content: "您好，我是小林。" }], "zh", true)
-    expect(history.at(-1)).toEqual({ role: "user", content: "请高级顾问接手这场对话。" })
+  it("repeats the visitor question when escalating from an assistant greeting", () => {
+    const history = hermesHistoryForGateway(
+      [
+        { role: "user", content: "水稻怎么用火山灰？" },
+        { role: "assistant", content: "您好，我是小林。" },
+      ],
+      "zh",
+      true,
+    )
+    expect(history.at(-1)).toEqual({ role: "user", content: "水稻怎么用火山灰？" })
+    expect(hermesHistoryForGateway([{ role: "assistant", content: "您好，我是小林。" }], "zh", true).at(-1)?.content).toMatch(
+      /皮纳图博火山灰/,
+    )
     expect(hermesHistoryForGateway([{ role: "user", content: "你好" }], "zh", true).at(-1)?.role).toBe("user")
+  })
+
+  it("scrubs denied aliases from the gateway prompt", () => {
+    const messages = buildHermesMessages(
+      [{ role: "user", content: "Hermes 还在吗" }],
+      "项目文案",
+      "不要提 Linda",
+      ["Linda"],
+    )
+    expect(messages[0]?.content).not.toMatch(/Hermes|Linda|weho|MiniMax|\bNAS\b/i)
+    expect(messages[1]?.content).not.toMatch(/Hermes/i)
   })
 
   it("explains the handoff without leaking deploy details", () => {

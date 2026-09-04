@@ -10,6 +10,7 @@ import {
 } from "../../src/cms/greeting"
 import { resolveGuideReply } from "../../src/cms/guideRuntime"
 import { readHermesCases, readHermesLedger, readHermesMemory, writeHermesCase } from "../../src/cms/hermesBlobs"
+import { advisorConversationIdentity } from "../../src/cms/advisorIdentity"
 import { hermesHandoffHint, hermesReady, type AdvisorId } from "../../src/cms/hermes"
 import {
   findHermesCase,
@@ -62,6 +63,8 @@ function envBag() {
     HERMES_API_BASE: readEnv("HERMES_API_BASE"),
     HERMES_API_KEY: readEnv("HERMES_API_KEY"),
     HERMES_MODEL: readEnv("HERMES_MODEL"),
+    ADVISOR_CASE_ID_SECRET: readEnv("ADVISOR_CASE_ID_SECRET"),
+    PROJECT_IDENTITY_DENYLIST: readEnv("PROJECT_IDENTITY_DENYLIST"),
   }
 }
 
@@ -189,10 +192,12 @@ export default async (req: Request, context: Context) => {
   if (advisor === "hermes") {
     extra = frontHermesExtra(await readHermesMemory(), findHermesCase(deskCases, { visitorId }), extra)
   }
-  const result = await resolveGuideReply(history, flattenKnowledge(content), envBag(), extra, {
+  const env = envBag()
+  const result = await resolveGuideReply(history, flattenKnowledge(content), env, extra, {
     advisor,
     escalate,
     lang,
+    conversationId: advisorConversationIdentity(visitorId || "anon-front", env.ADVISOR_CASE_ID_SECRET),
   })
   const ledger = await readHermesLedger()
   const identity = {

@@ -1530,6 +1530,7 @@ export async function resolveCoachReply(
   memory?: HermesMemory,
   images?: { mime: string; data: string }[],
   inquiry?: InquiryState,
+  conversationId?: string,
 ) {
   const currentInquiry = inquiry || emptyInquiry()
   const hermes = hermesEnvFrom(env)
@@ -1541,6 +1542,7 @@ export async function resolveCoachReply(
       hosts: "exact",
       images,
       timeoutMs: 15_000,
+      conversationId,
     })
     if (raw) {
       const parsed = extractDeskUpdates(raw)
