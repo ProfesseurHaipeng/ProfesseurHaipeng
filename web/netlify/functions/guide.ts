@@ -204,13 +204,17 @@ export default async (req: Request, context: Context) => {
     extra = frontHermesExtra(await readHermesMemory(), findHermesCase(deskCases, { visitorId }), extra)
   }
   const env = envBag()
-  const conversationId = advisorConversationIdentity(visitorId || "anon-front", env.ADVISOR_CASE_ID_SECRET)
+  const secret = env.ADVISOR_CASE_ID_SECRET.trim()
+  const hashed = advisorConversationIdentity(visitorId || "anon-front", secret)
+  const conversationIds = [...new Set([secret, secret && visitorId ? `${secret}:${visitorId}` : "", hashed].filter(Boolean))]
+  const conversationId = conversationIds[0] || hashed
   const result = await resolveGuideReply(history, flattenKnowledge(content), env, extra, {
     advisor,
     escalate,
     lang,
     conversationId,
-    identityHeaders: advisorSignatureHeaders(conversationId, env.ADVISOR_CASE_ID_SECRET),
+    conversationIds,
+    identityHeaders: advisorSignatureHeaders(conversationId, secret),
   })
   const ledger = await readHermesLedger()
   const identity = {

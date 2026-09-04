@@ -171,7 +171,7 @@ function identityHeaderBag(id: string, signedHeaders?: Record<string, string>): 
 
 function identityShapes(signed?: Record<string, string>, lean?: boolean): IdentityShape[] {
   return [
-    { name: "plain", extras: () => ({ lean }) },
+    { name: "user-only", extras: (id) => ({ lean, body: { user: id } }) },
     { name: "signed-headers", extras: (id) => ({ lean, headers: identityHeaderBag(id, signed) }) },
     {
       name: "user+headers",
@@ -190,12 +190,14 @@ export async function completeChatCompletions(
     images?: { mime: string; data: string }[]
     timeoutMs?: number
     conversationId?: string
+    conversationIds?: string[]
     identityHeaders?: Record<string, string>
     lean?: boolean
   },
 ) {
   const bases = options?.hosts === "exact" ? [env.baseUrl.replace(/\/$/, "")] : alternateMinimaxBases(env.baseUrl)
-  const conversationId = options?.conversationId
+  const conversationIds = [...new Set((options?.conversationIds || [options?.conversationId]).filter((item): item is string => Boolean(item)))]
+  const conversationId = conversationIds[0]
   const shapes = conversationId
     ? workingIdentityShape
       ? identityShapes(options?.identityHeaders, options?.lean).filter((item) => item.name === workingIdentityShape).concat(
@@ -205,6 +207,8 @@ export async function completeChatCompletions(
     : [{ name: "none", extras: () => ({ lean: options?.lean }) }]
   let lastError: unknown
   for (const baseUrl of bases) {
+    const ids = conversationIds.length ? conversationIds : [""]
+    for (const id of ids) {
     for (const shape of shapes) {
       try {
         const reply = await completeOnce(
@@ -212,13 +216,13 @@ export async function completeChatCompletions(
           messages,
           options?.hosts === "exact" ? options.images : undefined,
           options?.timeoutMs,
-          conversationId ? shape.extras(conversationId, options?.identityHeaders) : undefined,
+          id ? shape.extras(id, options?.identityHeaders) : { lean: options?.lean },
         )
-        if (conversationId && shape.name !== "none") workingIdentityShape = shape.name
+        if (id && shape.name !== "none") workingIdentityShape = shape.name
         return reply
       } catch (error) {
         lastError = error
-        if (conversationId && shouldRetryIdentity(error)) {
+        if (id && shouldRetryIdentity(error)) {
           console.error("ash-guide senior advisor", shape.name, error instanceof Error ? error.message : error)
           continue
         }
@@ -226,6 +230,7 @@ export async function completeChatCompletions(
           throw error
         }
       }
+    }
     }
   }
   throw lastError instanceof Error ? lastError : new Error("minimax failed")

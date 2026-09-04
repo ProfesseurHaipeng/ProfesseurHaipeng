@@ -160,7 +160,13 @@ export async function resolveHermesReply(
   env: Record<string, string | undefined>,
   extraSystem: string | undefined,
   lang: "zh" | "en",
-  options?: { escalate?: boolean; timeoutMs?: number; conversationId?: string; identityHeaders?: Record<string, string> },
+  options?: {
+    escalate?: boolean
+    timeoutMs?: number
+    conversationId?: string
+    conversationIds?: string[]
+    identityHeaders?: Record<string, string>
+  },
 ) {
   const hermes = hermesEnvFrom(env)
   const unconfigured = options?.escalate ? hermesHandoffGreeting(lang) : hermesUnavailableReply(lang)
@@ -180,7 +186,12 @@ export async function resolveHermesReply(
       {
         hosts: "exact",
         timeoutMs: options?.timeoutMs ?? 12_000,
-        conversationId: options?.conversationId,
+        conversationId: options?.conversationId || env.ADVISOR_CASE_ID_SECRET?.trim(),
+        conversationIds: [
+          ...(options?.conversationIds || []),
+          options?.conversationId,
+          env.ADVISOR_CASE_ID_SECRET?.trim(),
+        ].filter((item): item is string => Boolean(item)),
         identityHeaders: options?.identityHeaders,
         lean: true,
       },

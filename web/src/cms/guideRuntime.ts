@@ -24,6 +24,7 @@ export async function resolveGuideReply(
     escalate?: boolean
     lang?: "zh" | "en"
     conversationId?: string
+    conversationIds?: string[]
     identityHeaders?: Record<string, string>
   },
 ): Promise<GuideResult> {
@@ -38,6 +39,7 @@ export async function resolveGuideReply(
     const hermes = await resolveHermesReply(cleanedHistory, knowledge, env, extraSystem, options?.lang || "zh", {
       escalate: options?.escalate === true,
       conversationId: options?.conversationId,
+      conversationIds: options?.conversationIds,
       identityHeaders: options?.identityHeaders,
     })
     return { ...hermes, advisor: "hermes", reconnecting: hermes.reconnecting === true }
