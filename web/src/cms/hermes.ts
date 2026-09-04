@@ -142,19 +142,11 @@ export function buildHermesMessages(
       ),
     }))
     .slice(-12)
-  const system: GuideMessage[] = [
-    {
-      role: "system",
-      content: stripProjectAliases(`${HERMES_RULES}\n${knowledge.trim()}`, denied).slice(0, GATEWAY_MESSAGE_LIMIT),
-    },
-  ]
-  if (extraSystem?.trim()) {
-    system.push({
-      role: "system",
-      content: stripProjectAliases(extraSystem.trim(), denied).slice(0, GATEWAY_MESSAGE_LIMIT),
-    })
-  }
-  return [...system, ...cleaned]
+  const system = stripProjectAliases(
+    [HERMES_RULES, knowledge.trim(), extraSystem?.trim() || ""].filter(Boolean).join("\n\n"),
+    denied,
+  ).slice(0, GATEWAY_MESSAGE_LIMIT)
+  return [{ role: "system" as const, content: system }, ...cleaned]
 }
 
 export function hermesUnavailableReply(lang: "zh" | "en") {
@@ -195,7 +187,7 @@ export async function resolveHermesReply(
   env: Record<string, string | undefined>,
   extraSystem: string | undefined,
   lang: "zh" | "en",
-  options?: { escalate?: boolean; timeoutMs?: number; conversationId?: string },
+  options?: { escalate?: boolean; timeoutMs?: number; conversationId?: string; identityHeaders?: Record<string, string> },
 ) {
   const hermes = hermesEnvFrom(env)
   const unconfigured = options?.escalate ? hermesHandoffGreeting(lang) : hermesUnavailableReply(lang)
@@ -216,6 +208,7 @@ export async function resolveHermesReply(
         hosts: "exact",
         timeoutMs: options?.timeoutMs ?? 12_000,
         conversationId: options?.conversationId,
+        identityHeaders: options?.identityHeaders,
       },
     )
     if (raw) {

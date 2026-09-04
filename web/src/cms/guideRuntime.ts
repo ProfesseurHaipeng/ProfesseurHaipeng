@@ -19,7 +19,13 @@ export async function resolveGuideReply(
   knowledge: string,
   env: GuideEnvBag,
   extraSystem?: string,
-  options?: { advisor?: AdvisorId; escalate?: boolean; lang?: "zh" | "en"; conversationId?: string },
+  options?: {
+    advisor?: AdvisorId
+    escalate?: boolean
+    lang?: "zh" | "en"
+    conversationId?: string
+    identityHeaders?: Record<string, string>
+  },
 ): Promise<GuideResult> {
   // Ticket markers are a model-only protocol; never accept them from users.
   const cleanedHistory = history.map((item) =>
@@ -32,6 +38,7 @@ export async function resolveGuideReply(
     const hermes = await resolveHermesReply(cleanedHistory, knowledge, env, extraSystem, options?.lang || "zh", {
       escalate: options?.escalate === true,
       conversationId: options?.conversationId,
+      identityHeaders: options?.identityHeaders,
     })
     return { ...hermes, advisor: "hermes", reconnecting: hermes.reconnecting === true }
   }

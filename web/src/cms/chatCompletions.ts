@@ -83,7 +83,6 @@ function withImages(
 type CompletionExtras = {
   headers?: Record<string, string>
   body?: Record<string, unknown>
-  userName?: string
 }
 
 async function completeOnce(
@@ -96,9 +95,7 @@ async function completeOnce(
   const endpoint = new URL(`${env.baseUrl}/chat/completions`)
   if (env.groupId) endpoint.searchParams.set("GroupId", env.groupId)
 
-  const packed = withImages(messages, images).map((item) =>
-    extras?.userName && item.role === "user" ? { ...item, name: extras.userName } : item,
-  )
+  const packed = withImages(messages, images)
   const response = await fetch(endpoint.toString(), {
     method: "POST",
     headers: {
@@ -157,70 +154,33 @@ function shouldRetryIdentity(error: unknown) {
 
 type IdentityShape = {
   name: string
-  extras: (id: string) => CompletionExtras
+  extras: (id: string, signed?: Record<string, string>) => CompletionExtras
 }
 
-const IDENTITY_SHAPES: IdentityShape[] = [
-  {
-    name: "user",
-    extras: (id) => ({
-      body: { user: id },
-      headers: { "X-Conversation-Id": id },
-    }),
-  },
-  {
-    name: "user-name",
-    extras: (id) => ({ body: { user: id }, userName: id }),
-  },
-  {
-    name: "hdr-isolated",
-    extras: (id) => ({ headers: { "X-Isolated-Conversation-Identity": id } }),
-  },
-  {
-    name: "hdr-advisor-case",
-    extras: (id) => ({ headers: { "X-Advisor-Case-Id": id } }),
-  },
-  {
-    name: "hdr-conversation-identity",
-    extras: (id) => ({ headers: { "X-Conversation-Identity": id } }),
-  },
-  {
-    name: "identity",
-    extras: (id) => ({ body: { identity: id } }),
-  },
-  {
-    name: "isolated_conversation_identity",
-    extras: (id) => ({ body: { isolated_conversation_identity: id } }),
-  },
-  {
-    name: "case_id",
-    extras: (id) => ({ body: { case_id: id } }),
-  },
-]
+function identityHeaderBag(id: string, signedHeaders?: Record<string, string>): Record<string, string> {
+  return {
+    "X-Conversation-Id": id,
+    "X-Conversation-Identity": id,
+    "X-Isolated-Conversation-Identity": id,
+    "X-Advisor-Case-Id": id,
+    "X-Advisor-Identity": id,
+    "X-Case-Id": id,
+    ...signedHeaders,
+  }
+}
+
+function identityShapes(signed?: Record<string, string>): IdentityShape[] {
+  return [
+    { name: "plain", extras: () => ({}) },
+    { name: "signed-headers", extras: (id) => ({ headers: identityHeaderBag(id, signed) }) },
+    {
+      name: "user+headers",
+      extras: (id) => ({ body: { user: id }, headers: identityHeaderBag(id, signed) }),
+    },
+  ]
+}
 
 let workingIdentityShape: string | null = null
-
-async function mintedConversationId(env: ChatCompletionsEnv, seed: string, timeoutMs: number) {
-  for (const path of ["/conversations", "/chat/conversations"]) {
-    try {
-      const response = await fetch(`${env.baseUrl}${path}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${env.apiKey}`,
-        },
-        signal: AbortSignal.timeout(Math.min(4000, timeoutMs)),
-        body: JSON.stringify({ user: seed }),
-      })
-      if (!response.ok) continue
-      const payload = (await response.json()) as { id?: string; conversation_id?: string }
-      if (payload.id || payload.conversation_id) return payload.id || payload.conversation_id
-    } catch {
-      /* try the next create path */
-    }
-  }
-  return seed
-}
 
 export async function completeChatCompletions(
   env: ChatCompletionsEnv,
@@ -230,22 +190,17 @@ export async function completeChatCompletions(
     images?: { mime: string; data: string }[]
     timeoutMs?: number
     conversationId?: string
+    identityHeaders?: Record<string, string>
   },
 ) {
   const bases = options?.hosts === "exact" ? [env.baseUrl.replace(/\/$/, "")] : alternateMinimaxBases(env.baseUrl)
   const conversationId = options?.conversationId
-    ? await mintedConversationId(
-        { ...env, baseUrl: bases[0] || env.baseUrl },
-        options.conversationId,
-        options.timeoutMs ?? 20_000,
-      )
-    : undefined
   const shapes = conversationId
     ? workingIdentityShape
-      ? IDENTITY_SHAPES.filter((item) => item.name === workingIdentityShape).concat(
-          IDENTITY_SHAPES.filter((item) => item.name !== workingIdentityShape),
+      ? identityShapes(options?.identityHeaders).filter((item) => item.name === workingIdentityShape).concat(
+          identityShapes(options?.identityHeaders).filter((item) => item.name !== workingIdentityShape),
         )
-      : IDENTITY_SHAPES
+      : identityShapes(options?.identityHeaders)
     : [{ name: "none", extras: () => ({}) }]
   let lastError: unknown
   for (const baseUrl of bases) {
@@ -256,7 +211,7 @@ export async function completeChatCompletions(
           messages,
           options?.hosts === "exact" ? options.images : undefined,
           options?.timeoutMs,
-          conversationId ? shape.extras(conversationId) : undefined,
+          conversationId ? shape.extras(conversationId, options?.identityHeaders) : undefined,
         )
         if (conversationId && shape.name !== "none") workingIdentityShape = shape.name
         return reply

@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto"
 import { advisorConversationIdentity } from "../src/cms/advisorIdentity"
 import { defaultContent } from "../src/cms/defaultContent"
 import { buildGreeting, chinesePlace, replyLang, visitorLang } from "../src/cms/greeting"
@@ -96,11 +97,22 @@ export default async (req: Request) => {
   const lang = replyLang(visitorLang(req.headers.get("x-vercel-ip-country")), lastUser?.content)
   const extra = escalate ? hermesHandoffHint(lang) : undefined
   const visitorId = typeof body.visitorId === "string" ? body.visitorId.trim() : ""
+  const conversationId = advisorConversationIdentity(visitorId || "anon-front", env.ADVISOR_CASE_ID_SECRET)
+  const signature = env.ADVISOR_CASE_ID_SECRET
+    ? createHmac("sha256", env.ADVISOR_CASE_ID_SECRET).update(conversationId).digest("hex")
+    : ""
   const result = await resolveGuideReply(history, flattenKnowledge(defaultContent), env, extra, {
     advisor,
     escalate,
     lang,
-    conversationId: advisorConversationIdentity(visitorId || "anon-front", env.ADVISOR_CASE_ID_SECRET),
+    conversationId,
+    identityHeaders: signature
+      ? {
+          "X-Advisor-Signature": signature,
+          "X-Advisor-Case-Signature": signature,
+          "X-Case-Signature": signature,
+        }
+      : undefined,
   })
   return json({
     reply: result.reply,

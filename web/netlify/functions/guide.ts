@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto"
 import type { Config, Context } from "@netlify/functions"
 import { defaultContent } from "../../src/cms/defaultContent"
 import {
@@ -45,6 +46,16 @@ function readEnv(name: string) {
     return fromNetlify || process.env[name] || ""
   } catch {
     return process.env[name] || ""
+  }
+}
+
+function advisorSignatureHeaders(id: string, secret: string) {
+  if (!secret) return {}
+  const signature = createHmac("sha256", secret).update(id).digest("hex")
+  return {
+    "X-Advisor-Signature": signature,
+    "X-Advisor-Case-Signature": signature,
+    "X-Case-Signature": signature,
   }
 }
 
@@ -193,11 +204,13 @@ export default async (req: Request, context: Context) => {
     extra = frontHermesExtra(await readHermesMemory(), findHermesCase(deskCases, { visitorId }), extra)
   }
   const env = envBag()
+  const conversationId = advisorConversationIdentity(visitorId || "anon-front", env.ADVISOR_CASE_ID_SECRET)
   const result = await resolveGuideReply(history, flattenKnowledge(content), env, extra, {
     advisor,
     escalate,
     lang,
-    conversationId: advisorConversationIdentity(visitorId || "anon-front", env.ADVISOR_CASE_ID_SECRET),
+    conversationId,
+    identityHeaders: advisorSignatureHeaders(conversationId, env.ADVISOR_CASE_ID_SECRET),
   })
   const ledger = await readHermesLedger()
   const identity = {
