@@ -35,7 +35,7 @@ import { InquiryPanel } from "./InquiryPanel"
 import { TicketsPanel, TicketEditDialog } from "./TicketsPanel"
 import type { AdminAuth } from "./LeadsPanel"
 
-type LinkView = "connecting" | "connected" | "disconnected"
+type LinkView = "connecting" | "reconnecting" | "connected" | "disconnected"
 type DeskPane = "dash" | "desk" | "inquiry"
 type BoardModule = "tickets" | "inquiry"
 type PendingImage = { key: string; mime: string; name: string; data: string; preview: string }
@@ -53,6 +53,7 @@ function sameJson(left: unknown, right: unknown) {
 
 const STATUS_LABEL: Record<LinkView, string> = {
   connecting: "正在连接",
+  reconnecting: "正在重新连接",
   connected: "正常连接",
   disconnected: "断开连接",
 }
@@ -279,7 +280,7 @@ export function HermesDesk({ auth, onExpandSide }: { auth: AdminAuth; onExpandSi
   }, [apply, headers])
 
   const probe = useCallback(async () => {
-    setStatus((current) => (current === "connected" ? current : "connecting"))
+    setStatus((current) => (current === "connected" || current === "disconnected" ? "reconnecting" : "connecting"))
     try {
       await post({ action: "health" })
     } catch {

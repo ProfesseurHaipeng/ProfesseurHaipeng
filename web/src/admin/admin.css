@@ -697,7 +697,8 @@ body:has(.admin-shell--desk) #root {
   background: #34d399;
 }
 
-.hermes-grok__status--connecting i {
+.hermes-grok__status--connecting i,
+.hermes-grok__status--reconnecting i {
   background: var(--hud-gold);
   animation: hermes-pulse 1s ease-in-out infinite;
 }
@@ -4001,7 +4002,8 @@ body:has(.admin-shell--desk) #root {
   background: #19c37d;
 }
 
-.guide-desk__live--connecting {
+.guide-desk__live--connecting,
+.guide-desk__live--reconnecting {
   background: #ff9500;
 }
 

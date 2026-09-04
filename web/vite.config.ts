@@ -516,6 +516,7 @@ function localGuide(): Plugin {
               lang: turnLang,
               advisor: result.advisor,
               hermesReady: hermesMod.hermesReady(env),
+              reconnecting: result.reconnecting === true,
             }),
           )
         } catch {

@@ -84,6 +84,7 @@ async function completeOnce(
   env: ChatCompletionsEnv,
   messages: GuideMessage[],
   images?: { mime: string; data: string }[],
+  timeoutMs = 20_000,
 ) {
   const endpoint = new URL(`${env.baseUrl}/chat/completions`)
   if (env.groupId) endpoint.searchParams.set("GroupId", env.groupId)
@@ -94,6 +95,7 @@ async function completeOnce(
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.apiKey}`,
     },
+    signal: AbortSignal.timeout(timeoutMs),
     body: JSON.stringify({
       model: env.model,
       temperature: 0.3,
@@ -137,13 +139,18 @@ function isHostAuthError(error: unknown) {
 export async function completeChatCompletions(
   env: ChatCompletionsEnv,
   messages: GuideMessage[],
-  options?: { hosts?: "minimax-alt" | "exact"; images?: { mime: string; data: string }[] },
+  options?: { hosts?: "minimax-alt" | "exact"; images?: { mime: string; data: string }[]; timeoutMs?: number },
 ) {
   const bases = options?.hosts === "exact" ? [env.baseUrl.replace(/\/$/, "")] : alternateMinimaxBases(env.baseUrl)
   let lastError: unknown
   for (const baseUrl of bases) {
     try {
-      return await completeOnce({ ...env, baseUrl }, messages, options?.hosts === "exact" ? options.images : undefined)
+      return await completeOnce(
+        { ...env, baseUrl },
+        messages,
+        options?.hosts === "exact" ? options.images : undefined,
+        options?.timeoutMs,
+      )
     } catch (error) {
       lastError = error
       if (options?.hosts === "exact" || !isHostAuthError(error) || bases.indexOf(baseUrl) === bases.length - 1) {

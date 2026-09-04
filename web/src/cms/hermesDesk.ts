@@ -1519,6 +1519,10 @@ export function coachUnavailableReply() {
   return "指令已记下。顾问网关还没接到站点上，接通后我会按这条调整跟进和话术。"
 }
 
+export function coachReconnectingReply() {
+  return "网关这一下没接上。指令还在，正在重新连接，请再发一次。"
+}
+
 export async function resolveCoachReply(
   cases: HermesCase[],
   history: HermesCoachTurn[],
@@ -1536,6 +1540,7 @@ export async function resolveCoachReply(
     const raw = await completeChatCompletions(hermes, buildCoachMessages(cases, history, undefined, memory, currentInquiry), {
       hosts: "exact",
       images,
+      timeoutMs: 15_000,
     })
     if (raw) {
       const parsed = extractDeskUpdates(raw)
@@ -1554,5 +1559,5 @@ export async function resolveCoachReply(
   } catch (error) {
     console.error("ash-hermes-desk coach", error)
   }
-  return { reply: coachUnavailableReply(), cases, memory, inquiry: currentInquiry, source: "local" as const }
+  return { reply: coachReconnectingReply(), cases, memory, inquiry: currentInquiry, source: "local" as const }
 }

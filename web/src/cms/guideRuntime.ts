@@ -11,6 +11,7 @@ export type GuideResult = {
   source: "minimax" | "custom" | "local" | "hermes"
   ticket: TicketDraft | null
   advisor: AdvisorId
+  reconnecting?: boolean
 }
 
 export async function resolveGuideReply(
@@ -31,7 +32,7 @@ export async function resolveGuideReply(
     const hermes = await resolveHermesReply(cleanedHistory, knowledge, env, extraSystem, options?.lang || "zh", {
       escalate: options?.escalate === true,
     })
-    return { ...hermes, advisor: "hermes" }
+    return { ...hermes, advisor: "hermes", reconnecting: hermes.reconnecting === true }
   }
   const messages = buildGuideMessages(cleanedHistory, knowledge, extraSystem)
 

@@ -8,7 +8,9 @@ import {
   hermesLinkInfo,
   hermesReady,
   hermesHandoffGreeting,
+  hermesReconnectingReply,
   hermesUnavailableReply,
+  isAdvisorOutageJoke,
   probeHermes,
   resolveHermesReply,
 } from "./hermes"
@@ -64,9 +66,13 @@ describe("hermes prompt", () => {
   it("explains the handoff without leaking deploy details", () => {
     expect(hermesHandoffHint("zh")).toContain("接手")
     expect(hermesHandoffHint("en")).toMatch(/take over|handoff/i)
-    expect(hermesUnavailableReply("zh")).toContain("内网")
-    expect(hermesUnavailableReply("en")).toContain("private network")
-    expect(hermesUnavailableReply("zh")).not.toMatch(/192\.168|cloudflare|tunnel/i)
+    expect(hermesUnavailableReply("zh")).toContain("还没接通")
+    expect(hermesUnavailableReply("en")).toMatch(/not on this line/i)
+    expect(hermesUnavailableReply("zh")).not.toMatch(/192\.168|cloudflare|tunnel|联络|冲凉|作物和吨位/)
+    expect(hermesReconnectingReply("zh")).toContain("正在重新连接")
+    expect(hermesReconnectingReply("zh")).not.toMatch(/联络|冲凉|作物和吨位|内网/)
+    expect(isAdvisorOutageJoke("高级顾问正在冲凉 无法连接成功")).toBe(true)
+    expect(isAdvisorOutageJoke("我是 Karmenai，后面我来跟您谈。")).toBe(false)
   })
 })
 
@@ -96,5 +102,21 @@ describe("resolveHermesReply", () => {
     expect(result.reply).toBe(hermesHandoffGreeting("zh"))
     expect(result.reply).toContain("Karmenai")
     expect(result.reply).not.toMatch(/无法接入|Linda|内网|Hermes/)
+    expect(result.reconnecting).toBe(false)
+  })
+
+  it("asks the visitor to wait instead of sending them to contact when the gateway fails", async () => {
+    const result = await resolveHermesReply(
+      [{ role: "user", content: "你好" }],
+      flattenKnowledge(defaultContent),
+      { HERMES_API_BASE: "https://127.0.0.1:1/v1", HERMES_API_KEY: "local" },
+      undefined,
+      "zh",
+      { timeoutMs: 800 },
+    )
+    expect(result.source).toBe("local")
+    expect(result.reconnecting).toBe(true)
+    expect(result.reply).toBe(hermesReconnectingReply("zh"))
+    expect(result.reply).not.toMatch(/联络|作物和吨位|冲凉/)
   })
 })

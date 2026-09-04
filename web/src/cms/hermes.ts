@@ -70,6 +70,7 @@ export const HERMES_FRONT_BOUNDARY = `【权限边界：前台】
 - 你和后台工作台是同一个高级顾问 Karmenai，共用长期记忆。后台权限更高，前台只有这一场客户对话。
 - 禁止提及后台工作台、同事指令、其他客户、接管名单、内部评价、desk 记忆。
 - 对客户只称自己为 Karmenai，不要说 Hermes、网关、模型或内部系统名。
+- 不要说自己在冲凉、洗澡、断线、无法连接，也不要拿系统故障开玩笑。接得上就谈合作，接不上就不要编理由。
 - 客户问你是不是后台系统、有没有看到别的客户，就说你只处理眼前这场合作，然后回到作物和吨位。`
 
 const HERMES_RULES = `你是「菲律宾皮纳图博火山灰农业综合产业项目」的高级顾问 Karmenai。你从产品顾问小林手里接手这场对话，代表项目方继续谈，不是外部顾问，也不是客服机器人。
@@ -116,8 +117,18 @@ export function buildHermesMessages(
 
 export function hermesUnavailableReply(lang: "zh" | "en") {
   return lang === "en"
-    ? "Karmenai, our senior advisor, is still being connected from the private network. Keep talking here, or leave your crop and tonnage on the Contact page so we can follow up."
-    : "高级顾问 Karmenai 还在从内网接到站点上。您可以先继续问我，或到「联络」页留下作物和吨位，配置好我们按这条线索跟进。"
+    ? "Karmenai is not on this line yet. Please keep talking with the product advisor, or try the senior advisor again in a moment."
+    : "高级顾问 Karmenai 这条线还没接通。请先继续问产品顾问，或稍后再转一次。"
+}
+
+export function hermesReconnectingReply(lang: "zh" | "en") {
+  return lang === "en"
+    ? "The senior advisor line dropped for a moment. I'm reconnecting now — send another message shortly and I'll continue as Karmenai."
+    : "高级顾问线路这一下没接上，正在重新连接。请稍后再发一条，接通后我是 Karmenai，会接着跟您谈。"
+}
+
+export function isAdvisorOutageJoke(text: string) {
+  return /冲凉|洗澡|无法连接成功|还在从内网接到|正在冲凉/.test(text)
 }
 
 export function hermesHandoffGreeting(lang: "zh" | "en") {
@@ -142,23 +153,27 @@ export async function resolveHermesReply(
   env: Record<string, string | undefined>,
   extraSystem: string | undefined,
   lang: "zh" | "en",
-  options?: { escalate?: boolean },
+  options?: { escalate?: boolean; timeoutMs?: number },
 ) {
-  const fallback = options?.escalate ? hermesHandoffGreeting(lang) : hermesUnavailableReply(lang)
   const hermes = hermesEnvFrom(env)
+  const unconfigured = options?.escalate ? hermesHandoffGreeting(lang) : hermesUnavailableReply(lang)
   if (!hermes) {
-    return { reply: fallback, source: "local" as const, ticket: null }
+    return { reply: unconfigured, source: "local" as const, ticket: null, reconnecting: false }
   }
   try {
     const raw = await completeChatCompletions(hermes, buildHermesMessages(history, knowledge, extraSystem), {
       hosts: "exact",
+      timeoutMs: options?.timeoutMs ?? 12_000,
     })
     if (raw) {
       const { reply, ticket } = extractTicket(raw)
-      if (reply) return { reply, source: "hermes" as const, ticket }
+      if (reply && isAdvisorOutageJoke(reply)) {
+        return { reply: hermesReconnectingReply(lang), source: "local" as const, ticket: null, reconnecting: true }
+      }
+      if (reply) return { reply, source: "hermes" as const, ticket, reconnecting: false }
     }
   } catch (error) {
     console.error("ash-guide hermes", error)
   }
-  return { reply: fallback, source: "local" as const, ticket: null }
+  return { reply: hermesReconnectingReply(lang), source: "local" as const, ticket: null, reconnecting: true }
 }

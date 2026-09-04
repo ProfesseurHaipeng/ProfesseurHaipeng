@@ -91,5 +91,6 @@ export default async (req: Request) => {
     source: result.source,
     advisor: result.advisor,
     hermesReady: hermesReady(env),
+    reconnecting: result.reconnecting === true,
   })
 }

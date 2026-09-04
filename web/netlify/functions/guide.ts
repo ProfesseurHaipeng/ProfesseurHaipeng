@@ -227,6 +227,7 @@ export default async (req: Request, context: Context) => {
     lang,
     advisor: result.advisor,
     hermesReady: hermesReady(envBag()),
+    reconnecting: result.reconnecting === true,
   })
 }
 
