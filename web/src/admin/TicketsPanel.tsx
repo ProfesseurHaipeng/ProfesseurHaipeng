@@ -249,7 +249,6 @@ export function TicketsPanel({
                   </span>
                   <time dateTime={item.updatedAt}>{formatTime(item.updatedAt)}</time>
                 </div>
-                <b aria-hidden="true">›</b>
               </button>
               <div className="desk-ticket__ops">
                 <button type="button" onClick={() => setEditId(item.id)}>

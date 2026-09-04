@@ -174,12 +174,18 @@ export function AdminApp() {
         ) : null}
       </aside>
       <section className={view === "hermes" ? "admin-main admin-main--desk" : "admin-main"}>
-        {!sideOpen ? (
-          <button type="button" className="admin-side__open" onClick={toggleSide}>
-            展开菜单
-          </button>
-        ) : null}
-        {view === "hermes" ? <HermesDesk auth={auth} /> : <LeadsPanel auth={auth} />}
+        {view === "hermes" ? (
+          <HermesDesk auth={auth} onExpandSide={sideOpen ? undefined : toggleSide} />
+        ) : (
+          <>
+            {!sideOpen ? (
+              <button type="button" className="admin-side__open" onClick={toggleSide}>
+                展开菜单
+              </button>
+            ) : null}
+            <LeadsPanel auth={auth} />
+          </>
+        )}
       </section>
     </div>
   )

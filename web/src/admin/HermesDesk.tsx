@@ -193,7 +193,7 @@ type DeskPayload = {
   error?: string
 }
 
-export function HermesDesk({ auth }: { auth: AdminAuth }) {
+export function HermesDesk({ auth, onExpandSide }: { auth: AdminAuth; onExpandSide?: () => void }) {
   const [cases, setCases] = useState<HermesCase[]>([])
   const [coach, setCoach] = useState<HermesCoachTurn[]>([])
   const [events, setEvents] = useState<HermesEvent[]>([])
@@ -541,6 +541,11 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
           <span className="hermes-grok__status-label">{STATUS_LABEL[status]}</span>
         </button>
         <div className="hermes-grok__tools">
+          {onExpandSide ? (
+            <button type="button" className="hermes-grok__ghost" onClick={onExpandSide}>
+              展开菜单
+            </button>
+          ) : null}
           <button type="button" className="hermes-grok__ghost" onClick={() => void load()} disabled={loading}>
             {loading ? "读取中" : "刷新"}
           </button>
@@ -788,7 +793,14 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                   <button type="button" onClick={() => setEditTicketId(selected.id)}>
                     编辑
                   </button>
-                  <button type="button" className="is-danger" onClick={() => void deleteCases([selected.id])}>
+                  <button
+                    type="button"
+                    className="is-danger"
+                    onClick={() => {
+                      if (!window.confirm("删除这张工单？删除后无法恢复。")) return
+                      void deleteCases([selected.id])
+                    }}
+                  >
                     删除
                   </button>
                 </span>

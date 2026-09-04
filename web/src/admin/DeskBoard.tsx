@@ -78,23 +78,41 @@ export function DeskBoard({
   )
 }
 
+function chartTicks(max: number) {
+  const top = Math.max(1, max)
+  return [0, top / 2, top]
+}
+
 function BarChart({ rows }: { rows: { key: string; label: string; value: number }[] }) {
   const max = Math.max(1, ...rows.map((item) => item.value))
+  const plotLeft = 36
+  const plotRight = 352
+  const plotTop = 16
+  const plotBottom = 118
+  const plotH = plotBottom - plotTop
   return (
     <svg className="desk-chart" viewBox="0 0 360 160" role="img" aria-label="工单进度柱状图">
+      {chartTicks(max).map((tick) => {
+        const y = plotBottom - (tick / max) * plotH
+        return (
+          <g key={tick}>
+            <line x1={plotLeft} y1={y} x2={plotRight} y2={y} stroke="#ececec" />
+            <text x={plotLeft - 8} y={y + 3} textAnchor="end" fontSize="8" fill="#6e6e73">
+              {tick}
+            </text>
+          </g>
+        )
+      })}
       {rows.map((item, index) => {
-        const width = 360 / rows.length
-        const x = index * width + width * 0.18
+        const width = (plotRight - plotLeft) / rows.length
+        const x = plotLeft + index * width + width * 0.18
         const barW = width * 0.64
-        const h = (item.value / max) * 110
+        const h = (item.value / max) * plotH
         return (
           <g key={item.key}>
-            <rect x={x} y={128 - h} width={barW} height={h} rx="3" fill="#ff7a1a" />
+            <rect x={x} y={plotBottom - h} width={barW} height={h} rx="3" fill="#ff7a1a" />
             <text x={x + barW / 2} y="148" textAnchor="middle" fontSize="8" fill="#6e6e73">
               {item.label}
-            </text>
-            <text x={x + barW / 2} y={120 - h} textAnchor="middle" fontSize="9" fill="#1d1d1f">
-              {item.value}
             </text>
           </g>
         )
@@ -108,18 +126,34 @@ function LineChart({ points }: { points: { label: string; value: number }[] }) {
     return <p className="desk-board__empty">尚无事件曲线。</p>
   }
   const max = Math.max(1, ...points.map((item) => item.value))
-  const step = points.length > 1 ? 320 / (points.length - 1) : 0
-  const coords = points.map((item, index) => `${20 + index * step},${130 - (item.value / max) * 100}`)
+  const plotLeft = 36
+  const plotRight = 352
+  const plotTop = 16
+  const plotBottom = 118
+  const plotH = plotBottom - plotTop
+  const step = points.length > 1 ? (plotRight - plotLeft) / (points.length - 1) : 0
+  const coords = points.map((item, index) => `${plotLeft + index * step},${plotBottom - (item.value / max) * plotH}`)
   return (
     <svg className="desk-chart" viewBox="0 0 360 160" role="img" aria-label="近两周事件折线图">
+      {chartTicks(max).map((tick) => {
+        const y = plotBottom - (tick / max) * plotH
+        return (
+          <g key={tick}>
+            <line x1={plotLeft} y1={y} x2={plotRight} y2={y} stroke="#ececec" />
+            <text x={plotLeft - 8} y={y + 3} textAnchor="end" fontSize="8" fill="#6e6e73">
+              {tick}
+            </text>
+          </g>
+        )
+      })}
       <polyline fill="none" stroke="#0071e3" strokeWidth="2" points={coords.join(" ")} />
       {points.map((item, index) => (
-        <circle key={item.label} cx={20 + index * step} cy={130 - (item.value / max) * 100} r="3" fill="#0071e3" />
+        <circle key={item.label} cx={plotLeft + index * step} cy={plotBottom - (item.value / max) * plotH} r="3" fill="#0071e3" />
       ))}
-      <text x="20" y="150" fontSize="8" fill="#6e6e73">
+      <text x={plotLeft} y="150" fontSize="8" fill="#6e6e73">
         {points[0]?.label}
       </text>
-      <text x="340" y="150" textAnchor="end" fontSize="8" fill="#6e6e73">
+      <text x={plotRight} y="150" textAnchor="end" fontSize="8" fill="#6e6e73">
         {points.at(-1)?.label}
       </text>
     </svg>
@@ -128,7 +162,7 @@ function LineChart({ points }: { points: { label: string; value: number }[] }) {
 
 function TreeChart({ tickets, customers, factories }: { tickets: number; customers: number; factories: number }) {
   return (
-    <svg className="desk-chart desk-chart--tree" viewBox="0 0 360 170" role="img" aria-label="档案树状图">
+    <svg className="desk-chart desk-chart--tree" viewBox="0 0 360 150" role="img" aria-label="档案树状图">
       <line x1="180" y1="48" x2="90" y2="98" stroke="#d2d2d7" />
       <line x1="180" y1="48" x2="270" y2="98" stroke="#d2d2d7" />
       <rect x="120" y="12" width="120" height="36" rx="8" fill="#1d1d1f" />
