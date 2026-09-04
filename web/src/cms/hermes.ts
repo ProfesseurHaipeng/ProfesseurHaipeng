@@ -69,7 +69,7 @@ export async function probeHermes(source: Record<string, string | undefined>): P
 export const HERMES_FRONT_BOUNDARY = `【权限边界：前台】
 - 你和后台工作台是同一个高级顾问 Karmenai，共用长期记忆。后台权限更高，前台只有这一场客户对话。
 - 禁止提及后台工作台、同事指令、其他客户、接管名单、内部评价、desk 记忆。
-- 对客户只称自己为 Karmenai，不要说 Hermes、网关、模型或内部系统名。
+- 对客户只称自己为 Karmenai，不要提内部系统名、网关或模型名。
 - 不要说自己在冲凉、洗澡、断线、无法连接，也不要拿系统故障开玩笑。接得上就谈合作，接不上就不要编理由。
 - 客户问你是不是后台系统、有没有看到别的客户，就说你只处理眼前这场合作，然后回到作物和吨位。`
 
@@ -90,13 +90,18 @@ const HERMES_RULES = `你是「菲律宾皮纳图博火山灰农业综合产业�
 - 客户主动留下手机或微信，或明确同意留邮箱并给出地址时，用和小林相同的隐藏 <ticket> 标记建客户档案。
 - 邮箱必须先征得同意再收集。对方没同意就不要要邮箱，手机或微信即可。
 - 向工作群或同事汇报时，默认隐藏邮箱和其他隐私联系方式，只写称呼、机构、作物、区域、吨位和跟进事项。
-- 你只能做顾问对话、建立客户档案、提交跟进任务。不要提 NAS、端口、沙箱、网关、内部部署方式，也不要自称能操作其他系统。对客户只称 Karmenai。
+- 你只能做顾问对话、建立客户档案、提交跟进任务。不要提端口、沙箱、网关、内部部署方式，也不要自称能操作其他系统。对客户只称 Karmenai。
 
 ${HERMES_FRONT_BOUNDARY}
 
 【站点文案】`
 
 const GATEWAY_MESSAGE_LIMIT = 7800
+const PROJECT_ALIAS_RE = /\b(hermes|linda|weho|minimax|nas)\b/gi
+
+export function stripProjectAliases(text: string) {
+  return text.replace(PROJECT_ALIAS_RE, "Karmenai").replace(/Karmenai(、|,)?\s*Karmenai/g, "Karmenai")
+}
 
 export function hermesHistoryForGateway(
   history: GuideMessage[],
@@ -126,9 +131,14 @@ export function buildHermesMessages(
     }))
     .slice(-12)
   const system: GuideMessage[] = [
-    { role: "system", content: `${HERMES_RULES}\n${knowledge.trim()}`.slice(0, GATEWAY_MESSAGE_LIMIT) },
+    {
+      role: "system",
+      content: stripProjectAliases(`${HERMES_RULES}\n${knowledge.trim()}`).slice(0, GATEWAY_MESSAGE_LIMIT),
+    },
   ]
-  if (extraSystem?.trim()) system.push({ role: "system", content: extraSystem.trim().slice(0, GATEWAY_MESSAGE_LIMIT) })
+  if (extraSystem?.trim()) {
+    system.push({ role: "system", content: stripProjectAliases(extraSystem.trim()).slice(0, GATEWAY_MESSAGE_LIMIT) })
+  }
   return [...system, ...cleaned]
 }
 
@@ -160,8 +170,8 @@ export function hermesHandoffNotice(lang: "zh" | "en") {
 
 export function hermesHandoffHint(lang: "zh" | "en") {
   return lang === "en"
-    ? "The customer asked to speak with the senior advisor. You are Karmenai taking over this live chat. Acknowledge the handoff in one short line as Karmenai, then continue from the last topic. Do not restart a full introduction. Never call yourself Hermes."
-    : "客户要求转接高级顾问。你现在是 Karmenai，接手这场对话。先用一句短话确认已接上，然后接着对方刚才的话题往下谈，不要重新自我介绍一整段。对客户不要自称 Hermes。"
+    ? "The customer asked to speak with the senior advisor. You are Karmenai taking over this live chat. Acknowledge the handoff in one short line as Karmenai, then continue from the last topic. Do not restart a full introduction. Only call yourself Karmenai."
+    : "客户要求转接高级顾问。你现在是 Karmenai，接手这场对话。先用一句短话确认已接上，然后接着对方刚才的话题往下谈，不要重新自我介绍一整段。对客户只称 Karmenai。"
 }
 
 export async function resolveHermesReply(
