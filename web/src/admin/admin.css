@@ -4802,9 +4802,10 @@ body:has(.admin-shell--desk) #root {
   font-weight: 650;
 }
 
-.hermes-karmenai .guide-desk__bubble--staff {
-  background: #e7ebe7;
-  color: var(--admin-ink);
+.hermes-karmenai .guide-desk__bubble--staff,
+.hermes-karmenai .guide-desk .guide-desk__bubble--staff {
+  background: #e7ebe7 !important;
+  color: var(--admin-ink) !important;
   border-radius: 1rem 1rem 0.3rem 1rem;
 }
 
@@ -5005,10 +5006,23 @@ body:has(.admin-shell--desk) #root {
   padding: 1.05rem 1.15rem 1.5rem;
 }
 
+.inq-page__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+}
+
+.inq-page__back {
+  flex: 0 0 auto;
+  width: auto;
+}
+
 .inq-page__ops {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+  margin-left: auto;
 }
 
 .inq-save,
@@ -5065,9 +5079,11 @@ body:has(.admin-shell--desk) #root {
 }
 
 .hermes-karmenai .hermes-rail__track i,
+.hermes-karmenai .hermes-stages .hermes-rail__track i,
 .hermes-karmenai .hermes-mini-stages i {
-  background: var(--admin-green);
-  animation: none;
+  background: var(--admin-green) !important;
+  background-image: none !important;
+  animation: none !important;
 }
 
 .hermes-karmenai .hermes-apple .hermes-ticket:hover,
