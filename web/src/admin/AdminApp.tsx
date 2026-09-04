@@ -304,6 +304,7 @@ export function AdminApp() {
               auth={auth}
               area={deskArea}
               archiveView={archiveView}
+              visible={deskVisible}
               onNeedDesk={() => go("desk")}
               onExpandSide={sideOpen ? undefined : toggleSide}
             />

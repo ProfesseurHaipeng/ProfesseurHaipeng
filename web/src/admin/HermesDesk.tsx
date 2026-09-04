@@ -208,12 +208,14 @@ export function HermesDesk({
   archiveView,
   onNeedDesk,
   onExpandSide,
+  visible = true,
 }: {
   auth: AdminAuth
   area?: DeskArea
   archiveView?: TicketView
   onNeedDesk?: () => void
   onExpandSide?: () => void
+  visible?: boolean
 }) {
   const [cases, setCases] = useState<HermesCase[]>([])
   const [coach, setCoach] = useState<HermesCoachTurn[]>([])
@@ -313,6 +315,11 @@ export function HermesDesk({
   useEffect(() => {
     void load().then(() => void probe())
   }, [load, probe])
+
+  useEffect(() => {
+    if (!visible) return
+    void load()
+  }, [visible, load])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -928,7 +935,9 @@ export function HermesDesk({
                 <p className="guide-desk__status">
                   {chatId ? <span className="karm-chat-head__id">{chatId}</span> : null}
                   <span>
-                    {PRODUCT_NAME} · {AGENT_NAME}
+                    {selected || customerFile || factoryFile
+                      ? `${PRODUCT_NAME} · ${AGENT_NAME}`
+                      : "火山灰项目工作区"}
                   </span>
                 </p>
               </div>

@@ -4148,6 +4148,10 @@ body:has(.admin-shell--desk) #root {
 }
 
 .admin-gate h1 {
+  color: var(--admin-green);
+}
+
+.admin-gate h1 {
   margin: 0.1rem 0 0;
   font-size: 1.35rem;
 }
@@ -4392,6 +4396,18 @@ body:has(.admin-shell--desk) #root {
 .admin-lead {
   border-radius: 0.85rem;
   box-shadow: none;
+}
+
+.admin-shell--karmenai .admin-lead {
+  background: #fff;
+}
+
+.admin-shell--karmenai .admin-lead strong {
+  color: var(--admin-ink);
+}
+
+.admin-shell--karmenai .admin-lead__note {
+  color: #3d4a45;
 }
 
 .admin-lead__attach {
