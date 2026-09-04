@@ -1,0 +1,10 @@
+{
+  "name": "Pinatubo Ash site",
+  "install": "cd web && npm ci",
+  "terminals": [
+    {
+      "name": "vite-dev",
+      "command": "cd web && npm run dev -- --host 127.0.0.1 --port 5173"
+    }
+  ]
+}
