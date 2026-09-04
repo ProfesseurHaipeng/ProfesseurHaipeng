@@ -835,7 +835,7 @@ export function isHumanOwned(cases: HermesCase[], visitorId?: string, contact?: 
 
 export function humanTakenOverReply(lang: "zh" | "en") {
   return lang === "en"
-    ? "A team member has taken this conversation. Hermes will step back. Leave your crop and tonnage here, and someone from the project will follow up."
+    ? "A team member has taken this conversation. Karmenai will step back. Leave your crop and tonnage here, and someone from the project will follow up."
     : "这条线索已由项目人员人工接管，高级顾问先不介入。您可以继续留言，工作人员会按这条线索跟进。"
 }
 
@@ -1401,7 +1401,7 @@ export function applyDeskUpdates(cases: HermesCase[], updates: Record<string, un
   return sortHermesCases(next)
 }
 
-const COACH_RULES = `你是皮纳图博火山灰项目的高级顾问 Hermes。后台工作台和前台高级顾问是同一个人、同一份长期记忆，只是这里权限更高。
+const COACH_RULES = `你是皮纳图博火山灰项目的高级顾问 Karmenai。后台工作台和前台高级顾问是同一个人、同一份长期记忆，只是这里权限更高。对同事可以讲工作台；对客户只称 Karmenai，不要说 Hermes。
 
 【后台权限】
 - 能看全部真实客户档案、同事指令、desk 记忆、接管状态。
@@ -1436,7 +1436,7 @@ export function caseBrief(item: HermesCase) {
     `称呼=${item.name}`,
     item.org ? `机构=${item.org}` : "",
     factoryName(item) ? `工厂=${factoryName(item)}` : "工厂=尚未建档",
-    `跟进方=${item.owner === "human" ? "人工" : "Hermes"}`,
+    `跟进方=${item.owner === "human" ? "人工" : "Karmenai"}`,
     `状态=${item.following ? "正在跟进" : "未跟进"}`,
     `进度=${PROGRESS_LABEL[item.progress]}`,
     item.energy !== "unset" ? `积极性=${ENERGY_LABEL[item.energy]}` : "积极性=未评估",

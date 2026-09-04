@@ -40,7 +40,7 @@ describe("hermes env", () => {
 })
 
 describe("hermes prompt", () => {
-  it("speaks as senior advisor Hermes taking over from 小林", () => {
+  it("speaks as senior advisor Karmenai taking over from 小林", () => {
     const messages = buildHermesMessages(
       [
         { role: "assistant", content: "您好，我是小林。" },
@@ -49,7 +49,8 @@ describe("hermes prompt", () => {
       flattenKnowledge(defaultContent),
     )
     expect(messages[0]?.role).toBe("system")
-    expect(messages[0]?.content).toContain("Hermes")
+    expect(messages[0]?.content).toContain("Karmenai")
+    expect(messages[0]?.content).not.toMatch(/我是 Hermes|I'm Hermes|高级顾问 Hermes/)
     expect(messages[0]?.content).toContain("小林")
     expect(messages[0]?.content).toContain("<ticket>")
     expect(messages[0]?.content).toContain("邮箱必须先征得同意")
@@ -93,6 +94,7 @@ describe("resolveHermesReply", () => {
       { escalate: true },
     )
     expect(result.reply).toBe(hermesHandoffGreeting("zh"))
-    expect(result.reply).not.toMatch(/无法接入|Linda|内网/)
+    expect(result.reply).toContain("Karmenai")
+    expect(result.reply).not.toMatch(/无法接入|Linda|内网|Hermes/)
   })
 })
