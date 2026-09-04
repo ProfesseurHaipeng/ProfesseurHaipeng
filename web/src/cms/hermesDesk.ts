@@ -1,5 +1,5 @@
 import { completeChatCompletions } from "./chatCompletions"
-import { hermesEnvFrom, resolveCoachViaSignedGuide } from "./hermes"
+import { hermesEnvFrom, isAdvisorOutageJoke, resolveCoachViaSignedGuide, signedGuideEnabled } from "./hermes"
 import {
   applyInquiryState,
   attachTaskCase,
@@ -1560,19 +1560,48 @@ export async function resolveCoachReply(
   const hermes = hermesEnvFrom(env)
   const lastStaff = [...history].reverse().find((item) => item.role === "staff")?.content || ""
   const applyHint = (next: HermesMemory | undefined) => mergeSharedMemoryHint(next, staffSharedMemoryHint(lastStaff))
+  const fallbackOn = signedGuideEnabled(env)
+  const viaSigned = async () => {
+    const extra = [
+      memory?.shared?.trim() ? `【长期记忆（与前台共用）】\n${memory.shared.trim()}` : "",
+      memory?.desk?.trim() ? `【工作台笔记（仅后台）】\n${memory.desk.trim()}` : "",
+      inquiryCoachExtra(currentInquiry),
+    ]
+      .filter(Boolean)
+      .join("\n\n")
+    const signed = await resolveCoachViaSignedGuide(lastStaff || "请回复同事", extra)
+    if (signed?.reply && !isAdvisorOutageJoke(signed.reply)) {
+      return {
+        reply: signed.reply,
+        cases,
+        memory: applyHint(memory),
+        inquiry: currentInquiry,
+        source: "hermes" as const,
+      }
+    }
+    return null
+  }
   if (!hermes) {
+    if (fallbackOn) {
+      try {
+        const signed = await viaSigned()
+        if (signed) return signed
+      } catch (error) {
+        console.error("ash-hermes-desk coach signed-guide", error)
+      }
+    }
     return { reply: coachUnavailableReply(), cases, memory: applyHint(memory), inquiry: currentInquiry, source: "local" as const }
   }
   try {
     const raw = await completeChatCompletions(hermes, buildCoachMessages(cases, history, undefined, memory, currentInquiry), {
       hosts: "exact",
       images,
-      timeoutMs: 15_000,
+      timeoutMs: fallbackOn ? 3_500 : 8_000,
       conversationId,
-      conversationIds: [conversationId, env.ADVISOR_CASE_ID_SECRET?.trim()].filter((item): item is string => Boolean(item)),
+      conversationIds: conversationId ? [conversationId] : undefined,
       identityHeaders,
     })
-    if (raw) {
+    if (raw && !isAdvisorOutageJoke(raw)) {
       const parsed = extractDeskUpdates(raw)
       const inquiryPatch = extractInquiryUpdates(raw)
       const reply = stripInquiryTags(parsed.reply)
@@ -1590,24 +1619,10 @@ export async function resolveCoachReply(
   } catch (error) {
     console.error("ash-hermes-desk coach", error)
   }
-  if (env.ADVISOR_CASE_ID_SECRET || env.SIGNED_GUIDE_FALLBACK === "1") {
+  if (fallbackOn) {
     try {
-      const extra = [
-        memory?.shared?.trim() ? `【长期记忆（与前台共用）】\n${memory.shared.trim()}` : "",
-        memory?.desk?.trim() ? `【工作台笔记（仅后台）】\n${memory.desk.trim()}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n\n")
-      const signed = await resolveCoachViaSignedGuide(lastStaff || "请回复同事", extra)
-      if (signed?.reply) {
-        return {
-          reply: signed.reply,
-          cases,
-          memory: applyHint(memory),
-          inquiry: currentInquiry,
-          source: "hermes" as const,
-        }
-      }
+      const signed = await viaSigned()
+      if (signed) return signed
     } catch (error) {
       console.error("ash-hermes-desk coach signed-guide", error)
     }

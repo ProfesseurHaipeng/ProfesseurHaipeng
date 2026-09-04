@@ -111,7 +111,7 @@ function IconSend() {
 
 const CLOSE_MS = 220
 const CONNECT_MIN_MS = 1100
-const GUIDE_TIMEOUT_MS = 16_000
+const GUIDE_TIMEOUT_MS = 28_000
 const RECONNECT_WAIT_MS = 700
 
 export function SiteGuide() {

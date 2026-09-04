@@ -193,6 +193,7 @@ export default async (req: Request, context: Context) => {
     visitorId?: unknown
     handoffIndex?: unknown
     takenOver?: unknown
+    extraSystem?: unknown
   } = {}
   try {
     body = (await req.json()) as {
@@ -204,6 +205,7 @@ export default async (req: Request, context: Context) => {
       visitorId?: unknown
       handoffIndex?: unknown
       takenOver?: unknown
+      extraSystem?: unknown
     }
   } catch {
     return json({ error: "bad-json" }, 400)
@@ -304,7 +306,8 @@ export default async (req: Request, context: Context) => {
     lang === "en"
       ? `Visitor location: ${place}. The customer's latest message is in English. You MUST answer this turn in natural English.`
       : `访客位置：${place}。客户最后一条消息是中文。本轮必须全程用简体中文回答，不要夹英文段落。`
-  let extra = escalate ? `${langHint}\n${hermesHandoffHint(lang)}` : langHint
+  const extraFromClient = typeof body.extraSystem === "string" ? body.extraSystem.trim().slice(0, 3500) : ""
+  let extra = [escalate ? `${langHint}\n${hermesHandoffHint(lang)}` : langHint, extraFromClient].filter(Boolean).join("\n")
   if (advisor === "hermes") {
     extra = frontHermesExtra(await readHermesMemory(), findHermesCase(deskCases, { visitorId }), extra)
   }

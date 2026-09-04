@@ -29,9 +29,11 @@ function readBody(req: IncomingMessage) {
 
 function localGuide(): Plugin {
   const attach = (server: ViteDevServer) => {
-    const env = {
+    const loaded = loadEnv(server.config.mode, server.config.envDir || process.cwd(), "")
+    const env: Record<string, string | undefined> = {
       ...process.env,
-      ...loadEnv(server.config.mode, server.config.envDir || process.cwd(), ""),
+      ...loaded,
+      SIGNED_GUIDE_FALLBACK: loaded.SIGNED_GUIDE_FALLBACK || process.env.SIGNED_GUIDE_FALLBACK || "1",
     }
     const localLeads: { id: string; source?: string; contact?: string; email?: string; name?: string; org?: string; note?: string; at?: string }[] = []
     const localDesk: {

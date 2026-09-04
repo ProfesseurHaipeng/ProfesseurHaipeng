@@ -7,6 +7,12 @@
   directory = "web/netlify/functions"
   node_bundler = "esbuild"
 
+[functions.guide]
+  timeout = 26
+
+[functions."hermes-desk"]
+  timeout = 26
+
 [[redirects]]
   from = "/api/content"
   to = "/.netlify/functions/content"

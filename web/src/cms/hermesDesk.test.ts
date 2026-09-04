@@ -37,6 +37,8 @@ import {
   pruneUnspokenCases,
   publicVisitorContext,
   recordInquiry,
+  resolveCoachReply,
+  coachUnavailableReply,
   sanitizeCoachImages,
   stageFill,
   ticketNo,
@@ -171,6 +173,32 @@ describe("hermes desk cases", () => {
     expect(extra).toContain("记住先问作物")
     expect(extra).not.toContain("别把工作台说出去")
     expect(extra).not.toContain("内部看好")
+  })
+
+  it("uses the signed backup for workbench chat when live keys are missing", async () => {
+    const original = globalThis.fetch
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ source: "hermes", reply: "收到。我先按这份报价跟王先生。" }), { status: 200 })
+    try {
+      const result = await resolveCoachReply(
+        [sample()],
+        [{ id: "t1", at: now, role: "staff", content: "记住：本周报价以FOB马尼拉为准" }],
+        { SIGNED_GUIDE_FALLBACK: "1" },
+        { shared: "", desk: "", updatedAt: now },
+      )
+      expect(result.source).toBe("hermes")
+      expect(result.reply).toContain("报价")
+      expect(result.reply).not.toBe(coachUnavailableReply())
+      expect(result.memory?.shared).toContain("FOB马尼拉")
+    } finally {
+      globalThis.fetch = original
+    }
+  })
+
+  it("does not pretend the workbench chat is live when no line is configured", async () => {
+    const result = await resolveCoachReply([], [{ id: "t1", at: now, role: "staff", content: "先问作物" }], {})
+    expect(result.source).toBe("local")
+    expect(result.reply).toBe(coachUnavailableReply())
   })
 
   it("lets staff write shared memory that the front can read", () => {
