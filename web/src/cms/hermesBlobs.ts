@@ -3,6 +3,7 @@ import {
   emptyLedger,
   emptyMemory,
   hydrateLedger,
+  canWriteLiveHermesCase,
   liveCases,
   sortHermesCases,
   type HermesCase,
@@ -66,6 +67,12 @@ export async function readHermesCases(options: { includeGone?: boolean } = {}): 
 export async function writeHermesCase(item: HermesCase) {
   const blobs = await store("ash-hermes")
   if (!blobs) return false
+  if (!item.gone) {
+    const raw = await blobs.get(item.id, { type: "json" })
+    const existing = raw && typeof raw === "object" && (raw as HermesCase).id ? (raw as HermesCase) : null
+    const ledger = await readHermesLedger()
+    if (!canWriteLiveHermesCase(item, existing, ledger)) return true
+  }
   await blobs.setJSON(item.id, item)
   return true
 }

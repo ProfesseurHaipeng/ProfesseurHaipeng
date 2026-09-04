@@ -466,8 +466,12 @@ function localGuide(): Plugin {
             extra,
             { advisor, escalate, lang: turnLang },
           )
+          const suppressed = deskMod.isIdentitySuppressed(
+            { visitorId: visitorId || undefined, contact: result.ticket?.contact },
+            localDesk.ledger,
+          )
           let ticketFiled = false
-          if (result.ticket) {
+          if (result.ticket && !suppressed) {
             const leadsMod = await server.ssrLoadModule("/src/cms/leads.ts")
             localLeads.unshift({
               id: leadsMod.newLeadId(),
@@ -481,12 +485,24 @@ function localGuide(): Plugin {
             })
             ticketFiled = true
           }
-          if (result.advisor === "hermes" && !deskMod.isVisitorSuppressed(visitorId, localDesk.ledger)) {
+          if (result.advisor === "hermes" && !suppressed) {
             const seeded = visitorId
-              ? deskMod.upsertFromVisit(localDesk.cases, visitorId, lastUser?.content || result.ticket?.note || "")
+              ? deskMod.upsertFromVisit(
+                  localDesk.cases,
+                  visitorId,
+                  lastUser?.content || result.ticket?.note || "",
+                  undefined,
+                  localDesk.ledger,
+                )
               : { cases: localDesk.cases, case: null }
             const withTicket = result.ticket
-              ? deskMod.upsertFromTicket(seeded.cases, result.ticket, { visitorId: visitorId || undefined, following: true })
+              ? deskMod.upsertFromTicket(
+                  seeded.cases,
+                  result.ticket,
+                  { visitorId: visitorId || undefined, following: true },
+                  undefined,
+                  localDesk.ledger,
+                )
               : seeded
             localDesk.cases = withTicket.cases
           }

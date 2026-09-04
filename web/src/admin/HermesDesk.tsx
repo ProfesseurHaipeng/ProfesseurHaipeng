@@ -301,16 +301,21 @@ export function HermesDesk({ auth, onExpandSide }: { auth: AdminAuth; onExpandSi
 
   const deleteCases = useCallback(
     async (ids: string[]) => {
+      const wanted = ids.filter((id) => id.startsWith("case-"))
+      if (!wanted.length) return
       setError("")
+      const snapshot = cases
+      setCases(snapshot.filter((item) => !wanted.includes(item.id)))
+      if (focus.kind === "ticket" && wanted.includes(focus.id)) setFocus({ kind: "home" })
       try {
-        await post({ action: "cases", op: "delete", ids })
-        if (focus.kind === "ticket" && ids.includes(focus.id)) setFocus({ kind: "home" })
+        await post({ action: "cases", op: "delete", ids: wanted })
       } catch (err) {
+        setCases(snapshot)
         setError(err instanceof Error ? err.message : "删除失败")
         throw err
       }
     },
-    [focus, post],
+    [cases, focus, post],
   )
 
   const updateCase = useCallback(

@@ -251,23 +251,37 @@ export function reviveOnLedger(ledger: HermesLedger, item: Pick<HermesCase, "id"
   }
 }
 
-export function isCaseSuppressed(item: HermesCase, ledger: HermesLedger) {
-  if (item.gone) return true
-  if (ledger.goneIds.includes(item.id)) return true
-  if (item.leadId && ledger.goneLeadIds.includes(item.leadId)) return true
-  if (item.visitorId && ledger.goneVisitorIds.includes(item.visitorId)) return true
-  const contact = (item.contact || "").trim()
+export function isVisitorSuppressed(visitorId: string, ledger: HermesLedger) {
+  return Boolean(visitorId) && ledger.goneVisitorIds.includes(visitorId)
+}
+
+export function isIdentitySuppressed(
+  keys: { id?: string; visitorId?: string; contact?: string; leadId?: string },
+  ledger: HermesLedger,
+) {
+  if (keys.id && ledger.goneIds.includes(keys.id)) return true
+  if (keys.visitorId && isVisitorSuppressed(keys.visitorId, ledger)) return true
+  if (keys.leadId && ledger.goneLeadIds.includes(keys.leadId)) return true
+  const contact = (keys.contact || "").trim()
   return contact.length >= 5 && ledger.goneContacts.includes(contact)
+}
+
+export function isCaseSuppressed(item: HermesCase, ledger: HermesLedger) {
+  return Boolean(item.gone) || isIdentitySuppressed(item, ledger)
 }
 
 export function isLeadSuppressed(lead: Lead, ledger: HermesLedger) {
-  if (ledger.goneLeadIds.includes(lead.id)) return true
-  const contact = (lead.contact || lead.email || "").trim()
-  return contact.length >= 5 && ledger.goneContacts.includes(contact)
+  return isIdentitySuppressed({ leadId: lead.id, contact: lead.contact || lead.email }, ledger)
 }
 
-export function isVisitorSuppressed(visitorId: string, ledger: HermesLedger) {
-  return Boolean(visitorId) && ledger.goneVisitorIds.includes(visitorId)
+/** Refuse live writes that would undelete a tombstone or recreate a suppressed identity. */
+export function canWriteLiveHermesCase(item: HermesCase, existing: HermesCase | null | undefined, ledger: HermesLedger) {
+  if (item.gone) return true
+  if (existing?.gone) return false
+  return !isIdentitySuppressed(
+    { id: item.id, visitorId: item.visitorId, contact: item.contact, leadId: item.leadId },
+    ledger,
+  )
 }
 
 export function liveCases(cases: HermesCase[], ledger: HermesLedger = emptyLedger()) {
@@ -986,10 +1000,13 @@ function patchLinkedCase(
   return { cases: next, touched }
 }
 
-function bindTaskCase(inquiry: InquiryState, cases: HermesCase[], task: InquiryTask, now: string) {
+function bindTaskCase(inquiry: InquiryState, cases: HermesCase[], task: InquiryTask, now: string, ledger: HermesLedger) {
   if (task.caseId) {
     const existing = cases.find((item) => item.id === task.caseId && !item.gone)
     if (existing) return { inquiry, cases, task, created: null as HermesCase | null }
+    if (ledger.goneIds.includes(task.caseId)) {
+      return { inquiry, cases, task, created: null as HermesCase | null }
+    }
   }
   const rec = caseFromInquiryTask(task, cases, now)
   return {
@@ -1014,7 +1031,7 @@ export function applyInquiryTaskAction(
   if (op === "create") {
     const created = createInquiryTask(inquiry, body, now)
     if (created.error || !created.task) return { ...empty, error: created.error || "empty" }
-    const bound = bindTaskCase(created.state, cases, created.task, now)
+    const bound = bindTaskCase(created.state, cases, created.task, now, ledger)
     const active = created.task.status === "searching"
     const patched = active
       ? patchLinkedCase(bound.cases, bound.task.caseId, { progress: "talking", following: true, nextAction: "正在找真实厂商" }, now)
@@ -1038,7 +1055,7 @@ export function applyInquiryTaskAction(
       ...updated.state,
       targets: updated.task.targets.length ? updated.task.targets : updated.state.targets,
     }
-    const bound = bindTaskCase(withTargets, cases, updated.task, now)
+    const bound = bindTaskCase(withTargets, cases, updated.task, now, ledger)
     const patched = patchLinkedCase(
       bound.cases,
       bound.task.caseId,
@@ -1068,7 +1085,7 @@ export function applyInquiryTaskAction(
       currentId: id,
       targets: hit.targets.length ? hit.targets : inquiry.targets,
     }
-    const bound = bindTaskCase(selected, cases, hit, now)
+    const bound = bindTaskCase(selected, cases, hit, now, ledger)
     return {
       inquiry: bound.inquiry,
       cases: bound.cases,
@@ -1082,7 +1099,7 @@ export function applyInquiryTaskAction(
   if (op === "start") {
     const started = startInquiryTask(inquiry, id, now)
     if (started.error || !started.task) return { ...empty, error: started.error || "missing" }
-    const bound = bindTaskCase(started.state, cases, started.task, now)
+    const bound = bindTaskCase(started.state, cases, started.task, now, ledger)
     const patched = patchLinkedCase(
       bound.cases,
       bound.task.caseId,
@@ -1155,7 +1172,16 @@ export function upsertFromTicket(
   ticket: { name: string; org: string; contact: string; note: string },
   extra: { visitorId?: string; place?: string; leadId?: string; following?: boolean },
   now = new Date().toISOString(),
+  ledger: HermesLedger = emptyLedger(),
 ) {
+  if (
+    isIdentitySuppressed(
+      { visitorId: extra.visitorId, contact: ticket.contact, leadId: extra.leadId },
+      ledger,
+    )
+  ) {
+    return { cases, case: null as HermesCase | null }
+  }
   const existing = findHermesCase(cases, {
     visitorId: extra.visitorId,
     contact: ticket.contact,
@@ -1212,7 +1238,11 @@ export function upsertFromVisit(
   visitorId: string,
   note: string,
   now = new Date().toISOString(),
+  ledger: HermesLedger = emptyLedger(),
 ) {
+  if (isIdentitySuppressed({ visitorId }, ledger)) {
+    return { cases, case: null as HermesCase | null }
+  }
   const existing = findHermesCase(cases, { visitorId })
   if (existing) {
     if (existing.owner === "human") return { cases, case: existing }
@@ -1394,7 +1424,7 @@ export function applyDeskUpdates(cases: HermesCase[], updates: Record<string, un
   for (const raw of updates) {
     const id = typeof raw.id === "string" ? raw.id : ""
     const hit = findHermesCase(next, { id, contact: typeof raw.contact === "string" ? raw.contact : undefined })
-    if (!hit) continue
+    if (!hit || hit.gone) continue
     const patched = patchHermesCase(hit, raw, now)
     next = [patched, ...next.filter((item) => item.id !== patched.id)]
   }
