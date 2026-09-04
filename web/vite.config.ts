@@ -5,10 +5,10 @@ import { defineConfig, loadEnv, type Plugin, type ViteDevServer } from "vite"
 
 function localConversationId(seed: string, secret: string) {
   const clean = (seed || "anon").trim().slice(0, 120) || "anon"
-  if (!secret.trim()) return `karmenai:${clean}`
+  if (!secret.trim()) return `linda:${clean}`
   let a = 2166136261
   let b = 2246822519
-  const material = `karmenai:${clean}:${secret}`
+  const material = `linda:${clean}:${secret}`
   for (let i = 0; i < material.length; i += 1) {
     const code = material.charCodeAt(i)
     a ^= code
@@ -365,7 +365,7 @@ function localGuide(): Plugin {
               localDesk.memory,
               images.map((image: { mime: string; data: string }) => ({ mime: image.mime, data: image.data })),
               localDesk.inquiry,
-              localConversationId("desk:karmenai-workbench", env.ADVISOR_CASE_ID_SECRET || ""),
+              localConversationId("desk:linda-workbench", env.ADVISOR_CASE_ID_SECRET || ""),
             )
             const replyTurn = {
               id: deskMod.newCoachTurnId(Date.now() + 1),

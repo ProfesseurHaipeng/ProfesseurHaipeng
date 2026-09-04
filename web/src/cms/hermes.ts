@@ -68,7 +68,8 @@ export async function probeHermes(source: Record<string, string | undefined>): P
 }
 
 const GATEWAY_MESSAGE_LIMIT = 1800
-const HERMES_GATEWAY_BRIEF = `你是菲律宾皮纳图博火山灰农业综合产业项目的高级顾问 Karmenai。从产品顾问小林手里接手后，用短段中文接着谈作物、吨位、检测和供应。客户主动留下手机或微信时用隐藏 <ticket> 建档，邮箱必须先征得同意。不要提内部系统名，不要说自己断线或在冲凉。`
+const SYNCED_MEMORY_LIMIT = 3500
+const HERMES_GATEWAY_BRIEF = `你是菲律宾皮纳图博火山灰农业综合产业项目的高级顾问 Linda。从产品顾问小林手里接手后，用短段中文接着谈作物、吨位、检测和供应。客户主动留下手机或微信时用隐藏 <ticket> 建档，邮箱必须先征得同意。不要提内部系统名，不要说自己断线或在冲凉。对客户只称 Linda。`
 
 export function stripProjectAliases(text: string, extra: string[] = []) {
   return stripDeniedIdentities(text, extra)
@@ -96,6 +97,20 @@ export function hermesHistoryForGateway(
   ]
 }
 
+/** Put shared desk facts on the turn without blowing the 1800-char system cap. Last message stays user. */
+export function withSyncedMemory(history: GuideMessage[], extraSystem?: string): GuideMessage[] {
+  const extra = extraSystem?.trim().slice(0, SYNCED_MEMORY_LIMIT)
+  if (!extra) return history
+  return [
+    {
+      role: "user",
+      content: `请先记住这些已与后台同步的事实，回答时直接使用，不要复述这份清单。\n\n${extra}`,
+    },
+    { role: "assistant", content: "已记住这些同步事实，请继续。" },
+    ...history,
+  ]
+}
+
 export function buildHermesMessages(
   history: GuideMessage[],
   knowledge: string,
@@ -114,24 +129,26 @@ export function buildHermesMessages(
     }))
     .slice(-12)
   const system = stripProjectAliases(
-    [HERMES_GATEWAY_BRIEF, knowledge.trim().slice(0, 1200), extraSystem?.trim().slice(0, 400) || ""]
-      .filter(Boolean)
-      .join("\n\n"),
+    [HERMES_GATEWAY_BRIEF, knowledge.trim().slice(0, 1200)].filter(Boolean).join("\n\n"),
     denied,
   ).slice(0, GATEWAY_MESSAGE_LIMIT)
-  return [{ role: "system" as const, content: system }, ...cleaned]
+  const remembered = withSyncedMemory(cleaned, extraSystem).map((item) => ({
+    role: item.role,
+    content: stripProjectAliases(item.content, denied),
+  }))
+  return [{ role: "system" as const, content: system }, ...remembered]
 }
 
 export function hermesUnavailableReply(lang: "zh" | "en") {
   return lang === "en"
-    ? "Karmenai is not on this line yet. Please keep talking with the product advisor, or try the senior advisor again in a moment."
-    : "高级顾问 Karmenai 这条线还没接通。请先继续问产品顾问，或稍后再转一次。"
+    ? "Linda is not on this line yet. Please keep talking with the product advisor, or try the senior advisor again in a moment."
+    : "高级顾问 Linda 这条线还没接通。请先继续问产品顾问，或稍后再转一次。"
 }
 
 export function hermesReconnectingReply(lang: "zh" | "en") {
   return lang === "en"
-    ? "The senior advisor line dropped for a moment. I'm reconnecting now — send another message shortly and I'll continue as Karmenai."
-    : "高级顾问线路这一下没接上，正在重新连接。请稍后再发一条，接通后我是 Karmenai，会接着跟您谈。"
+    ? "The senior advisor line dropped for a moment. I'm reconnecting now — send another message shortly and I'll continue as Linda."
+    : "高级顾问线路这一下没接上，正在重新连接。请稍后再发一条，接通后我是 Linda，会接着跟您谈。"
 }
 
 export function isAdvisorOutageJoke(text: string) {
@@ -140,8 +157,8 @@ export function isAdvisorOutageJoke(text: string) {
 
 export function hermesHandoffGreeting(lang: "zh" | "en") {
   return lang === "en"
-    ? "Hello — I'm Karmenai, the senior advisor. I'll take it from here."
-    : "您好，我是高级顾问 Karmenai，后面由我来跟您谈。"
+    ? "Hello — I'm Linda, the senior advisor. I'll take it from here."
+    : "您好，我是高级顾问 Linda，后面由我来跟您谈。"
 }
 
 export function hermesHandoffNotice(lang: "zh" | "en") {
@@ -150,8 +167,8 @@ export function hermesHandoffNotice(lang: "zh" | "en") {
 
 export function hermesHandoffHint(lang: "zh" | "en") {
   return lang === "en"
-    ? "The customer asked to speak with the senior advisor. You are Karmenai taking over this live chat. Acknowledge the handoff in one short line as Karmenai, then continue from the last topic. Do not restart a full introduction. Only call yourself Karmenai."
-    : "客户要求转接高级顾问。你现在是 Karmenai，接手这场对话。先用一句短话确认已接上，然后接着对方刚才的话题往下谈，不要重新自我介绍一整段。对客户只称 Karmenai。"
+    ? "The customer asked to speak with the senior advisor. You are Linda taking over this live chat. Acknowledge the handoff in one short line as Linda, then continue from the last topic. Do not restart a full introduction. Only call yourself Linda."
+    : "客户要求转接高级顾问。你现在是 Linda，接手这场对话。先用一句短话确认已接上，然后接着对方刚才的话题往下谈，不要重新自我介绍一整段。对客户只称 Linda。"
 }
 
 const SIGNED_GUIDE_URL = "https://6a9a9ec83794709d3ce03081--pinatubo-volcanic-ash.netlify.app/api/guide"
@@ -160,8 +177,9 @@ async function resolveHermesViaSignedGuide(
   history: GuideMessage[],
   lang: "zh" | "en",
   options?: { escalate?: boolean; visitorId?: string; timeoutMs?: number },
+  extraSystem?: string,
 ) {
-  const messages = hermesHistoryForGateway(history, lang, options?.escalate)
+  const messages = withSyncedMemory(hermesHistoryForGateway(history, lang, options?.escalate), extraSystem)
   const response = await fetch(SIGNED_GUIDE_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -170,6 +188,7 @@ async function resolveHermesViaSignedGuide(
       advisor: "hermes",
       escalate: options?.escalate === true,
       visitorId: options?.visitorId || "",
+      extraSystem: extraSystem?.trim() || undefined,
       messages,
     }),
   })
@@ -179,6 +198,16 @@ async function resolveHermesViaSignedGuide(
   const { reply, ticket } = extractTicket(payload.reply)
   if (!reply) return null
   return { reply, source: "hermes" as const, ticket, reconnecting: false }
+}
+
+export async function resolveCoachViaSignedGuide(user: string, extraSystem?: string) {
+  const messages: GuideMessage[] = [
+    {
+      role: "user",
+      content: `你是 Linda。这是后台同事给你的指令，不是来访者提问。用中文短段回复同事，不要说无法连接或冲凉。\n\n${user}`,
+    },
+  ]
+  return resolveHermesViaSignedGuide(messages, "zh", { timeoutMs: 20_000 }, extraSystem)
 }
 
 export async function resolveHermesReply(
@@ -200,14 +229,6 @@ export async function resolveHermesReply(
   const unconfigured = options?.escalate ? hermesHandoffGreeting(lang) : hermesUnavailableReply(lang)
   if (!hermes) {
     return { reply: unconfigured, source: "local" as const, ticket: null, reconnecting: false }
-  }
-  if (env.ADVISOR_CASE_ID_SECRET || env.SIGNED_GUIDE_FALLBACK === "1") {
-    try {
-      const signed = await resolveHermesViaSignedGuide(history, lang, options)
-      if (signed) return signed
-    } catch (error) {
-      console.error("ash-guide senior advisor signed-guide", error)
-    }
   }
   try {
     const denied = parseProjectIdentityDenylist(env.PROJECT_IDENTITY_DENYLIST)
@@ -241,6 +262,14 @@ export async function resolveHermesReply(
     }
   } catch (error) {
     console.error("ash-guide senior advisor", error)
+  }
+  if (env.ADVISOR_CASE_ID_SECRET || env.SIGNED_GUIDE_FALLBACK === "1") {
+    try {
+      const signed = await resolveHermesViaSignedGuide(history, lang, options, extraSystem)
+      if (signed) return signed
+    } catch (error) {
+      console.error("ash-guide senior advisor signed-guide", error)
+    }
   }
   return { reply: hermesReconnectingReply(lang), source: "local" as const, ticket: null, reconnecting: true }
 }

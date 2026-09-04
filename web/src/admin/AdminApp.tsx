@@ -102,7 +102,7 @@ export function AdminApp() {
         <form onSubmit={(event) => void unlock(event)}>
           <p className="latin-kicker">Back office</p>
           <h1>网站后台</h1>
-          <p>查看前台线索，进入 karmenai 工作台。</p>
+          <p>查看前台线索，进入 Linda 工作台。</p>
           <label>
             账号
             <input
@@ -141,7 +141,7 @@ export function AdminApp() {
             <p className="latin-kicker">Back office</p>
             <h1>网站后台</h1>
             {!sideOpen ? (
-              <p className="admin-side__now">{view === "hermes" ? "karmenai 工作台" : "前台线索"}</p>
+              <p className="admin-side__now">{view === "hermes" ? "Linda 工作台" : "前台线索"}</p>
             ) : null}
           </div>
           <div className="admin-side__links">
@@ -168,7 +168,7 @@ export function AdminApp() {
               className={view === "hermes" ? "is-active" : ""}
               onClick={() => setView("hermes")}
             >
-              karmenai 工作台
+              Linda 工作台
             </button>
           </nav>
         ) : null}

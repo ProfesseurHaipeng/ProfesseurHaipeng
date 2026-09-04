@@ -13,9 +13,11 @@ describe("project identity denylist", () => {
     expect(parseProjectIdentityDenylist("not-json")).toEqual([])
   })
 
-  it("scrubs denied names out of advisor prompts", () => {
+  it("scrubs denied names out of advisor prompts but keeps Linda", () => {
     const cleaned = stripDeniedIdentities("Hermes 和 Linda 还在 weho 内网", ["Linda"])
-    expect(cleaned).not.toMatch(/Hermes|Linda|weho/i)
-    expect(cleaned).toContain("Karmenai")
+    expect(cleaned).not.toMatch(/Hermes|weho/i)
+    expect(cleaned).toContain("Linda")
+    expect(cleaned).not.toContain("Karmenai")
+    expect(parseProjectIdentityDenylist(JSON.stringify({ names: ["Linda", "Hermes"] }))).toEqual(["Hermes"])
   })
 })

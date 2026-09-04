@@ -492,7 +492,7 @@ export function inquiryCoachExtra(state: InquiryState) {
     : "还没有真实找到的厂商。"
   const jobLine = `${JOB_LABEL[state.job.status]}${state.job.brief ? `。${state.job.brief}` : ""}`
   return [
-    "【询单模块（同一工作台、同一 Karmenai）】",
+    "【询单模块（同一工作台、同一 Linda）】",
     "- 同事选定的需求类型、家数上限、限时都是硬性参数。按这些去网上找真实厂商，到数即停，到点即停。",
     "- 没有真实来源就不要写厂商。不要编公司名、电话、邮箱、网址。",
     "- 找到的每一条必须带 source，并尽量写下官网、联系方式或邮箱。询单只许起草，不许群发，不许写 sent。本站没有发信口。",

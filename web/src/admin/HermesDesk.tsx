@@ -45,7 +45,7 @@ type BoardFocus =
   | { kind: "customer"; key: string }
   | { kind: "factory"; name: string }
 
-const AGENT_NAME = "Karmenai"
+const AGENT_NAME = "Linda"
 
 function sameJson(left: unknown, right: unknown) {
   return JSON.stringify(left) === JSON.stringify(right)
@@ -627,7 +627,7 @@ export function HermesDesk({ auth, onExpandSide }: { auth: AdminAuth; onExpandSi
           <div className="hermes-grok__log guide-desk__log" ref={logRef}>
             {coach.length === 0 && !sending ? (
               <div className="guide-desk__hello">
-                <p>在这里下指令。询单条件会自动写进系统提示；复杂进度仍由 Karmenai 在对话里改。</p>
+                <p>在这里下指令。询单条件会自动写进系统提示；复杂进度仍由 Linda 在对话里改。</p>
               </div>
             ) : null}
             {coach.map((turn) => (

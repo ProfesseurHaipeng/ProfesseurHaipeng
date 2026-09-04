@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto"
 import type { Config } from "@netlify/functions"
 import { advisorConversationIdentity } from "../../src/cms/advisorIdentity"
 import { hermesLinkInfo, hermesReady, probeHermes } from "../../src/cms/hermes"
@@ -85,6 +86,16 @@ function readEnv(name: string) {
   }
 }
 
+function advisorSignatureHeaders(id: string, secret: string) {
+  if (!secret) return {}
+  const signature = createHmac("sha256", secret).update(id).digest("hex")
+  return {
+    "X-Advisor-Signature": signature,
+    "X-Advisor-Case-Signature": signature,
+    "X-Case-Signature": signature,
+  }
+}
+
 function envBag() {
   return {
     SENIOR_ADVISOR_API_BASE: readEnv("SENIOR_ADVISOR_API_BASE"),
@@ -94,6 +105,7 @@ function envBag() {
     HERMES_API_KEY: readEnv("HERMES_API_KEY"),
     HERMES_MODEL: readEnv("HERMES_MODEL"),
     ADVISOR_CASE_ID_SECRET: readEnv("ADVISOR_CASE_ID_SECRET"),
+    SIGNED_GUIDE_FALLBACK: readEnv("SIGNED_GUIDE_FALLBACK"),
     PROJECT_IDENTITY_DENYLIST: readEnv("PROJECT_IDENTITY_DENYLIST"),
   }
 }
@@ -368,6 +380,8 @@ export default async (req: Request) => {
     const memory = (await readHermesMemory()) || emptyMemory()
     const inquiry = await readInquiryState()
     const env = envBag()
+    const secret = env.ADVISOR_CASE_ID_SECRET || ""
+    const conversationId = advisorConversationIdentity("desk:linda-workbench", secret)
     const coachResult = await resolveCoachReply(
       cases,
       history,
@@ -375,7 +389,8 @@ export default async (req: Request) => {
       memory,
       images.map(({ mime, data }) => ({ mime, data })),
       inquiry,
-      advisorConversationIdentity("desk:karmenai-workbench", env.ADVISOR_CASE_ID_SECRET),
+      conversationId,
+      advisorSignatureHeaders(conversationId, secret),
     )
     const replyTurn: HermesCoachTurn = {
       id: newCoachTurnId(Date.now() + 1),

@@ -1,5 +1,5 @@
 import { completeChatCompletions } from "./chatCompletions"
-import { hermesEnvFrom } from "./hermes"
+import { hermesEnvFrom, resolveCoachViaSignedGuide } from "./hermes"
 import {
   applyInquiryState,
   attachTaskCase,
@@ -812,10 +812,33 @@ export function publicVisitorContext(item: HermesCase | null) {
     "【本场客户已知事实，可在前台使用】",
     item.name ? `称呼：${item.name}` : "",
     item.org ? `机构：${item.org}` : "",
+    item.factory ? `工厂：${item.factory}` : "",
+    item.place ? `地区：${item.place}` : "",
     item.note ? `线索：${item.note}` : "",
+    item.nextAction ? `下一步：${item.nextAction}` : "",
+    `进度：${PROGRESS_LABEL[item.progress]}`,
+    item.following ? "跟进：Linda 正在跟进" : "",
   ]
     .filter(Boolean)
     .join("\n")
+}
+
+/** Staff can force a line into the shared (front+desk) memory without waiting for <desk> XML. */
+export function staffSharedMemoryHint(user: string) {
+  const match = String(user).match(
+    /(?:请记住|记住|记一下|写入共用记忆|同步到前台|同步记忆)[：:，,\s]+([\s\S]{2,1200})/,
+  )
+  return match?.[1]?.replace(/\s+/g, " ").trim() ?? ""
+}
+
+export function mergeSharedMemoryHint(
+  memory: HermesMemory | undefined,
+  hint: string,
+  now = new Date().toISOString(),
+): HermesMemory | undefined {
+  if (!memory || !hint) return memory
+  if (memory.shared.includes(hint)) return memory
+  return applyMemoryPatch(memory, { shared: [memory.shared, hint].filter(Boolean).join("\n") }, now)
 }
 
 export function findHermesCase(
@@ -849,7 +872,7 @@ export function isHumanOwned(cases: HermesCase[], visitorId?: string, contact?: 
 
 export function humanTakenOverReply(lang: "zh" | "en") {
   return lang === "en"
-    ? "A team member has taken this conversation. Karmenai will step back. Leave your crop and tonnage here, and someone from the project will follow up."
+    ? "A team member has taken this conversation. Linda will step back. Leave your crop and tonnage here, and someone from the project will follow up."
     : "这条线索已由项目人员人工接管，高级顾问先不介入。您可以继续留言，工作人员会按这条线索跟进。"
 }
 
@@ -1431,7 +1454,7 @@ export function applyDeskUpdates(cases: HermesCase[], updates: Record<string, un
   return sortHermesCases(next)
 }
 
-const COACH_RULES = `你是皮纳图博火山灰项目的高级顾问 Karmenai。后台工作台和前台高级顾问是同一个人、同一份长期记忆，只是这里权限更高。对同事可以讲工作台；对客户只称 Karmenai，不要说 Hermes。
+const COACH_RULES = `你是皮纳图博火山灰项目的高级顾问 Linda。后台工作台和前台高级顾问是同一个人、同一份长期记忆，只是这里权限更高。对同事可以讲工作台；对客户只称 Linda，不要说 Hermes。同事写入 memory.shared 的内容会同步到前台；本场客户的称呼、机构、线索、进度、下一步、工厂也会出到前台。desk 记忆、评价、邮箱和其他客户不要出到前台。
 
 【后台权限】
 - 能看全部真实客户档案、同事指令、desk 记忆、接管状态。
@@ -1466,7 +1489,7 @@ export function caseBrief(item: HermesCase) {
     `称呼=${item.name}`,
     item.org ? `机构=${item.org}` : "",
     factoryName(item) ? `工厂=${factoryName(item)}` : "工厂=尚未建档",
-    `跟进方=${item.owner === "human" ? "人工" : "Karmenai"}`,
+    `跟进方=${item.owner === "human" ? "人工" : "Linda"}`,
     `状态=${item.following ? "正在跟进" : "未跟进"}`,
     `进度=${PROGRESS_LABEL[item.progress]}`,
     item.energy !== "unset" ? `积极性=${ENERGY_LABEL[item.energy]}` : "积极性=未评估",
@@ -1531,11 +1554,14 @@ export async function resolveCoachReply(
   images?: { mime: string; data: string }[],
   inquiry?: InquiryState,
   conversationId?: string,
+  identityHeaders?: Record<string, string>,
 ) {
   const currentInquiry = inquiry || emptyInquiry()
   const hermes = hermesEnvFrom(env)
+  const lastStaff = [...history].reverse().find((item) => item.role === "staff")?.content || ""
+  const applyHint = (next: HermesMemory | undefined) => mergeSharedMemoryHint(next, staffSharedMemoryHint(lastStaff))
   if (!hermes) {
-    return { reply: coachUnavailableReply(), cases, memory, inquiry: currentInquiry, source: "local" as const }
+    return { reply: coachUnavailableReply(), cases, memory: applyHint(memory), inquiry: currentInquiry, source: "local" as const }
   }
   try {
     const raw = await completeChatCompletions(hermes, buildCoachMessages(cases, history, undefined, memory, currentInquiry), {
@@ -1543,16 +1569,19 @@ export async function resolveCoachReply(
       images,
       timeoutMs: 15_000,
       conversationId,
+      conversationIds: [conversationId, env.ADVISOR_CASE_ID_SECRET?.trim()].filter((item): item is string => Boolean(item)),
+      identityHeaders,
     })
     if (raw) {
       const parsed = extractDeskUpdates(raw)
       const inquiryPatch = extractInquiryUpdates(raw)
       const reply = stripInquiryTags(parsed.reply)
       if (reply) {
+        const patched = parsed.memory && memory ? applyMemoryPatch(memory, parsed.memory) : memory
         return {
           reply,
           cases: applyDeskUpdates(cases, parsed.updates),
-          memory: parsed.memory && memory ? applyMemoryPatch(memory, parsed.memory) : memory,
+          memory: applyHint(patched),
           inquiry: applyInquiryState(currentInquiry, inquiryPatch),
           source: "hermes" as const,
         }
@@ -1561,5 +1590,27 @@ export async function resolveCoachReply(
   } catch (error) {
     console.error("ash-hermes-desk coach", error)
   }
-  return { reply: coachReconnectingReply(), cases, memory, inquiry: currentInquiry, source: "local" as const }
+  if (env.ADVISOR_CASE_ID_SECRET || env.SIGNED_GUIDE_FALLBACK === "1") {
+    try {
+      const extra = [
+        memory?.shared?.trim() ? `【长期记忆（与前台共用）】\n${memory.shared.trim()}` : "",
+        memory?.desk?.trim() ? `【工作台笔记（仅后台）】\n${memory.desk.trim()}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n")
+      const signed = await resolveCoachViaSignedGuide(lastStaff || "请回复同事", extra)
+      if (signed?.reply) {
+        return {
+          reply: signed.reply,
+          cases,
+          memory: applyHint(memory),
+          inquiry: currentInquiry,
+          source: "hermes" as const,
+        }
+      }
+    } catch (error) {
+      console.error("ash-hermes-desk coach signed-guide", error)
+    }
+  }
+  return { reply: coachReconnectingReply(), cases, memory: applyHint(memory), inquiry: currentInquiry, source: "local" as const }
 }

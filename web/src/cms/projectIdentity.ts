@@ -1,4 +1,9 @@
-const FALLBACK_ALIASES = ["hermes", "linda", "weho", "minimax", "nas"]
+const FALLBACK_ALIASES = ["hermes", "weho", "minimax", "nas"]
+const PUBLIC_ADVISOR_NAME = "Linda"
+
+function isProtectedAdvisorName(term: string) {
+  return /^linda$/i.test(term.trim())
+}
 
 export function parseProjectIdentityDenylist(raw?: string): string[] {
   const text = raw?.trim() || ""
@@ -12,7 +17,7 @@ export function parseProjectIdentityDenylist(raw?: string): string[] {
       else if (value && typeof value === "object") Object.values(value).forEach(take)
     }
     take(parsed)
-    return [...new Set(terms)]
+    return [...new Set(terms)].filter((term) => !isProtectedAdvisorName(term))
   } catch {
     return []
   }
@@ -21,12 +26,12 @@ export function parseProjectIdentityDenylist(raw?: string): string[] {
 export function stripDeniedIdentities(text: string, extra: string[] = []) {
   const terms = [...extra, ...FALLBACK_ALIASES]
     .map((item) => item.trim())
-    .filter((item) => item.length >= 2)
+    .filter((item) => item.length >= 2 && !isProtectedAdvisorName(item))
     .sort((a, b) => b.length - a.length)
   let out = text
   for (const term of terms) {
     const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    out = out.replace(new RegExp(escaped, "gi"), "Karmenai")
+    out = out.replace(new RegExp(escaped, "gi"), PUBLIC_ADVISOR_NAME)
   }
-  return out.replace(/Karmenai(?:[、,]\s*)?Karmenai/g, "Karmenai")
+  return out.replace(/Linda(?:[、,]\s*)?Linda/g, PUBLIC_ADVISOR_NAME)
 }

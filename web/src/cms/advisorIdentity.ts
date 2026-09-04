@@ -18,8 +18,8 @@ function asUuid(hex: string) {
 /** Stable per-visitor / per-desk identity. Never send the raw visitor id to the gateway. */
 export function advisorConversationIdentity(seed: string, secret: string) {
   const clean = (seed || "anon").trim().slice(0, 120) || "anon"
-  if (!secret.trim()) return `karmenai:${clean}`
-  const material = `karmenai:${clean}:${secret}`
+  if (!secret.trim()) return `linda:${clean}`
+  const material = `linda:${clean}:${secret}`
   return asUuid(
     `${mix(material)}${mix(`rev:${[...material].reverse().join("")}`)}${mix(`v2:${material}`)}${mix(`v3:${material}`)}`,
   )

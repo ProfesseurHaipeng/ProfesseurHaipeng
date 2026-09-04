@@ -12,6 +12,6 @@ describe("advisor conversation identity", () => {
   })
 
   it("falls back to a prefixed seed when no secret is configured", () => {
-    expect(advisorConversationIdentity("vis-abc", "")).toBe("karmenai:vis-abc")
+    expect(advisorConversationIdentity("vis-abc", "")).toBe("linda:vis-abc")
   })
 })

@@ -112,7 +112,7 @@ export function InquiryPanel({
 
       {inquiry.tasks.length === 0 ? (
         <article className="inq-hero">
-          <p>创建后立刻有一张本页工单。选好厂家类型和家数，再交给 Karmenai 去找。</p>
+          <p>创建后立刻有一张本页工单。选好厂家类型和家数，再交给 Linda 去找。</p>
           <button type="button" className="inq-go" disabled={locked} onClick={() => void createTask()}>
             {locked ? "正在创建…" : "创建询单任务"}
           </button>
@@ -185,7 +185,7 @@ function TaskEditor({
       : task.status === "cancelled"
         ? "这轮已取消。工单还在，需要的话可以再开始。"
         : task.status === "searching" && !hermesReady
-          ? "任务和工单已记下。网关接通后 Karmenai 才会按这些参数找来源。"
+          ? "任务和工单已记下。网关接通后 Linda 才会按这些参数找来源。"
           : task.brief
             ? `${hint} · ${task.brief}`
             : hint
@@ -462,14 +462,14 @@ function TaskEditor({
                 disabled={starting || locked || !canStart}
                 onClick={() => {
                   setStarting(true)
-                  setFlash("正在交给 Karmenai…")
+                  setFlash("正在交给 Linda…")
                   void onStart()
-                    .then(() => setFlash("已交给 Karmenai"))
+                    .then(() => setFlash("已交给 Linda"))
                     .catch(() => setFlash("没交出去，再点一次"))
                     .finally(() => setStarting(false))
                 }}
               >
-                {starting ? "正在交给 Karmenai…" : "开始寻找"}
+                {starting ? "正在交给 Linda…" : "开始寻找"}
               </button>
               {!canStart && task.status === "cancelled" ? <p className="inq-foot">已取消的任务请另建一轮。</p> : null}
               {!canStart && task.status !== "cancelled" ? <p className="inq-foot">先选定一种需求，或写一条指令。</p> : null}
@@ -483,7 +483,7 @@ function TaskEditor({
                 {inquiry.findings.length} / {quota}
               </span>
             </div>
-            <p className="inq-step-note">{starting ? "正在交给 Karmenai…" : note}</p>
+            <p className="inq-step-note">{starting ? "正在交给 Linda…" : note}</p>
             <ol className="inq-steps inq-steps--compact">
               {INQUIRY_RUN.map((step, index) => {
                 const fill = inquiryStepFill(jobStatus, targets.length, index)
