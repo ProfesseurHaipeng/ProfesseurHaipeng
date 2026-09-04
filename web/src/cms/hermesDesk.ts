@@ -1596,7 +1596,7 @@ export async function resolveCoachReply(
     const raw = await completeChatCompletions(hermes, buildCoachMessages(cases, history, undefined, memory, currentInquiry), {
       hosts: "exact",
       images,
-      timeoutMs: fallbackOn ? 3_500 : 8_000,
+      timeoutMs: fallbackOn ? 10_000 : 8_000,
       conversationId,
       conversationIds: conversationId ? [conversationId] : undefined,
       identityHeaders,

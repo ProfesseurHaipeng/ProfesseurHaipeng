@@ -230,17 +230,23 @@ export function hermesHandoffHint(lang: "zh" | "en") {
 
 const SIGNED_GUIDE_URL = "https://6a9a9ec83794709d3ce03081--pinatubo-volcanic-ash.netlify.app/api/guide"
 
+function signedGuideMessages(history: GuideMessage[], extraSystem?: string) {
+  const prepared = withSyncedMemory(history, extraSystem)
+  const head = extraSystem?.trim() ? prepared.slice(0, 2) : []
+  return [...head, ...prepared.slice(head.length).slice(-6)]
+}
+
 async function resolveHermesViaSignedGuide(
   history: GuideMessage[],
   lang: "zh" | "en",
   options?: { escalate?: boolean; visitorId?: string; timeoutMs?: number },
   extraSystem?: string,
 ) {
-  const messages = withSyncedMemory(hermesHistoryForGateway(history, lang, options?.escalate), extraSystem)
+  const messages = signedGuideMessages(hermesHistoryForGateway(history, lang, options?.escalate), extraSystem)
   const response = await fetch(SIGNED_GUIDE_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    signal: AbortSignal.timeout(options?.timeoutMs ?? 20_000),
+    signal: AbortSignal.timeout(options?.timeoutMs ?? 14_000),
     body: JSON.stringify({
       advisor: "hermes",
       escalate: options?.escalate === true,
@@ -258,13 +264,15 @@ async function resolveHermesViaSignedGuide(
 }
 
 export async function resolveCoachViaSignedGuide(user: string, extraSystem?: string) {
+  const instruction = user.trim().slice(0, 800) || "先确认这条线还通，接着按作物和吨位跟进。"
+  const known = extraSystem?.replace(/\s+/g, " ").trim().slice(0, 400)
   const messages: GuideMessage[] = [
     {
       role: "user",
-      content: `你是 Linda。这是后台同事给你的指令，不是来访者提问。用中文短段回复同事，不要说无法连接或冲凉。\n\n${user}`,
+      content: `皮纳图博火山灰项目。${known ? `已知：${known}。` : ""}同事要求：${instruction}。请用短段中文说明你怎么跟进。`,
     },
   ]
-  return resolveHermesViaSignedGuide(messages, "zh", { timeoutMs: 18_000 }, extraSystem)
+  return resolveHermesViaSignedGuide(messages, "zh", { escalate: true, timeoutMs: 14_000 })
 }
 
 export async function resolveHermesReply(
@@ -308,7 +316,7 @@ export async function resolveHermesReply(
       ),
       {
         hosts: "exact",
-        timeoutMs: options?.timeoutMs ?? (fallbackOn ? 3_500 : 8_000),
+        timeoutMs: options?.timeoutMs ?? (fallbackOn ? 10_000 : 8_000),
         conversationId: options?.conversationId || env.ADVISOR_CASE_ID_SECRET?.trim(),
         conversationIds: fallbackOn
           ? [options?.conversationId || env.ADVISOR_CASE_ID_SECRET?.trim()].filter((item): item is string => Boolean(item))

@@ -13,6 +13,7 @@ import {
   hermesUnavailableReply,
   isAdvisorOutageJoke,
   probeHermes,
+  resolveCoachViaSignedGuide,
   resolveHermesReply,
   signedGuideEnabled,
   withSyncedMemory,
@@ -223,6 +224,27 @@ describe("resolveHermesReply", () => {
       )
       expect(result.source).toBe("hermes")
       expect(result.reply).toContain("作物和吨位")
+    } finally {
+      globalThis.fetch = original
+    }
+  })
+
+  it("sends workbench backup turns as an on-topic Linda handoff", async () => {
+    const original = globalThis.fetch
+    let body: Record<string, unknown> | null = null
+    globalThis.fetch = async (_input, init) => {
+      body = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>
+      return new Response(JSON.stringify({ source: "hermes", reply: "收到，先按作物跟进。" }), { status: 200 })
+    }
+    try {
+      const result = await resolveCoachViaSignedGuide("先问王先生作物", "【长期记忆】报价按吨位谈")
+      expect(result?.source).toBe("hermes")
+      expect(body?.advisor).toBe("hermes")
+      expect(body?.escalate).toBe(true)
+      const messages = body?.messages as { content?: string }[]
+      expect(messages?.some((item) => item.content?.includes("皮纳图博火山灰"))).toBe(true)
+      expect(messages?.some((item) => item.content?.includes("先问王先生作物"))).toBe(true)
+      expect(messages?.some((item) => item.content?.includes("报价按吨位谈"))).toBe(true)
     } finally {
       globalThis.fetch = original
     }
