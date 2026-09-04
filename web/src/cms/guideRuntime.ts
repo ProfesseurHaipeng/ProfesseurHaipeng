@@ -26,6 +26,7 @@ export async function resolveGuideReply(
     conversationId?: string
     conversationIds?: string[]
     identityHeaders?: Record<string, string>
+    visitorId?: string
   },
 ): Promise<GuideResult> {
   // Ticket markers are a model-only protocol; never accept them from users.
@@ -41,6 +42,7 @@ export async function resolveGuideReply(
       conversationId: options?.conversationId,
       conversationIds: options?.conversationIds,
       identityHeaders: options?.identityHeaders,
+      visitorId: options?.visitorId,
     })
     return { ...hermes, advisor: "hermes", reconnecting: hermes.reconnecting === true }
   }

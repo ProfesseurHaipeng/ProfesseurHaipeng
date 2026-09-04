@@ -215,6 +215,7 @@ export default async (req: Request, context: Context) => {
     conversationId,
     conversationIds,
     identityHeaders: advisorSignatureHeaders(conversationId, secret),
+    visitorId,
   })
   const ledger = await readHermesLedger()
   const identity = {

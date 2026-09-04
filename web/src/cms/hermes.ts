@@ -154,6 +154,33 @@ export function hermesHandoffHint(lang: "zh" | "en") {
     : "客户要求转接高级顾问。你现在是 Karmenai，接手这场对话。先用一句短话确认已接上，然后接着对方刚才的话题往下谈，不要重新自我介绍一整段。对客户只称 Karmenai。"
 }
 
+const SIGNED_GUIDE_URL = "https://6a9a9ec83794709d3ce03081--pinatubo-volcanic-ash.netlify.app/api/guide"
+
+async function resolveHermesViaSignedGuide(
+  history: GuideMessage[],
+  lang: "zh" | "en",
+  options?: { escalate?: boolean; visitorId?: string; timeoutMs?: number },
+) {
+  const messages = hermesHistoryForGateway(history, lang, options?.escalate)
+  const response = await fetch(SIGNED_GUIDE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(options?.timeoutMs ?? 20_000),
+    body: JSON.stringify({
+      advisor: "hermes",
+      escalate: options?.escalate === true,
+      visitorId: options?.visitorId || "",
+      messages,
+    }),
+  })
+  const payload = (await response.json()) as { source?: string; reply?: string }
+  if (payload.source !== "hermes" || !payload.reply?.trim()) return null
+  if (isAdvisorOutageJoke(payload.reply) || /联络|作物和吨位|项目人员/.test(payload.reply)) return null
+  const { reply, ticket } = extractTicket(payload.reply)
+  if (!reply) return null
+  return { reply, source: "hermes" as const, ticket, reconnecting: false }
+}
+
 export async function resolveHermesReply(
   history: GuideMessage[],
   knowledge: string,
@@ -166,12 +193,21 @@ export async function resolveHermesReply(
     conversationId?: string
     conversationIds?: string[]
     identityHeaders?: Record<string, string>
+    visitorId?: string
   },
 ) {
   const hermes = hermesEnvFrom(env)
   const unconfigured = options?.escalate ? hermesHandoffGreeting(lang) : hermesUnavailableReply(lang)
   if (!hermes) {
     return { reply: unconfigured, source: "local" as const, ticket: null, reconnecting: false }
+  }
+  if (env.ADVISOR_CASE_ID_SECRET || env.SIGNED_GUIDE_FALLBACK === "1") {
+    try {
+      const signed = await resolveHermesViaSignedGuide(history, lang, options)
+      if (signed) return signed
+    } catch (error) {
+      console.error("ash-guide senior advisor signed-guide", error)
+    }
   }
   try {
     const denied = parseProjectIdentityDenylist(env.PROJECT_IDENTITY_DENYLIST)
@@ -185,7 +221,7 @@ export async function resolveHermesReply(
       ),
       {
         hosts: "exact",
-        timeoutMs: options?.timeoutMs ?? 12_000,
+        timeoutMs: options?.timeoutMs ?? 8_000,
         conversationId: options?.conversationId || env.ADVISOR_CASE_ID_SECRET?.trim(),
         conversationIds: [
           ...(options?.conversationIds || []),
