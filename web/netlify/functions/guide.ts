@@ -16,7 +16,7 @@ import {
   frontHermesExtra,
   humanTakenOverReply,
   isHumanOwned,
-  isVisitorSuppressed,
+  isIdentitySuppressed,
   upsertFromTicket,
   upsertFromVisit,
 } from "../../src/cms/hermesDesk"
@@ -191,25 +191,34 @@ export default async (req: Request, context: Context) => {
     escalate,
     lang,
   })
+  const ledger = await readHermesLedger()
+  const identity = {
+    visitorId: visitorId || undefined,
+    contact: result.ticket?.contact,
+  }
+  const suppressed = isIdentitySuppressed(identity, ledger)
   let ticketFiled = false
-  if (result.ticket) {
+  if (result.ticket && !suppressed) {
     ticketFiled = await fileTicket(result.ticket, placeZh)
   }
-  if (result.advisor === "hermes") {
-    const ledger = await readHermesLedger()
-    if (!isVisitorSuppressed(visitorId, ledger)) {
-      const seeded = visitorId
-        ? upsertFromVisit(deskCases, visitorId, lastUser?.content || result.ticket?.note || "")
-        : { cases: deskCases, case: null }
-      const withTicket = result.ticket
-        ? upsertFromTicket(seeded.cases, result.ticket, {
+  if (result.advisor === "hermes" && !suppressed) {
+    const seeded = visitorId
+      ? upsertFromVisit(deskCases, visitorId, lastUser?.content || result.ticket?.note || "", undefined, ledger)
+      : { cases: deskCases, case: null }
+    const withTicket = result.ticket
+      ? upsertFromTicket(
+          seeded.cases,
+          result.ticket,
+          {
             visitorId: visitorId || undefined,
             place: placeZh || undefined,
             following: true,
-          })
-        : seeded
-      if (withTicket.case) await writeHermesCase(withTicket.case)
-    }
+          },
+          undefined,
+          ledger,
+        )
+      : seeded
+    if (withTicket.case) await writeHermesCase(withTicket.case)
   }
   return json({
     reply: result.reply,

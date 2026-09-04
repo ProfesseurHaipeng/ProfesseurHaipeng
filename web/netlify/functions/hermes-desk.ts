@@ -267,8 +267,8 @@ export default async (req: Request) => {
     const result = attachLead(cases, leads, leadId, now, ledger)
     if (result.error === "missing") return json({ error: "missing" }, 400)
     if (result.case && result.error !== "exists") {
-      await persistCase(result.case)
       await persistLedger(result.ledger)
+      await persistCase(result.case)
     }
     await appendHermesEvent(eventOf("update", `接入线索 ${result.case?.name || leadId}`, result.case?.id))
     return json(await payload())

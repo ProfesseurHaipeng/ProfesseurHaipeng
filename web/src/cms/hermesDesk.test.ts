@@ -8,6 +8,7 @@ import {
   applyStaffCasesBatch,
   applyStaffCasesDelete,
   attachLead,
+  canWriteLiveHermesCase,
   caseFromLead,
   dedupeHermesCases,
   emptyLedger,
@@ -28,6 +29,7 @@ import {
   frontHermesExtra,
   importLeads,
   isHumanOwned,
+  isIdentitySuppressed,
   isStaffAction,
   progressRatio,
   pruneUnspokenCases,
@@ -432,5 +434,68 @@ describe("desk board telemetry", () => {
     expect(tagged.case?.category).toBe("test")
     expect(filterHermesCases([tagged.case!], { color: "red", category: "test" })).toHaveLength(1)
     expect(dedupeHermesCases([created, { ...created, id: "case-copy", updatedAt: "2026-09-01T00:00:00.000Z" }])).toHaveLength(1)
+  })
+
+  it("does not recreate a deleted visitor or contact ticket", () => {
+    const first = upsertFromVisit([], "vis-talk", "先问用量", now)
+    expect(first.case?.name).toBe("对话客户")
+    const deleted = applyStaffCasesDelete(first.cases, [first.case!.id], now)
+    const ledger = markGoneOnLedger(emptyLedger(), deleted.gone[0]!, now)
+    expect(isIdentitySuppressed({ visitorId: "vis-talk" }, ledger)).toBe(true)
+    const again = upsertFromVisit(deleted.cases, "vis-talk", "刷新后再聊", now, ledger)
+    expect(again.case).toBeNull()
+    expect(again.cases).toHaveLength(0)
+    const ticketed = upsertFromTicket(
+      deleted.cases,
+      { name: "陈经理", org: "江西绿田农业", contact: "13900001111", note: "还在" },
+      { visitorId: "vis-talk" },
+      now,
+      ledger,
+    )
+    expect(ticketed.case).toBeNull()
+    expect(ticketed.cases).toHaveLength(0)
+    const named = sample({ id: "case-chen", name: "陈经理", contact: "13900001111", visitorId: "vis-chen" })
+    const goneNamed = applyStaffCasesDelete([named], [named.id], now)
+    const namedLedger = markGoneOnLedger(emptyLedger(), goneNamed.gone[0]!, now)
+    const sameContact = upsertFromTicket(
+      goneNamed.cases,
+      { name: "陈经理", org: "江西绿田农业", contact: "13900001111", note: "线索又来了" },
+      { visitorId: "vis-new" },
+      now,
+      namedLedger,
+    )
+    expect(sameContact.case).toBeNull()
+    expect(canWriteLiveHermesCase({ ...first.case!, gone: false }, { ...first.case!, gone: true }, ledger)).toBe(false)
+    expect(canWriteLiveHermesCase({ ...first.case!, id: "case-fresh", gone: false }, null, ledger)).toBe(false)
+    expect(canWriteLiveHermesCase({ ...first.case!, gone: true }, { ...first.case!, gone: true }, ledger)).toBe(true)
+  })
+
+  it("does not mint a replacement ticket after an inquiry case is deleted", () => {
+    const created = applyInquiryTaskAction(
+      emptyInquiry(),
+      [],
+      emptyLedger(),
+      {
+        op: "create",
+        name: "土壤板结一轮",
+        targets: ["土壤板结"],
+        schedule: { kind: "daily", hour: 9 },
+        limitHours: 24,
+      },
+      now,
+    )
+    const caseId = created.cases[0]!.id
+    const deleted = applyStaffCasesDelete(created.cases, [caseId], now)
+    const ledger = markGoneOnLedger(created.ledger, deleted.gone[0]!, now)
+    const updated = applyInquiryTaskAction(
+      created.inquiry,
+      deleted.cases,
+      ledger,
+      { op: "update", id: created.inquiry.tasks[0]!.id, name: "还在找厂" },
+      now,
+    )
+    expect(updated.cases).toHaveLength(0)
+    expect(updated.touched).toHaveLength(0)
+    expect(updated.inquiry.tasks[0]?.caseId).toBe(caseId)
   })
 })
