@@ -4,7 +4,7 @@ import { CHUNK_GAP_MS, splitReplyIntoChunks, typingDelayFor } from "../cms/chunk
 import { buildGreeting, buildGreetingEn, detectMessageLang, type VisitorLang } from "../cms/greeting"
 import { GUIDE_STARTERS, GUIDE_STARTERS_EN } from "../cms/guidePrompt"
 import type { AdvisorId } from "../cms/hermes"
-import { hermesUnavailableReply } from "../cms/hermes"
+import { hermesHandoffGreeting, hermesHandoffNotice } from "../cms/hermes"
 import { flattenKnowledge, localGuideAnswer } from "../cms/knowledge"
 import { withBase } from "../lib/asset"
 
@@ -104,6 +104,7 @@ export function SiteGuide() {
   const [input, setInput] = useState("")
   const [typing, setTyping] = useState(false)
   const [turns, setTurns] = useState<ChatTurn[]>([])
+  const [handoffIndex, setHandoffIndex] = useState<number | null>(null)
 
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -160,7 +161,9 @@ export function SiteGuide() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: history.map((item) => ({ role: item.role, content: item.content })),
+          messages: history
+            .filter((item) => item.role === "user" || item.role === "assistant")
+            .map((item) => ({ role: item.role, content: item.content })),
           advisor: extra?.escalate ? "hermes" : advisorRef.current,
           escalate: extra?.escalate === true,
           visitorId: visitorId(),
@@ -216,6 +219,7 @@ export function SiteGuide() {
     if (advisorRef.current === "hermes" || stage !== "live") return
     advisorRef.current = "hermes"
     setAdvisor("hermes")
+    setHandoffIndex(turnsRef.current.length)
     setStage("escalating")
     inputRef.current?.focus()
     void (async () => {
@@ -227,7 +231,7 @@ export function SiteGuide() {
         const reply = await fetchReply(turnsRef.current, { escalate: true })
         if (!mounted.current) return
         setStage("live")
-        await deliverReply(reply ?? hermesUnavailableReply(lang))
+        await deliverReply(reply ?? hermesHandoffGreeting(lang))
         while (dirtyRef.current && mounted.current) {
           dirtyRef.current = false
           const history = turnsRef.current
@@ -398,13 +402,29 @@ export function SiteGuide() {
               </p>
             ) : null}
             {turns.map((turn, index) => (
-              <article key={`${turn.role}-${index}`} className={`site-guide__row site-guide__row--${turn.role}`}>
-                {turn.role === "assistant" ? (
-                  <span className={`${avatarClass} site-guide__avatar--sm`} aria-hidden="true" />
+              <div key={`${turn.role}-${index}`}>
+                {handoffIndex === index ? (
+                  <p className="site-guide__split">
+                    <i />
+                    <span>{hermesHandoffNotice(lang)}</span>
+                    <i />
+                  </p>
                 ) : null}
-                <p className={`site-guide__bubble site-guide__bubble--${turn.role}`}>{turn.content}</p>
-              </article>
+                <article className={`site-guide__row site-guide__row--${turn.role}`}>
+                  {turn.role === "assistant" ? (
+                    <span className={`${avatarClass} site-guide__avatar--sm`} aria-hidden="true" />
+                  ) : null}
+                  <p className={`site-guide__bubble site-guide__bubble--${turn.role}`}>{turn.content}</p>
+                </article>
+              </div>
             ))}
+            {handoffIndex === turns.length ? (
+              <p className="site-guide__split">
+                <i />
+                <span>{hermesHandoffNotice(lang)}</span>
+                <i />
+              </p>
+            ) : null}
             {typing ? (
               <article className="site-guide__row site-guide__row--assistant" aria-live="polite">
                 <span className={`${avatarClass} site-guide__avatar--sm`} aria-hidden="true" />

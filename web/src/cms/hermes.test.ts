@@ -7,6 +7,7 @@ import {
   hermesHandoffHint,
   hermesLinkInfo,
   hermesReady,
+  hermesHandoffGreeting,
   hermesUnavailableReply,
   probeHermes,
   resolveHermesReply,
@@ -80,5 +81,18 @@ describe("resolveHermesReply", () => {
     expect(result.source).toBe("local")
     expect(result.reply).toBe(hermesUnavailableReply("zh"))
     expect(result.ticket).toBeNull()
+  })
+
+  it("greets after a handoff instead of saying the advisor is unavailable", async () => {
+    const result = await resolveHermesReply(
+      [{ role: "user", content: "转高级顾问" }],
+      flattenKnowledge(defaultContent),
+      {},
+      undefined,
+      "zh",
+      { escalate: true },
+    )
+    expect(result.reply).toBe(hermesHandoffGreeting("zh"))
+    expect(result.reply).not.toMatch(/无法接入|Linda|内网/)
   })
 })

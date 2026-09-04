@@ -30,12 +30,13 @@ import {
 } from "../cms/hermesDesk"
 import { emptyInquiry, type InquiryState } from "../cms/inquiryDesk"
 import { withBase } from "../lib/asset"
+import { DeskBoard } from "./DeskBoard"
 import { InquiryPanel } from "./InquiryPanel"
 import { TicketsPanel, TicketEditDialog } from "./TicketsPanel"
 import type { AdminAuth } from "./LeadsPanel"
 
 type LinkView = "connecting" | "connected" | "disconnected"
-type MobilePane = "chat" | "board" | "inquiry"
+type DeskPane = "dash" | "desk" | "inquiry"
 type BoardModule = "tickets" | "inquiry"
 type PendingImage = { key: string; mime: string; name: string; data: string; preview: string }
 type BoardFocus =
@@ -204,7 +205,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
   const [input, setInput] = useState("")
   const [query, setQuery] = useState("")
   const [focus, setFocus] = useState<BoardFocus>({ kind: "home" })
-  const [pane, setPane] = useState<MobilePane>("board")
+  const [pane, setPane] = useState<DeskPane>("desk")
   const [module, setModule] = useState<BoardModule>("tickets")
   const [editTicketId, setEditTicketId] = useState<string | null>(null)
   const [inquiry, setInquiry] = useState<InquiryState>(emptyInquiry)
@@ -306,6 +307,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         if (focus.kind === "ticket" && ids.includes(focus.id)) setFocus({ kind: "home" })
       } catch (err) {
         setError(err instanceof Error ? err.message : "删除失败")
+        throw err
       }
     },
     [focus, post],
@@ -330,6 +332,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         await post({ action: "cases", op: "batch", ids, patch })
       } catch (err) {
         setError(err instanceof Error ? err.message : "批量编辑失败")
+        throw err
       }
     },
     [post],
@@ -389,13 +392,13 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
     const compact = compactBoard()
     setFocus(next)
     openFolds(next.kind === "home" ? true : !compact)
-    if (compact && next.kind !== "home") setPane("board")
+    if (compact && next.kind !== "home") setPane("desk")
   }
 
   const runSearch = (event?: FormEvent) => {
     event?.preventDefault()
     const q = query.trim()
-    if (compactBoard()) setPane("board")
+    if (compactBoard()) setPane("desk")
     if (!q) {
       goBoard({ kind: "home" })
       return
@@ -545,18 +548,22 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
       </header>
 
       <nav className="hermes-grok__tabs" aria-label="工作台分区">
-        <button type="button" className={pane === "chat" ? "is-on" : ""} onClick={() => setPane("chat")}>
-          对话
+        <button
+          type="button"
+          className={pane === "dash" ? "is-on" : ""}
+          onClick={() => setPane("dash")}
+        >
+          看板
         </button>
         <button
           type="button"
-          className={pane === "board" ? "is-on" : ""}
+          className={pane === "desk" ? "is-on" : ""}
           onClick={() => {
             setModule("tickets")
-            setPane("board")
+            setPane("desk")
           }}
         >
-          单子
+          工作台
         </button>
         <button
           type="button"
@@ -573,8 +580,11 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
       {error ? <p className="hermes-grok__error">{error}</p> : null}
 
       <div className={`hermes-grok__body hermes-grok__body--${pane}`}>
+        {pane === "dash" ? (
+          <DeskBoard cases={allLive} events={events} inquiry={inquiry} coachTurns={coach.length} />
+        ) : null}
         <section
-          className={`hermes-grok__chat${dragOver ? " is-drop" : ""}`}
+          className={`hermes-grok__chat guide-desk${dragOver ? " is-drop" : ""}`}
           onDragOver={(event) => {
             event.preventDefault()
             setDragOver(true)
@@ -586,42 +596,53 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
             void addFiles(event.dataTransfer.files)
           }}
         >
-          <div className="hermes-grok__log" ref={logRef}>
+          <header className="guide-desk__head">
+            <div className="guide-desk__who">
+              <span className="guide-desk__avatar" aria-hidden="true" />
+              <div>
+                <p className="guide-desk__title">{AGENT_NAME}</p>
+                <p className="guide-desk__status">
+                  <span className={`guide-desk__live guide-desk__live--${status}`} />
+                  {STATUS_LABEL[status]}
+                </p>
+              </div>
+            </div>
+            {coach.length ? (
+              <button type="button" className="hermes-grok__ghost" onClick={() => void clearCoach()}>
+                清空
+              </button>
+            ) : null}
+          </header>
+          <div className="hermes-grok__log guide-desk__log" ref={logRef}>
             {coach.length === 0 && !sending ? (
-              <div className="hermes-grok__hello">
-                <h2>{AGENT_NAME}</h2>
+              <div className="guide-desk__hello">
                 <p>在这里下指令。询单条件会自动写进系统提示；复杂进度仍由 Karmenai 在对话里改。</p>
               </div>
             ) : null}
-            {coach.length > 0 ? (
-              <div className="hermes-grok__chat-tools">
-                <button type="button" className="hermes-grok__ghost" onClick={() => void clearCoach()}>
-                  清空对话
-                </button>
-              </div>
-            ) : null}
             {coach.map((turn) => (
-              <article key={turn.id} className={`hermes-grok__bubble hermes-grok__bubble--${turn.role}`}>
-                {turn.images?.length ? (
-                  <div className="hermes-grok__thumbs">
-                    {turn.images.map((image: HermesCoachImage) => (
-                      <AuthImage key={image.id} id={image.id} headers={headers} />
-                    ))}
-                  </div>
-                ) : null}
-                <p>{turn.content}</p>
-                <time dateTime={turn.at}>
-                  {turn.role === "staff" ? "你" : AGENT_NAME} · {formatTime(turn.at)}
-                </time>
+              <article key={turn.id} className={`guide-desk__row guide-desk__row--${turn.role}`}>
+                {turn.role !== "staff" ? <span className="guide-desk__avatar guide-desk__avatar--sm" aria-hidden="true" /> : null}
+                <div className={`guide-desk__bubble guide-desk__bubble--${turn.role}`}>
+                  {turn.images?.length ? (
+                    <div className="hermes-grok__thumbs">
+                      {turn.images.map((image: HermesCoachImage) => (
+                        <AuthImage key={image.id} id={image.id} headers={headers} />
+                      ))}
+                    </div>
+                  ) : null}
+                  <p>{turn.content}</p>
+                </div>
               </article>
             ))}
             {sending ? (
-              <div className="hermes-load" aria-live="polite">
-                <span />
-                <span />
-                <span />
-                {AGENT_NAME} 正在看档案
-              </div>
+              <article className="guide-desk__row guide-desk__row--hermes" aria-live="polite">
+                <span className="guide-desk__avatar guide-desk__avatar--sm" aria-hidden="true" />
+                <p className="guide-desk__bubble guide-desk__bubble--hermes guide-desk__typing">
+                  <span />
+                  <span />
+                  <span />
+                </p>
+              </article>
             ) : null}
           </div>
           <form
@@ -700,29 +721,6 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
         </section>
 
         <aside className="hermes-panel">
-          <nav className="hermes-mod" aria-label="工作台模块">
-            <button
-              type="button"
-              className={module === "tickets" ? "is-on" : ""}
-              onClick={() => {
-                setModule("tickets")
-                setPane("board")
-              }}
-            >
-              工单档案
-            </button>
-            <button
-              type="button"
-              className={module === "inquiry" ? "is-on" : ""}
-              onClick={() => {
-                setModule("inquiry")
-                setFocus({ kind: "home" })
-                setPane("inquiry")
-              }}
-            >
-              询单系统
-            </button>
-          </nav>
           {module === "inquiry" ? (
             <InquiryPanel
               inquiry={inquiry}
@@ -752,7 +750,7 @@ export function HermesDesk({ auth }: { auth: AdminAuth }) {
                   const payload = await post({ action: "task", op: "start", id })
                   const message = payload.assignMessage || ""
                   if (message) {
-                    if (compactBoard()) setPane("chat")
+                    if (compactBoard()) setPane("desk")
                     await post({ action: "coach", message })
                   }
                 } catch (err) {

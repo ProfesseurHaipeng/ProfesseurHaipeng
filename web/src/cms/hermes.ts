@@ -119,6 +119,16 @@ export function hermesUnavailableReply(lang: "zh" | "en") {
     : "高级顾问 Hermes 还在从内网接到站点上。您可以先继续问我，或到「联络」页留下作物和吨位，配置好我们按这条线索跟进。"
 }
 
+export function hermesHandoffGreeting(lang: "zh" | "en") {
+  return lang === "en"
+    ? "Hello — I'm Hermes, the senior advisor. I'll take it from here."
+    : "您好，我是高级顾问 Hermes，后面由我来跟您谈。"
+}
+
+export function hermesHandoffNotice(lang: "zh" | "en") {
+  return lang === "en" ? "You’ve been transferred to the senior advisor." : "已转接高级顾问为您服务"
+}
+
 export function hermesHandoffHint(lang: "zh" | "en") {
   return lang === "en"
     ? "The customer asked to speak with the senior advisor. You are Hermes taking over this live chat. Acknowledge the handoff in one short line, then continue from the last topic. Do not restart a full introduction."
@@ -131,10 +141,12 @@ export async function resolveHermesReply(
   env: Record<string, string | undefined>,
   extraSystem: string | undefined,
   lang: "zh" | "en",
+  options?: { escalate?: boolean },
 ) {
+  const fallback = options?.escalate ? hermesHandoffGreeting(lang) : hermesUnavailableReply(lang)
   const hermes = hermesEnvFrom(env)
   if (!hermes) {
-    return { reply: hermesUnavailableReply(lang), source: "local" as const, ticket: null }
+    return { reply: fallback, source: "local" as const, ticket: null }
   }
   try {
     const raw = await completeChatCompletions(hermes, buildHermesMessages(history, knowledge, extraSystem), {
@@ -147,5 +159,5 @@ export async function resolveHermesReply(
   } catch (error) {
     console.error("ash-guide hermes", error)
   }
-  return { reply: hermesUnavailableReply(lang), source: "local" as const, ticket: null }
+  return { reply: fallback, source: "local" as const, ticket: null }
 }

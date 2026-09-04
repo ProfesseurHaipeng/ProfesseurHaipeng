@@ -64,12 +64,12 @@ export function TicketsPanel({
   const [batchColor, setBatchColor] = useState<CaseColor>("none")
   const [batchCategory, setBatchCategory] = useState<CaseCategory>("unset")
   const [color, setColor] = useState<"all" | CaseColor>("all")
-  const [category, setCategory] = useState<"all" | CaseCategory>("all")
+  const [busy, setBusy] = useState(false)
 
   const live = useMemo(() => filterHermesCases(cases, { origin: "live" }).map(normalizeCase), [cases])
   const visible = useMemo(
-    () => filterHermesCases(cases, { origin: "live", query, color, category }).map(normalizeCase),
-    [cases, query, color, category],
+    () => filterHermesCases(cases, { origin: "live", query, color }).map(normalizeCase),
+    [cases, query, color],
   )
   const customers = useMemo(() => customerArchives(visible), [visible])
   const factories = useMemo(() => factoryArchives(visible), [visible])
@@ -94,25 +94,40 @@ export function TicketsPanel({
   const clearSelection = () => setSelected(new Set())
 
   const confirmDelete = async (ids: string[]) => {
-    if (!ids.length) return
+    if (!ids.length || busy) return
     if (!window.confirm(`删除 ${ids.length} 张工单？删除后无法恢复。`)) return
-    await onDelete(ids)
-    setSelected(new Set())
-    if (editId && ids.includes(editId)) setEditId(null)
+    setBusy(true)
+    try {
+      await onDelete(ids)
+      setSelected((current) => new Set([...current].filter((id) => !ids.includes(id))))
+      if (editId && ids.includes(editId)) setEditId(null)
+    } finally {
+      setBusy(false)
+    }
   }
 
   const applyBatchProgress = async () => {
     const ids = [...selected]
-    if (!ids.length) return
-    await onBatchUpdate(ids, { progress: batchProgress })
-    clearSelection()
+    if (!ids.length || busy) return
+    setBusy(true)
+    try {
+      await onBatchUpdate(ids, { progress: batchProgress })
+      clearSelection()
+    } finally {
+      setBusy(false)
+    }
   }
 
   const applyBatchTag = async () => {
     const ids = [...selected]
-    if (!ids.length) return
-    await onBatchUpdate(ids, { color: batchColor, category: batchCategory })
-    clearSelection()
+    if (!ids.length || busy) return
+    setBusy(true)
+    try {
+      await onBatchUpdate(ids, { color: batchColor, category: batchCategory })
+      clearSelection()
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -149,21 +164,6 @@ export function TicketsPanel({
               onClick={() => setColor(item.key)}
               aria-label={item.label}
             />
-          ))}
-        </div>
-        <div className="desk-tickets__cats">
-          <button type="button" className={category === "all" ? "is-on" : ""} onClick={() => setCategory("all")}>
-            全部分类
-          </button>
-          {CASE_CATEGORIES.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={category === item.key ? "is-on" : ""}
-              onClick={() => setCategory(item.key)}
-            >
-              {item.label}
-            </button>
           ))}
         </div>
       </div>
@@ -216,8 +216,8 @@ export function TicketsPanel({
               <button type="button" onClick={() => void applyBatchTag()}>
                 批量打标
               </button>
-              <button type="button" className="is-danger" onClick={() => void confirmDelete([...selected])}>
-                删除选中
+              <button type="button" className="is-danger" disabled={busy} onClick={() => void confirmDelete([...selected])}>
+                {busy ? "正在删除…" : "删除选中"}
               </button>
               <button type="button" className="is-ghost" onClick={clearSelection}>
                 取消
@@ -230,11 +230,14 @@ export function TicketsPanel({
       {view === "tickets" ? (
         <ul className="desk-tickets__list">
           {visible.map((item) => (
-            <li key={item.id} className={focusId === item.id ? "is-focus" : undefined}>
+            <li
+              key={item.id}
+              className={`desk-row desk-row--${item.color || "none"}${focusId === item.id ? " is-focus" : ""}`}
+            >
               <label className="desk-tickets__check">
                 <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggle(item.id)} />
               </label>
-              <button type="button" className={`desk-ticket desk-ticket--${item.color || "none"}`} onClick={() => onOpenTicket(item.id)}>
+              <button type="button" className="desk-ticket" onClick={() => onOpenTicket(item.id)}>
                 <div className="desk-ticket__body">
                   <em>{ticketNo(item)}</em>
                   <strong>{item.name}</strong>

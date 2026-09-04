@@ -28,7 +28,9 @@ export async function resolveGuideReply(
   const fallback = lastUser ? localGuideAnswer(lastUser.content, knowledge) : "请先问一个具体问题。"
   const advisor: AdvisorId = options?.advisor === "hermes" || options?.escalate ? "hermes" : "lin"
   if (advisor === "hermes") {
-    const hermes = await resolveHermesReply(cleanedHistory, knowledge, env, extraSystem, options?.lang || "zh")
+    const hermes = await resolveHermesReply(cleanedHistory, knowledge, env, extraSystem, options?.lang || "zh", {
+      escalate: options?.escalate === true,
+    })
     return { ...hermes, advisor: "hermes" }
   }
   const messages = buildGuideMessages(cleanedHistory, knowledge, extraSystem)

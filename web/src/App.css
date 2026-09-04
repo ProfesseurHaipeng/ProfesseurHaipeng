@@ -1885,6 +1885,26 @@ h3 {
   transform: scale(0.95);
 }
 
+.site-guide__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0.35rem 0 0.15rem;
+  color: #6b6b6b;
+  font-size: 0.72rem;
+}
+
+.site-guide__split i {
+  display: block;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.site-guide__split span {
+  white-space: nowrap;
+}
+
 .site-guide__handoff {
   display: flex;
   justify-content: flex-start;
