@@ -5,12 +5,12 @@ import { extractTicket, stripTicketTags } from "./ticket"
 export type AdvisorId = "lin" | "hermes"
 
 export function hermesEnvFrom(source: Record<string, string | undefined>): ChatCompletionsEnv | null {
-  const baseUrl = (source.HERMES_API_BASE || "").trim().replace(/\/$/, "")
+  const baseUrl = (source.SENIOR_ADVISOR_API_BASE || source.HERMES_API_BASE || "").trim().replace(/\/$/, "")
   if (!baseUrl) return null
   return {
-    apiKey: (source.HERMES_API_KEY || "local").trim() || "local",
+    apiKey: (source.SENIOR_ADVISOR_API_KEY || source.HERMES_API_KEY || "local").trim() || "local",
     baseUrl,
-    model: (source.HERMES_MODEL || "weho-senior-advisor").trim() || "weho-senior-advisor",
+    model: (source.SENIOR_ADVISOR_MODEL || source.HERMES_MODEL || "weho-senior-advisor").trim() || "weho-senior-advisor",
   }
 }
 
@@ -42,7 +42,7 @@ export async function probeHermes(source: Record<string, string | undefined>): P
   const hermes = hermesEnvFrom(source)
   const checkedAt = new Date().toISOString()
   if (!hermes) {
-    return { status: "disconnected", checkedAt, detail: "未配置 HERMES_API_BASE" }
+    return { status: "disconnected", checkedAt, detail: "未配置高级顾问网关" }
   }
   const headers = { Authorization: `Bearer ${hermes.apiKey}` }
   const signal = AbortSignal.timeout(8000)

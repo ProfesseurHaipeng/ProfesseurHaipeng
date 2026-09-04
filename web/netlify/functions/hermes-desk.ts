@@ -86,6 +86,9 @@ function readEnv(name: string) {
 
 function envBag() {
   return {
+    SENIOR_ADVISOR_API_BASE: readEnv("SENIOR_ADVISOR_API_BASE"),
+    SENIOR_ADVISOR_API_KEY: readEnv("SENIOR_ADVISOR_API_KEY"),
+    SENIOR_ADVISOR_MODEL: readEnv("SENIOR_ADVISOR_MODEL"),
     HERMES_API_BASE: readEnv("HERMES_API_BASE"),
     HERMES_API_KEY: readEnv("HERMES_API_KEY"),
     HERMES_MODEL: readEnv("HERMES_MODEL"),

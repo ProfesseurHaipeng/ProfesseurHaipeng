@@ -32,12 +32,24 @@ describe("hermes env", () => {
       host: "hermes.example.com",
       model: "weho-senior-advisor",
     })
+    const senior = hermesEnvFrom({
+      HERMES_API_BASE: "https://hermes.example.com/v1",
+      HERMES_API_KEY: "old",
+      SENIOR_ADVISOR_API_BASE: "https://advisor.example.com/v1",
+      SENIOR_ADVISOR_API_KEY: "senior",
+      SENIOR_ADVISOR_MODEL: "project-senior-advisor",
+    })
+    expect(senior).toMatchObject({
+      baseUrl: "https://advisor.example.com/v1",
+      apiKey: "senior",
+      model: "project-senior-advisor",
+    })
   })
 
   it("treats a missing gateway as disconnected", async () => {
     const health = await probeHermes({})
     expect(health.status).toBe("disconnected")
-    expect(health.detail).toContain("HERMES_API_BASE")
+    expect(health.detail).toContain("高级顾问网关")
   })
 })
 
