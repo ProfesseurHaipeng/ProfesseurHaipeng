@@ -162,7 +162,7 @@ function LineChart({ points }: { points: { label: string; value: number }[] }) {
 
 function TreeChart({ tickets, customers, factories }: { tickets: number; customers: number; factories: number }) {
   return (
-    <svg className="desk-chart desk-chart--tree" viewBox="0 0 360 150" role="img" aria-label="档案树状图">
+    <svg className="desk-chart desk-chart--tree" viewBox="0 0 360 160" role="img" aria-label="档案树状图">
       <line x1="180" y1="48" x2="90" y2="98" stroke="#d2d2d7" />
       <line x1="180" y1="48" x2="270" y2="98" stroke="#d2d2d7" />
       <rect x="120" y="12" width="120" height="36" rx="8" fill="#1d1d1f" />
