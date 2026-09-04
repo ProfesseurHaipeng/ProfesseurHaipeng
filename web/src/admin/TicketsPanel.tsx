@@ -1,4 +1,5 @@
-import { useMemo, useState, type CSSProperties, type FormEvent } from "react"
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react"
+import { IconMore, IconSearch } from "./icons"
 import {
   CASE_CATEGORIES,
   CASE_CATEGORY_LABEL,
@@ -8,7 +9,6 @@ import {
   customerArchives,
   customerKey,
   factoryArchives,
-  factoryName,
   filterHermesCases,
   normalizeCase,
   ticketNo,
@@ -30,12 +30,19 @@ function formatTime(iso: string) {
   }
 }
 
+function caseTitle(item: HermesCase) {
+  const note = item.note?.split(/[\n。]/)[0]?.trim()
+  if (note && note.length > 0 && note.length <= 40) return note
+  return item.org || item.name
+}
+
 export function TicketsPanel({
   cases,
   loading,
   query,
   onQueryChange,
   onSearch,
+  initialView = "tickets",
   focusId,
   onOpenTicket,
   onOpenCustomer,
@@ -49,6 +56,7 @@ export function TicketsPanel({
   query: string
   onQueryChange: (value: string) => void
   onSearch: (event?: FormEvent) => void
+  initialView?: TicketView
   focusId?: string
   onOpenTicket: (id: string) => void
   onOpenCustomer: (key: string) => void
@@ -57,20 +65,26 @@ export function TicketsPanel({
   onDelete: (ids: string[]) => Promise<void>
   onBatchUpdate: (ids: string[], patch: StaffCasePatch) => Promise<void>
 }) {
-  const [view, setView] = useState<TicketView>("tickets")
+  const [view, setView] = useState<TicketView>(initialView)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editId, setEditId] = useState<string | null>(null)
+  const [menuId, setMenuId] = useState<string | null>(null)
   const [batchProgress, setBatchProgress] = useState<HermesProgress>("talking")
   const [batchColor, setBatchColor] = useState<CaseColor>("none")
   const [batchCategory, setBatchCategory] = useState<CaseCategory>("unset")
   const [color, setColor] = useState<"all" | CaseColor>("all")
+  const [progress, setProgress] = useState<"all" | HermesProgress>("all")
   const [busy, setBusy] = useState(false)
 
+  useEffect(() => {
+    setView(initialView)
+  }, [initialView])
+
   const live = useMemo(() => filterHermesCases(cases, { origin: "live" }).map(normalizeCase), [cases])
-  const visible = useMemo(
-    () => filterHermesCases(cases, { origin: "live", query, color }).map(normalizeCase),
-    [cases, query, color],
-  )
+  const visible = useMemo(() => {
+    const rows = filterHermesCases(cases, { origin: "live", query, color }).map(normalizeCase)
+    return progress === "all" ? rows : rows.filter((item) => item.progress === progress)
+  }, [cases, query, color, progress])
   const customers = useMemo(() => customerArchives(visible), [visible])
   const factories = useMemo(() => factoryArchives(visible), [visible])
   const editing = editId ? live.find((item) => item.id === editId) || null : null
@@ -133,52 +147,59 @@ export function TicketsPanel({
   return (
     <div className="desk-tickets">
       <header className="desk-tickets__head">
-        <div>
-          <h2>工单档案</h2>
-          <p className="desk-tickets__hint">
-            {visible.length ? `当前 ${visible.length} 张` : "还没有工单"} · 存在站点存储里，删除后不会被线索自动建回
-          </p>
-        </div>
+        <h2>
+          工单档案
+          <em>{visible.length}</em>
+        </h2>
       </header>
 
       <form className="desk-tickets__search" onSubmit={onSearch}>
+        <IconSearch />
         <input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="工单号、手机、邮箱或公司"
+          placeholder="搜索工单、客户、邮箱"
         />
-        <button type="submit">搜索</button>
       </form>
 
+      <nav className="desk-tickets__views" aria-label="档案视图">
+        <button type="button" className={view === "tickets" ? "is-on" : ""} onClick={() => setView("tickets")}>
+          工单 {visible.length}
+        </button>
+        <button type="button" className={view === "customers" ? "is-on" : ""} onClick={() => setView("customers")}>
+          客户 {customers.length}
+        </button>
+        <button type="button" className={view === "factories" ? "is-on" : ""} onClick={() => setView("factories")}>
+          工厂 {factories.length}
+        </button>
+      </nav>
+
       <div className="desk-tickets__filters" aria-label="归类筛选">
+        <label className="desk-tickets__select">
+          <span className="sr-only">全部状态</span>
+          <select value={progress} onChange={(event) => setProgress(event.target.value as "all" | HermesProgress)}>
+            <option value="all">全部状态</option>
+            {[...PROGRESS_TRACK, "hold" as const].map((step) => (
+              <option key={step} value={step}>
+                {PROGRESS_LABEL[step]}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="desk-tickets__colors">
-          <button type="button" className={color === "all" ? "is-on" : ""} onClick={() => setColor("all")}>
-            全部颜色
-          </button>
+          <span>颜色标签</span>
           {CASE_COLORS.map((item) => (
             <button
               key={item.key}
               type="button"
               className={`desk-color${color === item.key ? " is-on" : ""}`}
               style={{ "--swatch": item.swatch } as CSSProperties}
-              onClick={() => setColor(item.key)}
+              onClick={() => setColor(color === item.key ? "all" : item.key)}
               aria-label={item.label}
             />
           ))}
         </div>
       </div>
-
-      <nav className="desk-tickets__views" aria-label="档案视图">
-        <button type="button" className={view === "tickets" ? "is-on" : ""} onClick={() => setView("tickets")}>
-          工单 {visible.length ? `(${visible.length})` : ""}
-        </button>
-        <button type="button" className={view === "customers" ? "is-on" : ""} onClick={() => setView("customers")}>
-          客户 {customers.length ? `(${customers.length})` : ""}
-        </button>
-        <button type="button" className={view === "factories" ? "is-on" : ""} onClick={() => setView("factories")}>
-          工厂 {factories.length ? `(${factories.length})` : ""}
-        </button>
-      </nav>
 
       {view === "tickets" && visible.length > 0 ? (
         <div className="desk-tickets__batch">
@@ -238,25 +259,37 @@ export function TicketsPanel({
                 <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggle(item.id)} />
               </label>
               <button type="button" className="desk-ticket" onClick={() => onOpenTicket(item.id)}>
+                <i
+                  className="desk-ticket__dot"
+                  style={{
+                    background: CASE_COLORS.find((row) => row.key === (item.color || "none"))?.swatch || "#34c759",
+                  }}
+                  aria-hidden="true"
+                />
                 <div className="desk-ticket__body">
                   <em>{ticketNo(item)}</em>
-                  <strong>{item.name}</strong>
-                  <span>{item.org || "公司尚无"}</span>
+                  <strong>{caseTitle(item)}</strong>
                   <span>
-                    {PROGRESS_LABEL[item.progress]}
+                    {item.name} · {PROGRESS_LABEL[item.progress]}
                     {item.category && item.category !== "unset" ? ` · ${CASE_CATEGORY_LABEL[item.category]}` : ""}
-                    {factoryName(item) ? ` · ${factoryName(item)}` : ""}
                   </span>
-                  <time dateTime={item.updatedAt}>{formatTime(item.updatedAt)}</time>
                 </div>
+                <time dateTime={item.updatedAt}>{formatTime(item.updatedAt)}</time>
               </button>
               <div className="desk-ticket__ops">
-                <button type="button" onClick={() => setEditId(item.id)}>
-                  编辑
+                <button type="button" className="karm-icon-btn" aria-label="工单菜单" onClick={() => setMenuId(menuId === item.id ? null : item.id)}>
+                  <IconMore />
                 </button>
-                <button type="button" className="is-danger" onClick={() => void confirmDelete([item.id])}>
-                  删除
-                </button>
+                {menuId === item.id ? (
+                  <div className="karm-menu">
+                    <button type="button" onClick={() => { setMenuId(null); setEditId(item.id) }}>
+                      编辑
+                    </button>
+                    <button type="button" className="is-danger" onClick={() => { setMenuId(null); void confirmDelete([item.id]) }}>
+                      删除
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </li>
           ))}
@@ -271,12 +304,12 @@ export function TicketsPanel({
               <li key={customerKey(item)}>
                 <button type="button" className="desk-ticket" onClick={() => onOpenCustomer(customerKey(item))}>
                   <div className="desk-ticket__body">
-                    <em>客户</em>
+                    <em>客户档案</em>
                     <strong>{item.name}</strong>
-                    <span>{item.org || "公司尚无"}</span>
-                    <span>{owned.length} 张工单 · {PROGRESS_LABEL[item.progress]}</span>
+                    <span>
+                      {item.org || "公司尚无"} · {owned.length} 张工单 · {PROGRESS_LABEL[item.progress]}
+                    </span>
                   </div>
-                  <b aria-hidden="true">›</b>
                 </button>
               </li>
             )
@@ -290,12 +323,12 @@ export function TicketsPanel({
             <li key={row.name}>
               <button type="button" className="desk-ticket" onClick={() => onOpenFactory(row.name)}>
                 <div className="desk-ticket__body">
-                  <em>工厂</em>
+                  <em>工厂档案</em>
                   <strong>{row.name}</strong>
-                  <span>{row.count} 张工单</span>
-                  <span>{PROGRESS_LABEL[row.latest.progress]}</span>
+                  <span>
+                    {row.count} 张工单 · {PROGRESS_LABEL[row.latest.progress]}
+                  </span>
                 </div>
-                <b aria-hidden="true">›</b>
               </button>
             </li>
           ))}

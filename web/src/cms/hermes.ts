@@ -15,8 +15,12 @@ export function hermesEnvFrom(source: Record<string, string | undefined>): ChatC
   }
 }
 
+export function signedGuideEnabled(source: Record<string, string | undefined>) {
+  return Boolean(source.ADVISOR_CASE_ID_SECRET?.trim() || source.SIGNED_GUIDE_FALLBACK === "1")
+}
+
 export function hermesReady(source: Record<string, string | undefined>) {
-  return Boolean(hermesEnvFrom(source))
+  return Boolean(hermesEnvFrom(source) || signedGuideEnabled(source))
 }
 
 export function hermesLinkInfo(source: Record<string, string | undefined>) {
@@ -38,32 +42,85 @@ export type HermesHealth = {
   detail?: string
 }
 
-/** Live probe. Configured env is not the same as a working gateway. */
-export async function probeHermes(source: Record<string, string | undefined>): Promise<HermesHealth> {
-  const hermes = hermesEnvFrom(source)
-  const checkedAt = new Date().toISOString()
-  if (!hermes) {
-    return { status: "disconnected", checkedAt, detail: "未配置高级顾问网关" }
-  }
+async function probeLiveHermes(hermes: ChatCompletionsEnv): Promise<boolean> {
   const headers = { Authorization: `Bearer ${hermes.apiKey}` }
-  const signal = AbortSignal.timeout(8000)
   try {
-    const models = await fetch(`${hermes.baseUrl}/models`, { headers, signal })
-    if (models.ok) return { status: "connected", checkedAt, model: hermes.model }
+    const models = await fetch(`${hermes.baseUrl}/models`, {
+      headers,
+      signal: AbortSignal.timeout(4000),
+    })
+    if (models.ok) return true
+  } catch {
+    /* /models is optional; some gateways only expose chat. */
+  }
+  try {
     const ping = await fetch(`${hermes.baseUrl}/chat/completions`, {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json" },
-      signal,
+      signal: AbortSignal.timeout(5000),
       body: JSON.stringify({
         model: hermes.model,
         max_tokens: 1,
         messages: [{ role: "user", content: "ping" }],
       }),
     })
-    if (ping.ok) return { status: "connected", checkedAt, model: hermes.model }
-    return { status: "disconnected", checkedAt, model: hermes.model, detail: `网关 ${models.status}` }
+    return ping.ok
   } catch {
-    return { status: "disconnected", checkedAt, model: hermes.model, detail: "网关不可达" }
+    return false
+  }
+}
+
+/** Cheap then real ping of the locked signed-guide line. */
+export async function probeSignedGuide(timeoutMs = 8_000): Promise<boolean> {
+  try {
+    const status = await fetch(SIGNED_GUIDE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(Math.min(5000, timeoutMs)),
+      body: JSON.stringify({ hermes: "status" }),
+    })
+    if (status.ok) {
+      const payload = (await status.json()) as { ready?: boolean }
+      if (payload.ready === true) return true
+    }
+  } catch {
+    /* older locked deploys may not answer status */
+  }
+  try {
+    const signed = await resolveHermesViaSignedGuide(
+      [{ role: "user", content: "请用一句话确认你在线。" }],
+      "zh",
+      { timeoutMs },
+    )
+    return Boolean(signed?.reply)
+  } catch {
+    return false
+  }
+}
+
+/** Live probe, then signed fallback. Configured env is not the same as a working line. */
+export async function probeHermes(source: Record<string, string | undefined>): Promise<HermesHealth> {
+  const hermes = hermesEnvFrom(source)
+  const checkedAt = new Date().toISOString()
+  if (hermes && (await probeLiveHermes(hermes))) {
+    return { status: "connected", checkedAt, model: hermes.model, detail: "主线路已接通" }
+  }
+  if (signedGuideEnabled(source) && (await probeSignedGuide())) {
+    return {
+      status: "connected",
+      checkedAt,
+      model: hermes?.model,
+      detail: "备用线路已接通",
+    }
+  }
+  if (!hermes && !signedGuideEnabled(source)) {
+    return { status: "disconnected", checkedAt, detail: "未配置高级顾问网关" }
+  }
+  return {
+    status: "disconnected",
+    checkedAt,
+    model: hermes?.model,
+    detail: hermes ? "主线路与备用线路都不可达" : "备用线路不可达",
   }
 }
 
@@ -173,17 +230,53 @@ export function hermesHandoffHint(lang: "zh" | "en") {
 
 const SIGNED_GUIDE_URL = "https://6a9a9ec83794709d3ce03081--pinatubo-volcanic-ash.netlify.app/api/guide"
 
+function signedGuideMessages(history: GuideMessage[], extraSystem?: string) {
+  const prepared = withSyncedMemory(history, extraSystem)
+  const head = extraSystem?.trim() ? prepared.slice(0, 2) : []
+  return [...head, ...prepared.slice(head.length).slice(-6)]
+}
+
+function lastTopicUser(history: GuideMessage[], lang: "zh" | "en") {
+  const users = history.filter((item) => item.role === "user" && item.content.trim())
+  const last = users.at(-1)?.content.trim() || ""
+  if (users.length > 1 && /转(高级)?顾问|转接|handoff|senior advisor/i.test(last)) {
+    return users.at(-2)!.content.trim()
+  }
+  return last || inScopeTakeover(lang)
+}
+
+function publicKnownFacts(extraSystem?: string) {
+  return (extraSystem || "")
+    .split(/\n+/)
+    .filter((line) => /长期记忆|称呼|机构|工厂|地区|线索|下一步|进度|跟进|FOB|报价|作物|吨/.test(line))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 300)
+}
+
 async function resolveHermesViaSignedGuide(
   history: GuideMessage[],
   lang: "zh" | "en",
   options?: { escalate?: boolean; visitorId?: string; timeoutMs?: number },
   extraSystem?: string,
 ) {
-  const messages = withSyncedMemory(hermesHistoryForGateway(history, lang, options?.escalate), extraSystem)
+  const lastUser = lastTopicUser(history, lang)
+  const known = publicKnownFacts(extraSystem)
+  const alreadyCompact = history.length <= 2 && /皮纳图博火山灰/.test(lastUser)
+  const messages =
+    options?.escalate === true && !alreadyCompact
+      ? [
+          {
+            role: "user" as const,
+            content: `皮纳图博火山灰项目。${known ? `已知：${known}。` : ""}客户刚说：${lastUser.slice(0, 400)}。请接手后用短段中文接着谈作物、吨位或供应。`,
+          },
+        ]
+      : signedGuideMessages(hermesHistoryForGateway(history, lang, options?.escalate), extraSystem)
   const response = await fetch(SIGNED_GUIDE_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    signal: AbortSignal.timeout(options?.timeoutMs ?? 20_000),
+    signal: AbortSignal.timeout(options?.timeoutMs ?? 14_000),
     body: JSON.stringify({
       advisor: "hermes",
       escalate: options?.escalate === true,
@@ -194,20 +287,33 @@ async function resolveHermesViaSignedGuide(
   })
   const payload = (await response.json()) as { source?: string; reply?: string }
   if (payload.source !== "hermes" || !payload.reply?.trim()) return null
-  if (isAdvisorOutageJoke(payload.reply) || /联络|作物和吨位|项目人员/.test(payload.reply)) return null
+  if (isAdvisorOutageJoke(payload.reply) || /请联络项目人员|请联系项目人员|还在从内网接到/.test(payload.reply)) return null
   const { reply, ticket } = extractTicket(payload.reply)
   if (!reply) return null
   return { reply, source: "hermes" as const, ticket, reconnecting: false }
 }
 
 export async function resolveCoachViaSignedGuide(user: string, extraSystem?: string) {
+  const instruction = user.trim().slice(0, 800) || "先确认这条线还通，接着按作物和吨位跟进。"
+  const known = extraSystem?.replace(/\s+/g, " ").trim().slice(0, 400)
   const messages: GuideMessage[] = [
     {
       role: "user",
-      content: `你是 Linda。这是后台同事给你的指令，不是来访者提问。用中文短段回复同事，不要说无法连接或冲凉。\n\n${user}`,
+      content: `皮纳图博火山灰项目。${known ? `已知：${known}。` : ""}同事要求：${instruction}。请用短段中文说明你怎么跟进。`,
     },
   ]
-  return resolveHermesViaSignedGuide(messages, "zh", { timeoutMs: 20_000 }, extraSystem)
+  const first = await resolveHermesViaSignedGuide(messages, "zh", { escalate: true, timeoutMs: 16_000 })
+  if (first) return first
+  return resolveHermesViaSignedGuide(
+    [
+      {
+        role: "user",
+        content: `皮纳图博火山灰，水稻，吨位。同事说${instruction}。请回复你会怎么跟。`,
+      },
+    ],
+    "zh",
+    { escalate: true, timeoutMs: 12_000 },
+  )
 }
 
 export async function resolveHermesReply(
@@ -226,8 +332,22 @@ export async function resolveHermesReply(
   },
 ) {
   const hermes = hermesEnvFrom(env)
+  const fallbackOn = signedGuideEnabled(env)
   const unconfigured = options?.escalate ? hermesHandoffGreeting(lang) : hermesUnavailableReply(lang)
   if (!hermes) {
+    if (fallbackOn) {
+      try {
+        const signed = await resolveHermesViaSignedGuide(
+          history,
+          lang,
+          { ...options, timeoutMs: options?.timeoutMs ?? 20_000 },
+          extraSystem,
+        )
+        if (signed) return signed
+      } catch (error) {
+        console.error("ash-guide senior advisor signed-guide", error)
+      }
+    }
     return { reply: unconfigured, source: "local" as const, ticket: null, reconnecting: false }
   }
   try {
@@ -242,16 +362,15 @@ export async function resolveHermesReply(
       ),
       {
         hosts: "exact",
-        timeoutMs: options?.timeoutMs ?? (env.ADVISOR_CASE_ID_SECRET || env.SIGNED_GUIDE_FALLBACK === "1" ? 3_500 : 8_000),
+        timeoutMs: options?.timeoutMs ?? (fallbackOn ? 10_000 : 8_000),
         conversationId: options?.conversationId || env.ADVISOR_CASE_ID_SECRET?.trim(),
-        conversationIds:
-          env.ADVISOR_CASE_ID_SECRET || env.SIGNED_GUIDE_FALLBACK === "1"
-            ? [options?.conversationId || env.ADVISOR_CASE_ID_SECRET?.trim()].filter((item): item is string => Boolean(item))
-            : [
-                ...(options?.conversationIds || []),
-                options?.conversationId,
-                env.ADVISOR_CASE_ID_SECRET?.trim(),
-              ].filter((item): item is string => Boolean(item)),
+        conversationIds: fallbackOn
+          ? [options?.conversationId || env.ADVISOR_CASE_ID_SECRET?.trim()].filter((item): item is string => Boolean(item))
+          : [
+              ...(options?.conversationIds || []),
+              options?.conversationId,
+              env.ADVISOR_CASE_ID_SECRET?.trim(),
+            ].filter((item): item is string => Boolean(item)),
         identityHeaders: options?.identityHeaders,
         lean: true,
       },
@@ -266,7 +385,7 @@ export async function resolveHermesReply(
   } catch (error) {
     console.error("ash-guide senior advisor", error)
   }
-  if (env.ADVISOR_CASE_ID_SECRET || env.SIGNED_GUIDE_FALLBACK === "1") {
+  if (fallbackOn) {
     try {
       const signed = await resolveHermesViaSignedGuide(history, lang, options, extraSystem)
       if (signed) return signed

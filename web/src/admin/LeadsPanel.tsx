@@ -12,7 +12,7 @@ function formatTime(iso: string) {
   }
 }
 
-export function LeadsPanel({ auth }: { auth: AdminAuth }) {
+export function LeadsPanel({ auth, onAttached }: { auth: AdminAuth; onAttached?: () => void }) {
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -51,6 +51,7 @@ export function LeadsPanel({ auth }: { auth: AdminAuth }) {
       })
       const payload = (await response.json()) as { error?: string }
       if (!response.ok) throw new Error(payload.error || `接口返回 ${response.status}`)
+      onAttached?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : "接入失败")
     }

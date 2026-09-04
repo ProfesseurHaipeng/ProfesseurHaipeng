@@ -13,7 +13,9 @@ import {
   hermesUnavailableReply,
   isAdvisorOutageJoke,
   probeHermes,
+  resolveCoachViaSignedGuide,
   resolveHermesReply,
+  signedGuideEnabled,
   withSyncedMemory,
 } from "./hermes"
 
@@ -52,6 +54,41 @@ describe("hermes env", () => {
     const health = await probeHermes({})
     expect(health.status).toBe("disconnected")
     expect(health.detail).toContain("高级顾问网关")
+    expect(signedGuideEnabled({})).toBe(false)
+  })
+
+  it("treats the signed backup line as ready", () => {
+    expect(hermesReady({ SIGNED_GUIDE_FALLBACK: "1" })).toBe(true)
+    expect(signedGuideEnabled({ ADVISOR_CASE_ID_SECRET: "secret" })).toBe(true)
+  })
+
+  it("stays connected when only chat completions work", async () => {
+    const original = globalThis.fetch
+    globalThis.fetch = async (input) => {
+      const url = String(input)
+      if (url.endsWith("/models")) return new Response("missing", { status: 404 })
+      if (url.endsWith("/chat/completions")) return new Response("{}", { status: 200 })
+      return new Response("no", { status: 500 })
+    }
+    try {
+      const health = await probeHermes({ HERMES_API_BASE: "https://advisor.example.com/v1" })
+      expect(health.status).toBe("connected")
+      expect(health.detail).toContain("主线路")
+    } finally {
+      globalThis.fetch = original
+    }
+  })
+
+  it("marks health connected when the signed backup answers", async () => {
+    const original = globalThis.fetch
+    globalThis.fetch = async () => new Response(JSON.stringify({ ready: true }), { status: 200 })
+    try {
+      const health = await probeHermes({ SIGNED_GUIDE_FALLBACK: "1" })
+      expect(health.status).toBe("connected")
+      expect(health.detail).toContain("备用线路")
+    } finally {
+      globalThis.fetch = original
+    }
   })
 })
 
@@ -171,5 +208,97 @@ describe("resolveHermesReply", () => {
     expect(result.reconnecting).toBe(true)
     expect(result.reply).toBe(hermesReconnectingReply("zh"))
     expect(result.reply).not.toMatch(/联络|作物和吨位|冲凉/)
+  })
+
+  it("keeps a real Linda reply that mentions crops and tonnage", async () => {
+    const original = globalThis.fetch
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ source: "hermes", reply: "水稻可以先按作物和吨位谈供应。" }), { status: 200 })
+    try {
+      const result = await resolveHermesReply(
+        [{ role: "user", content: "水稻怎么用？" }],
+        flattenKnowledge(defaultContent),
+        { SIGNED_GUIDE_FALLBACK: "1" },
+        undefined,
+        "zh",
+      )
+      expect(result.source).toBe("hermes")
+      expect(result.reply).toContain("作物和吨位")
+    } finally {
+      globalThis.fetch = original
+    }
+  })
+
+  it("hands off the last real visitor question instead of the transfer phrase", async () => {
+    const original = globalThis.fetch
+    let body: Record<string, unknown> | null = null
+    globalThis.fetch = async (_input, init) => {
+      body = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>
+      return new Response(JSON.stringify({ source: "hermes", reply: "您好，我是 Linda，香蕉园可以先看钾钙镁。" }), { status: 200 })
+    }
+    try {
+      const result = await resolveHermesReply(
+        [
+          { role: "user", content: "香蕉园能不能用火山灰？" },
+          { role: "assistant", content: "可以先看土壤。" },
+          { role: "user", content: "转高级顾问" },
+        ],
+        flattenKnowledge(defaultContent),
+        { SIGNED_GUIDE_FALLBACK: "1" },
+        "客户要求转接高级顾问。你现在是 Linda。\n【长期记忆（与后台共用）】\n本周报价以FOB马尼拉为准。",
+        "zh",
+        { escalate: true },
+      )
+      expect(result.source).toBe("hermes")
+      const messages = body?.messages as { content?: string }[]
+      const packed = messages?.map((item) => item.content).join("\n") || ""
+      expect(packed).toContain("香蕉园")
+      expect(packed).toContain("FOB马尼拉")
+      expect(packed).not.toContain("你现在是 Linda")
+      expect(packed).not.toMatch(/客户刚说：转高级顾问/)
+    } finally {
+      globalThis.fetch = original
+    }
+  })
+
+  it("sends workbench backup turns as an on-topic Linda handoff", async () => {
+    const original = globalThis.fetch
+    let body: Record<string, unknown> | null = null
+    globalThis.fetch = async (_input, init) => {
+      body = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>
+      return new Response(JSON.stringify({ source: "hermes", reply: "收到，先按作物跟进。" }), { status: 200 })
+    }
+    try {
+      const result = await resolveCoachViaSignedGuide("先问王先生作物", "【长期记忆】报价按吨位谈")
+      expect(result?.source).toBe("hermes")
+      expect(body?.advisor).toBe("hermes")
+      expect(body?.escalate).toBe(true)
+      const messages = body?.messages as { content?: string }[]
+      expect(messages?.some((item) => item.content?.includes("皮纳图博火山灰"))).toBe(true)
+      expect(messages?.some((item) => item.content?.includes("先问王先生作物"))).toBe(true)
+      expect(messages?.some((item) => item.content?.includes("报价按吨位谈"))).toBe(true)
+    } finally {
+      globalThis.fetch = original
+    }
+  })
+
+  it("uses the signed backup when live keys are missing", async () => {
+    const original = globalThis.fetch
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ source: "hermes", reply: "您好，我是 Linda，水稻可以先从吨位谈。" }), { status: 200 })
+    try {
+      const result = await resolveHermesReply(
+        [{ role: "user", content: "水稻怎么用？" }],
+        flattenKnowledge(defaultContent),
+        { SIGNED_GUIDE_FALLBACK: "1" },
+        "【长期记忆（与后台共用）】\n本周报价以FOB马尼拉为准。",
+        "zh",
+      )
+      expect(result.source).toBe("hermes")
+      expect(result.reply).toContain("Linda")
+      expect(result.reply).not.toBe(hermesUnavailableReply("zh"))
+    } finally {
+      globalThis.fetch = original
+    }
   })
 })
