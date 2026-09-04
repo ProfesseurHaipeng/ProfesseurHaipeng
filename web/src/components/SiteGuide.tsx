@@ -3,6 +3,8 @@ import { useSiteContent } from "../cms/ContentContext"
 import { CHUNK_GAP_MS, splitReplyIntoChunks, typingDelayFor } from "../cms/chunks"
 import { buildGreeting, buildGreetingEn, detectMessageLang, type VisitorLang } from "../cms/greeting"
 import { GUIDE_STARTERS, GUIDE_STARTERS_EN } from "../cms/guidePrompt"
+import type { GuideSession } from "../cms/guideSession"
+import { loadGuideSession, readVisitorId, rememberVisitorId, saveGuideSession } from "../cms/guideSession"
 import type { AdvisorId } from "../cms/hermes"
 import { hermesHandoffGreeting, hermesHandoffNotice, hermesReconnectingReply } from "../cms/hermes"
 import { flattenKnowledge, localGuideAnswer } from "../cms/knowledge"
@@ -19,6 +21,9 @@ type GuidePayload = {
   hermesReady?: boolean
   takenOver?: boolean
   reconnecting?: boolean
+  resumed?: boolean
+  visitorId?: string
+  session?: GuideSession
 }
 type GuideTurn = {
   reply: string | null
@@ -68,16 +73,7 @@ function guideEndpoint() {
 }
 
 function visitorId() {
-  const key = "ash-visitor-id"
-  try {
-    const existing = window.localStorage.getItem(key)
-    if (existing) return existing
-    const next = `vis-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-    window.localStorage.setItem(key, next)
-    return next
-  } catch {
-    return ""
-  }
+  return readVisitorId()
 }
 
 function IconClose() {
@@ -141,6 +137,9 @@ export function SiteGuide() {
   const dirtyRef = useRef(false)
   const greetedRef = useRef(false)
   const advisorRef = useRef<AdvisorId>("lin")
+  const hydratedRef = useRef(false)
+  const handoffIndexRef = useRef<number | null>(null)
+  const takenOverRef = useRef(false)
 
   const sleep = (ms: number) =>
     new Promise<void>((resolve) => {
@@ -160,9 +159,40 @@ export function SiteGuide() {
     }
   }, [])
 
+  const persistSession = (openState = open) => {
+    if (!hydratedRef.current || !turnsRef.current.length) return
+    saveGuideSession({
+      visitorId: visitorId(),
+      turns: turnsRef.current,
+      advisor: advisorRef.current,
+      lang,
+      handoffIndex: handoffIndexRef.current,
+      takenOver: takenOverRef.current,
+      open: openState,
+      updatedAt: new Date().toISOString(),
+    })
+  }
+
+  const applySession = (session: GuideSession, extra?: { open?: boolean }) => {
+    turnsRef.current = session.turns
+    setTurns(session.turns)
+    advisorRef.current = session.advisor
+    setAdvisor(session.advisor)
+    setLang(session.lang)
+    handoffIndexRef.current = session.handoffIndex
+    setHandoffIndex(session.handoffIndex)
+    takenOverRef.current = session.takenOver
+    setTakenOver(session.takenOver)
+    setStage("live")
+    greetedRef.current = true
+    if (session.visitorId) rememberVisitorId(session.visitorId)
+    if (extra?.open || session.open) setOpen(true)
+  }
+
   const appendTurn = (turn: ChatTurn) => {
     turnsRef.current = [...turnsRef.current, turn]
     setTurns(turnsRef.current)
+    persistSession()
   }
 
   const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -189,7 +219,14 @@ export function SiteGuide() {
       advisorRef.current = "hermes"
       setAdvisor("hermes")
     }
-    if (payload.takenOver) setTakenOver(true)
+    if (payload.takenOver) {
+      takenOverRef.current = true
+      setTakenOver(true)
+    }
+    if (payload.visitorId) rememberVisitorId(payload.visitorId)
+    if (payload.session?.turns.length && payload.session.turns.length > turnsRef.current.length) {
+      applySession(payload.session)
+    }
     const reconnecting =
       payload.reconnecting === true ||
       (advisorRef.current === "hermes" && payload.source === "local" && payload.hermesReady !== false && !payload.takenOver)
@@ -217,6 +254,8 @@ export function SiteGuide() {
           advisor: extra?.escalate ? "hermes" : advisorRef.current,
           escalate: extra?.escalate === true,
           visitorId: visitorId(),
+          handoffIndex: handoffIndexRef.current,
+          takenOver: takenOverRef.current,
         }),
       })
       const text = await response.text()
@@ -292,6 +331,7 @@ export function SiteGuide() {
     if (advisorRef.current === "hermes" || stage !== "live") return
     advisorRef.current = "hermes"
     setAdvisor("hermes")
+    handoffIndexRef.current = turnsRef.current.length
     setHandoffIndex(turnsRef.current.length)
     setStage("escalating")
     inputRef.current?.focus()
@@ -334,14 +374,18 @@ export function SiteGuide() {
     })()
   }
 
-  const fetchGreeting = async (): Promise<{ text: string; lang: VisitorLang }> => {
+  const fetchGreeting = async (): Promise<{ text: string; lang: VisitorLang; session?: GuideSession }> => {
     try {
       const response = await fetch(guideEndpoint(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ greet: true }),
+        body: JSON.stringify({ greet: true, visitorId: visitorId() }),
       })
-      const payload = (await response.json()) as { reply?: string; lang?: string }
+      const payload = (await response.json()) as GuidePayload
+      if (payload.visitorId) rememberVisitorId(payload.visitorId)
+      if (payload.session && payload.session.turns.length) {
+        return { text: "", lang: payload.session.lang, session: payload.session }
+      }
       return {
         text: payload.reply?.trim() || (payload.lang === "en" ? buildGreetingEn(null) : buildGreeting(null)),
         lang: payload.lang === "en" ? "en" : "zh",
@@ -355,7 +399,19 @@ export function SiteGuide() {
     }
   }
 
-  // First open: play the "connecting you to an advisor" sequence, then greet.
+  useEffect(() => {
+    const local = loadGuideSession()
+    if (local?.turns.length) applySession(local, { open: local.open })
+    hydratedRef.current = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    persistSession(open)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turns, advisor, lang, handoffIndex, takenOver, open])
+
+  // First open: restore the same visitor's chat, or play the connecting sequence.
   useEffect(() => {
     if (!open || greetedRef.current) return
     let cancelled = false
@@ -367,6 +423,11 @@ export function SiteGuide() {
       const elapsed = Date.now() - startedAt
       if (elapsed < minWait) await sleep(minWait - elapsed)
       if (cancelled || !mounted.current) return
+      if (greeting.session?.turns.length) {
+        applySession(greeting.session)
+        persistSession(true)
+        return
+      }
       greetedRef.current = true
       setLang(greeting.lang)
       setStage("live")

@@ -49,6 +49,8 @@ function localGuide(): Plugin {
         currentId?: string
       }
       ledger: { goneIds: string[]; goneLeadIds: string[]; goneVisitorIds: string[]; goneContacts: string[]; updatedAt: string }
+      sessions: Record<string, unknown>
+      ipVisitors: Record<string, { visitorId: string; at: string }>
     } = {
       cases: [],
       coach: [],
@@ -58,6 +60,8 @@ function localGuide(): Plugin {
       images: {},
       inquiry: { targets: [], findings: [], job: { status: "idle", brief: "", updatedAt: "" }, tasks: [] },
       ledger: { goneIds: [], goneLeadIds: [], goneVisitorIds: [], goneContacts: [], updatedAt: "" },
+      sessions: {},
+      ipVisitors: {},
     }
     const staffOk = (req: IncomingMessage) => {
       const user = env.ADMIN_USER || "admin"
@@ -416,6 +420,8 @@ function localGuide(): Plugin {
                 advisor?: string
                 hermes?: string
                 visitorId?: string
+                handoffIndex?: number | null
+                takenOver?: boolean
               })
             : {}
           if (body.hermes === "status") {
@@ -424,13 +430,34 @@ function localGuide(): Plugin {
             res.end(JSON.stringify({ ready: hermesMod.hermesReady(env) }))
             return
           }
+          const sessionMod = await server.ssrLoadModule("/src/cms/guideSession.ts")
+          const persistLocalChat = (visitor: string, messages: unknown, reply: string, advisor: string, lang: string, extra?: { handoffIndex?: unknown; takenOver?: unknown }) => {
+            if (!visitor) return
+            const session = sessionMod.sessionAfterReply(messages, reply, {
+              visitorId: visitor,
+              advisor: advisor === "hermes" ? "hermes" : "lin",
+              lang: lang === "en" ? "en" : "zh",
+              handoffIndex: extra?.handoffIndex,
+              takenOver: extra?.takenOver,
+            })
+            if (session) localDesk.sessions[visitor] = session
+          }
           if (body.greet === true) {
+            const visitorId = typeof body.visitorId === "string" ? body.visitorId.trim() : ""
+            const stored = visitorId ? sessionMod.hydrateGuideSession(localDesk.sessions[visitorId], visitorId) : null
+            if (stored) {
+              res.statusCode = 200
+              res.setHeader("Content-Type", "application/json")
+              res.end(JSON.stringify({ reply: "", source: "resume", lang: stored.lang, hermesReady: hermesMod.hermesReady(env), resumed: true, visitorId: stored.visitorId, session: stored }))
+              return
+            }
             const accept = String(req.headers["accept-language"] || "")
             const lang = accept.toLowerCase().startsWith("zh") ? "zh" : accept ? "en" : "zh"
             const reply = lang === "en" ? greetingMod.buildGreetingEn(null) : greetingMod.buildGreeting(null)
+            persistLocalChat(visitorId, [], reply, "lin", lang)
             res.statusCode = 200
             res.setHeader("Content-Type", "application/json")
-            res.end(JSON.stringify({ reply, source: "greeting", lang, hermesReady: hermesMod.hermesReady(env) }))
+            res.end(JSON.stringify({ reply, source: "greeting", lang, hermesReady: hermesMod.hermesReady(env), visitorId }))
             return
           }
           const messages = Array.isArray(body.messages) ? body.messages : []
@@ -443,6 +470,9 @@ function localGuide(): Plugin {
             const turnLang = greetingMod.replyLang("zh", lastUser?.content)
             res.statusCode = 200
             res.setHeader("Content-Type", "application/json")
+            persistLocalChat(visitorId, messages, deskMod.humanTakenOverReply(turnLang), "hermes", turnLang, {
+              takenOver: true,
+            })
             res.end(
               JSON.stringify({
                 reply: deskMod.humanTakenOverReply(turnLang),
@@ -451,6 +481,7 @@ function localGuide(): Plugin {
                 lang: turnLang,
                 takenOver: true,
                 hermesReady: hermesMod.hermesReady(env),
+                visitorId,
               }),
             )
             return
@@ -527,6 +558,10 @@ function localGuide(): Plugin {
               : seeded
             localDesk.cases = withTicket.cases
           }
+          persistLocalChat(visitorId, messages, result.reply, result.advisor, turnLang, {
+            handoffIndex: body.handoffIndex,
+            takenOver: body.takenOver,
+          })
           res.statusCode = 200
           res.setHeader("Content-Type", "application/json")
           res.end(
@@ -538,6 +573,7 @@ function localGuide(): Plugin {
               advisor: result.advisor,
               hermesReady: hermesMod.hermesReady(env),
               reconnecting: result.reconnecting === true,
+              visitorId,
             }),
           )
         } catch {

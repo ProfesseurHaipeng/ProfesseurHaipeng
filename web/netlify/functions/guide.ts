@@ -10,7 +10,17 @@ import {
   visitorLang,
 } from "../../src/cms/greeting"
 import { resolveGuideReply } from "../../src/cms/guideRuntime"
-import { readHermesCases, readHermesLedger, readHermesMemory, writeHermesCase } from "../../src/cms/hermesBlobs"
+import {
+  readGuideChatSession,
+  readGuideIpVisitor,
+  readHermesCases,
+  readHermesLedger,
+  readHermesMemory,
+  writeGuideChatSession,
+  writeGuideIpVisitor,
+  writeHermesCase,
+} from "../../src/cms/hermesBlobs"
+import { hashVisitorSignal, pickGuideVisitor, sessionAfterReply } from "../../src/cms/guideSession"
 import { advisorConversationIdentity } from "../../src/cms/advisorIdentity"
 import { hermesHandoffHint, hermesReady, type AdvisorId } from "../../src/cms/hermes"
 import {
@@ -57,6 +67,48 @@ function advisorSignatureHeaders(id: string, secret: string) {
     "X-Advisor-Case-Signature": signature,
     "X-Case-Signature": signature,
   }
+}
+
+function requestIp(req: Request, context: Context) {
+  const fromContext = typeof (context as { ip?: string }).ip === "string" ? (context as { ip?: string }).ip : ""
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || ""
+  const nf = req.headers.get("x-nf-client-connection-ip") || ""
+  return (fromContext || nf || forwarded).trim()
+}
+
+async function resolveVisitor(req: Request, context: Context, clientVisitorId: string) {
+  const ipHash = hashVisitorSignal(requestIp(req, context))
+  const ipBind = ipHash ? await readGuideIpVisitor(ipHash) : null
+  const picked = pickGuideVisitor({
+    clientVisitorId,
+    ipVisitorId: ipBind?.visitorId,
+    ipAt: ipBind?.at,
+  })
+  return { ...picked, ipHash }
+}
+
+async function persistVisitorChat(options: {
+  req: Request
+  context: Context
+  visitorId: string
+  ipHash: string
+  messages: unknown
+  reply: string
+  advisor: AdvisorId
+  lang: "zh" | "en"
+  handoffIndex?: unknown
+  takenOver?: unknown
+}) {
+  if (!options.visitorId) return
+  const session = sessionAfterReply(options.messages, options.reply, {
+    visitorId: options.visitorId,
+    advisor: options.advisor,
+    lang: options.lang,
+    handoffIndex: options.handoffIndex,
+    takenOver: options.takenOver,
+  })
+  if (session) await writeGuideChatSession(session)
+  if (options.ipHash) await writeGuideIpVisitor(options.ipHash, options.visitorId)
 }
 
 function envBag() {
@@ -139,6 +191,8 @@ export default async (req: Request, context: Context) => {
     advisor?: unknown
     hermes?: unknown
     visitorId?: unknown
+    handoffIndex?: unknown
+    takenOver?: unknown
   } = {}
   try {
     body = (await req.json()) as {
@@ -148,6 +202,8 @@ export default async (req: Request, context: Context) => {
       advisor?: unknown
       hermes?: unknown
       visitorId?: unknown
+      handoffIndex?: unknown
+      takenOver?: unknown
     }
   } catch {
     return json({ error: "bad-json" }, 400)
@@ -158,18 +214,53 @@ export default async (req: Request, context: Context) => {
   }
 
   if (body.greet === true) {
+    const clientVisitorId = typeof body.visitorId === "string" ? body.visitorId.trim().slice(0, 80) : ""
+    const resolved = await resolveVisitor(req, context, clientVisitorId)
+    const stored = resolved.visitorId ? await readGuideChatSession(resolved.visitorId) : null
+    if (stored) {
+      return json({
+        reply: "",
+        source: "resume",
+        lang: stored.lang,
+        hermesReady: hermesReady(envBag()),
+        resumed: true,
+        visitorId: stored.visitorId,
+        session: stored,
+      })
+    }
     const geo = context.geo
     const lang = visitorLang(geo?.country?.code)
     const reply =
       lang === "en"
         ? buildGreetingEn(englishPlace(geo?.country?.code))
         : buildGreeting(chinesePlace(geo?.country?.code, geo?.subdivision?.name))
-    return json({ reply, source: "greeting", lang, hermesReady: hermesReady(envBag()) })
+    const visitorId = resolved.visitorId || clientVisitorId
+    if (visitorId) {
+      await persistVisitorChat({
+        req,
+        context,
+        visitorId,
+        ipHash: resolved.ipHash,
+        messages: [],
+        reply,
+        advisor: "lin",
+        lang,
+      })
+    }
+    return json({
+      reply,
+      source: "greeting",
+      lang,
+      hermesReady: hermesReady(envBag()),
+      visitorId,
+    })
   }
 
   const history = asMessages(body.messages)
   const escalate = body.escalate === true
-  const visitorId = typeof body.visitorId === "string" ? body.visitorId.trim().slice(0, 80) : ""
+  const clientVisitorId = typeof body.visitorId === "string" ? body.visitorId.trim().slice(0, 80) : ""
+  const resolved = await resolveVisitor(req, context, clientVisitorId)
+  const visitorId = resolved.visitorId || clientVisitorId
   let advisor: AdvisorId = body.advisor === "hermes" || escalate ? "hermes" : "lin"
   if (!escalate && !history.some((item) => item.role === "user")) return json({ error: "empty" }, 400)
 
@@ -178,6 +269,18 @@ export default async (req: Request, context: Context) => {
     const geoLang = visitorLang(context.geo?.country?.code)
     const lastUser = [...history].reverse().find((item) => item.role === "user")
     const lang = replyLang(geoLang, lastUser?.content)
+    await persistVisitorChat({
+      req,
+      context,
+      visitorId,
+      ipHash: resolved.ipHash,
+      messages: body.messages,
+      reply: humanTakenOverReply(lang),
+      advisor: "hermes",
+      lang,
+      handoffIndex: body.handoffIndex,
+      takenOver: true,
+    })
     return json({
       reply: humanTakenOverReply(lang),
       source: "local",
@@ -186,6 +289,7 @@ export default async (req: Request, context: Context) => {
       advisor: "hermes",
       hermesReady: hermesReady(envBag()),
       takenOver: true,
+      visitorId,
     })
   }
 
@@ -247,6 +351,18 @@ export default async (req: Request, context: Context) => {
       : seeded
     if (withTicket.case) await writeHermesCase(withTicket.case)
   }
+  await persistVisitorChat({
+    req,
+    context,
+    visitorId,
+    ipHash: resolved.ipHash,
+    messages: body.messages,
+    reply: result.reply,
+    advisor: result.advisor,
+    lang,
+    handoffIndex: body.handoffIndex,
+    takenOver: body.takenOver,
+  })
   return json({
     reply: result.reply,
     source: result.source,
@@ -255,6 +371,7 @@ export default async (req: Request, context: Context) => {
     advisor: result.advisor,
     hermesReady: hermesReady(envBag()),
     reconnecting: result.reconnecting === true,
+    visitorId,
   })
 }
 
