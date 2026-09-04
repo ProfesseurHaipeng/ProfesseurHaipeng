@@ -1,0 +1,117 @@
+[build]
+  base = "web"
+  command = "npm run build"
+  publish = "web/dist"
+
+[functions]
+  directory = "web/netlify/functions"
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/content"
+  to = "/.netlify/functions/content"
+  status = 200
+
+[[redirects]]
+  from = "/api/guide"
+  to = "/.netlify/functions/guide"
+  status = 200
+
+[[redirects]]
+  from = "/api/leads"
+  to = "/.netlify/functions/leads"
+  status = 200
+
+[[redirects]]
+  from = "/api/hermes-desk"
+  to = "/.netlify/functions/hermes-desk"
+  status = 200
+
+[[redirects]]
+  from = "/resource"
+  to = "/project"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/resource/"
+  to = "/project"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/supply"
+  to = "/products"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/supply/"
+  to = "/products"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/testing"
+  to = "/products"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/testing/"
+  to = "/products"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/market"
+  to = "/use"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/market/"
+  to = "/use"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/solutions"
+  to = "/use"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/solutions/"
+  to = "/use"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/videos"
+  to = "/cases"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/videos/"
+  to = "/cases"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[context.production.environment]
+  # 部署后在 Netlify UI 里覆盖为正式口令
+  # ADMIN_PASSWORD = "change-me"
+  # MINIMAX_API_KEY = ""
+  # MINIMAX_API_BASE = "https://api.minimax.io/v1"
+  # MINIMAX_MODEL = "MiniMax-Text-01"
+
+[[headers]]
+  for = "/admin/*"
+  [headers.values]
+    Cache-Control = "no-store"

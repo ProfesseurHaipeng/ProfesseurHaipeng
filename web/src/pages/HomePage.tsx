@@ -1,0 +1,185 @@
+import { Link } from "react-router-dom"
+import { LocationMap } from "../components/LocationMap"
+import { MediaFrame } from "../components/MediaFrame"
+import { SplitPanel } from "../components/SplitPanel"
+import { TopoField } from "../components/TopoField"
+import { useSiteContent } from "../cms/ContentContext"
+import { withBase } from "../lib/asset"
+
+export function HomePage() {
+  const { content } = useSiteContent()
+  const { hero, overview, products, solutions, cases, contact, settings } = content
+  const crops = solutions.crops.split("·").map((item) => item.trim()).filter(Boolean)
+  const cropPhotos = solutions.schemes.filter((item) => ["rice", "banana", "tea"].includes(item.id))
+
+  return (
+    <article className="home">
+      <section className="hero">
+        <div className="hero__photo">
+          {hero.image.src ? <img src={withBase(hero.image.src)} alt={hero.image.alt} /> : <TopoField />}
+        </div>
+        <div className="hero__copy">
+          <p className="eyebrow">{hero.kicker}</p>
+          <h1>{hero.title}</h1>
+          <p className="lede">{hero.subtitle}</p>
+          {hero.points[0] ? <p className="hero__tagline">{hero.points[0]}</p> : null}
+          {hero.points[1] ? <p className="hero__audience">{hero.points[1]}</p> : null}
+          <div className="btn-row">
+            <Link className="btn" to={hero.primaryCta.href}>
+              {hero.primaryCta.label}
+            </Link>
+            <Link className="btn btn--ghost" to={hero.secondaryCta.href}>
+              {hero.secondaryCta.label}
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="stats-band" aria-label="核心数字">
+        <div className="wrap stats">
+          {products.stats.map((item) => (
+            <div key={item.id} className="stat">
+              <strong>{item.value}</strong>
+              <span>{item.label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="block">
+        <div className="wrap split-panel">
+          <LocationMap />
+          <div className="split-panel__copy">
+            <p className="eyebrow">资源位置</p>
+            <h2>吕宋岛中西部</h2>
+            <p className="lede">
+              皮纳图博位于邦板牙省、三描礼士省与苏比克湾自由港区交界。矿带集中，可规模开采，距苏比克湾约 80 公里。谷歌地图标出火山实图位置，可放大到火山口与苏比克湾。
+            </p>
+            <Link className="text-link" to="/project">
+              看项目与资源 →
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="block">
+        <div className="wrap">
+          <header className="block-head">
+            <p className="eyebrow">项目</p>
+            <h2>{overview.title}</h2>
+            <p className="lede">{overview.intro[0]}</p>
+          </header>
+          <div className="tile-grid tile-grid--index">
+            {overview.pillars.map((item) => (
+              <article key={item.id} className="tile">
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </article>
+            ))}
+          </div>
+          <SplitPanel image={overview.craterImage} caption={overview.craterImage.alt}>
+            <p className="eyebrow">现场</p>
+            <h2>火山口与矿带同在一处</h2>
+            <p>{overview.intro[1]}</p>
+            <Link className="text-link" to="/project">
+              看战略与矿物 →
+            </Link>
+          </SplitPanel>
+        </div>
+      </section>
+
+      <section className="block band">
+        <div className="wrap">
+          <header className="section-head">
+            <div className="block-head">
+              <p className="eyebrow">产品</p>
+              <h2>{products.directionsTitle}</h2>
+            </div>
+            <Link className="text-link" to="/products">
+              进一步了解 →
+            </Link>
+          </header>
+          <div className="tile-grid tile-grid--index">
+            {products.directions.slice(0, 4).map((item) => (
+              <Link key={item.id} className="tile tile--link" to="/products?tab=use">
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="block">
+        <div className="wrap">
+          <header className="block-head">
+            <p className="eyebrow">应用</p>
+            <h2>先选作物</h2>
+            <p className="lede">水稻、蕉果、茶柑和南方红壤是当前主谈方向。</p>
+          </header>
+          <ul className="chip-row">
+            {crops.map((crop) => (
+              <li key={crop}>
+                <Link to={`/use?crop=${encodeURIComponent(crop)}`}>{crop}</Link>
+              </li>
+            ))}
+          </ul>
+          <div className="photo-strip">
+            {cropPhotos.map((item) => (
+              <Link key={item.id} className="photo-strip__link" to={`/use?crop=${encodeURIComponent(item.crop)}`}>
+                <MediaFrame image={item.image} caption={item.crop} ratio="portrait" />
+              </Link>
+            ))}
+          </div>
+          <p>
+            <Link className="text-link" to="/use">
+              看全部方案 →
+            </Link>
+          </p>
+        </div>
+      </section>
+
+      <section className="block band">
+        <div className="wrap">
+          <header className="section-head">
+            <div className="block-head">
+              <p className="eyebrow">案例</p>
+              <h2>两则案例</h2>
+            </div>
+            <Link className="text-link" to="/cases">
+              进一步了解 →
+            </Link>
+          </header>
+          <div className="case-grid">
+            {cases.items.slice(0, 2).map((item) => (
+              <Link key={item.id} className="case-card tile--link" to="/cases">
+                <MediaFrame image={item.image} ratio="portrait" />
+                <h3>{item.title}</h3>
+                <p>{item.intro}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="cta">
+        <div className="wrap cta__grid">
+          <div>
+            <p className="eyebrow">下一步</p>
+            <h2>拿样品谈，或留下作物和吨位</h2>
+            <p>{contact.lead}</p>
+            <p className="fine">{settings.audience}</p>
+          </div>
+          <div className="btn-row">
+            <Link className="btn" to="/contact">
+              谈合作
+            </Link>
+            <Link className="btn btn--ghost" to="/project">
+              先看项目
+            </Link>
+          </div>
+        </div>
+      </section>
+    </article>
+  )
+}

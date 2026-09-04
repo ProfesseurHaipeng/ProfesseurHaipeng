@@ -1,0 +1,15 @@
+{
+  "name": "pinatubo-ash",
+  "compatibility_date": "2026-08-31",
+  "main": "worker.ts",
+  "assets": {
+    "directory": "./web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/guide"]
+  },
+  "vars": {
+    "MINIMAX_API_BASE": "https://api.minimaxi.com/v1",
+    "MINIMAX_MODEL": "MiniMax-Text-01"
+  }
+}
