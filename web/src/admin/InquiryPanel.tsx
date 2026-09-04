@@ -249,7 +249,7 @@ function TaskEditor({
     <section className="inq-page">
       <header className="inq-page__head">
         <button type="button" className="inq-page__back" onClick={onBack}>
-          任务列表
+          返回
         </button>
         <div className="inq-page__title">
           <h2>{name || "询单任务"}</h2>
@@ -262,6 +262,44 @@ function TaskEditor({
             ) : null}
           </p>
         </div>
+        <div className="inq-page__ops">
+          <button
+            type="button"
+            className="inq-save"
+            disabled={locked || starting}
+            onClick={() => {
+              void persist(
+                {
+                  name: name.trim() || task.name,
+                  instruction,
+                  targets: targets.map((item) => item.label),
+                  quota,
+                  schedule,
+                  limitHours: limitHours || 0,
+                  enabled,
+                },
+                "草稿已保存",
+              )
+            }}
+          >
+            保存草稿
+          </button>
+          <button
+            type="button"
+            className="inq-go"
+            disabled={starting || locked || !canStart}
+            onClick={() => {
+              setStarting(true)
+              setFlash("正在交给 Linda…")
+              void onStart()
+                .then(() => setFlash("已交给 Linda"))
+                .catch(() => setFlash("没交出去，再点一次"))
+                .finally(() => setStarting(false))
+            }}
+          >
+            {starting ? "正在交给 Linda…" : "开始寻找"}
+          </button>
+        </div>
       </header>
       {flash ? (
         <p className="inq-flash" role="status">
@@ -271,10 +309,10 @@ function TaskEditor({
 
       <div className="inq-page__stack">
           <section className="inq-box">
-            <h3 className="inq-box__title">条件</h3>
+            <h3 className="inq-box__title">任务设置</h3>
 
             <label className="inq-field">
-              <span>名称</span>
+              <span>任务名称</span>
               <input
                 value={name}
                 maxLength={80}
@@ -287,7 +325,7 @@ function TaskEditor({
             </label>
 
             <label className="inq-field">
-              <span>指令</span>
+              <span>补充指令</span>
               <textarea
                 rows={2}
                 value={instruction}
@@ -346,8 +384,8 @@ function TaskEditor({
             </div>
 
             <div className="inq-field">
-              <span>找几家</span>
-              <div className="inq-seg" role="group" aria-label="找几家">
+              <span>目标数量</span>
+              <div className="inq-seg" role="group" aria-label="目标数量">
                 {FIND_QUOTAS.map((item) => (
                   <button
                     key={item}
@@ -367,8 +405,8 @@ function TaskEditor({
             </div>
 
             <div className="inq-field">
-              <span>限时</span>
-              <div className="inq-seg" role="group" aria-label="限时">
+              <span>时限</span>
+              <div className="inq-seg" role="group" aria-label="时限">
                 <button
                   type="button"
                   className={!limitHours ? "is-on" : ""}
@@ -400,7 +438,7 @@ function TaskEditor({
             </div>
 
             <div className="inq-field">
-              <span>节奏</span>
+              <span>执行节奏</span>
               <div className="inq-inline">
                 <select
                   value={schedule.kind}
@@ -456,21 +494,6 @@ function TaskEditor({
             </div>
 
             <div className="inq-box__foot">
-              <button
-                type="button"
-                className="inq-go"
-                disabled={starting || locked || !canStart}
-                onClick={() => {
-                  setStarting(true)
-                  setFlash("正在交给 Linda…")
-                  void onStart()
-                    .then(() => setFlash("已交给 Linda"))
-                    .catch(() => setFlash("没交出去，再点一次"))
-                    .finally(() => setStarting(false))
-                }}
-              >
-                {starting ? "正在交给 Linda…" : "开始寻找"}
-              </button>
               {!canStart && task.status === "cancelled" ? <p className="inq-foot">已取消的任务请另建一轮。</p> : null}
               {!canStart && task.status !== "cancelled" ? <p className="inq-foot">先选定一种需求，或写一条指令。</p> : null}
             </div>
@@ -478,7 +501,7 @@ function TaskEditor({
 
           <section className="inq-box">
             <div className="inq-box__head">
-              <h3 className="inq-box__title">进度</h3>
+              <h3 className="inq-box__title">执行进度</h3>
               <span>
                 {inquiry.findings.length} / {quota}
               </span>
@@ -496,7 +519,10 @@ function TaskEditor({
               })}
             </ol>
             {inquiry.findings.length === 0 ? (
-              <p className="inq-empty">尚无。找到带真实来源的厂商后写在这里。</p>
+              <div className="inq-wait">
+                <p className="inq-empty">等待开始</p>
+                <p>找到带真实来源的厂商后写在这里。</p>
+              </div>
             ) : (
               <ul className="inq-results">
                 {inquiry.findings.map((item) => (
