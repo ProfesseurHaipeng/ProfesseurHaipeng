@@ -236,13 +236,43 @@ function signedGuideMessages(history: GuideMessage[], extraSystem?: string) {
   return [...head, ...prepared.slice(head.length).slice(-6)]
 }
 
+function lastTopicUser(history: GuideMessage[], lang: "zh" | "en") {
+  const users = history.filter((item) => item.role === "user" && item.content.trim())
+  const last = users.at(-1)?.content.trim() || ""
+  if (users.length > 1 && /转(高级)?顾问|转接|handoff|senior advisor/i.test(last)) {
+    return users.at(-2)!.content.trim()
+  }
+  return last || inScopeTakeover(lang)
+}
+
+function publicKnownFacts(extraSystem?: string) {
+  return (extraSystem || "")
+    .split(/\n+/)
+    .filter((line) => /长期记忆|称呼|机构|工厂|地区|线索|下一步|进度|跟进|FOB|报价|作物|吨/.test(line))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 300)
+}
+
 async function resolveHermesViaSignedGuide(
   history: GuideMessage[],
   lang: "zh" | "en",
   options?: { escalate?: boolean; visitorId?: string; timeoutMs?: number },
   extraSystem?: string,
 ) {
-  const messages = signedGuideMessages(hermesHistoryForGateway(history, lang, options?.escalate), extraSystem)
+  const lastUser = lastTopicUser(history, lang)
+  const known = publicKnownFacts(extraSystem)
+  const alreadyCompact = history.length <= 2 && /皮纳图博火山灰/.test(lastUser)
+  const messages =
+    options?.escalate === true && !alreadyCompact
+      ? [
+          {
+            role: "user" as const,
+            content: `皮纳图博火山灰项目。${known ? `已知：${known}。` : ""}客户刚说：${lastUser.slice(0, 400)}。请接手后用短段中文接着谈作物、吨位或供应。`,
+          },
+        ]
+      : signedGuideMessages(hermesHistoryForGateway(history, lang, options?.escalate), extraSystem)
   const response = await fetch(SIGNED_GUIDE_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -272,7 +302,18 @@ export async function resolveCoachViaSignedGuide(user: string, extraSystem?: str
       content: `皮纳图博火山灰项目。${known ? `已知：${known}。` : ""}同事要求：${instruction}。请用短段中文说明你怎么跟进。`,
     },
   ]
-  return resolveHermesViaSignedGuide(messages, "zh", { escalate: true, timeoutMs: 14_000 })
+  const first = await resolveHermesViaSignedGuide(messages, "zh", { escalate: true, timeoutMs: 16_000 })
+  if (first) return first
+  return resolveHermesViaSignedGuide(
+    [
+      {
+        role: "user",
+        content: `皮纳图博火山灰，水稻，吨位。同事说${instruction}。请回复你会怎么跟。`,
+      },
+    ],
+    "zh",
+    { escalate: true, timeoutMs: 12_000 },
+  )
 }
 
 export async function resolveHermesReply(
@@ -296,7 +337,12 @@ export async function resolveHermesReply(
   if (!hermes) {
     if (fallbackOn) {
       try {
-        const signed = await resolveHermesViaSignedGuide(history, lang, options, extraSystem)
+        const signed = await resolveHermesViaSignedGuide(
+          history,
+          lang,
+          { ...options, timeoutMs: options?.timeoutMs ?? 20_000 },
+          extraSystem,
+        )
         if (signed) return signed
       } catch (error) {
         console.error("ash-guide senior advisor signed-guide", error)

@@ -229,6 +229,38 @@ describe("resolveHermesReply", () => {
     }
   })
 
+  it("hands off the last real visitor question instead of the transfer phrase", async () => {
+    const original = globalThis.fetch
+    let body: Record<string, unknown> | null = null
+    globalThis.fetch = async (_input, init) => {
+      body = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>
+      return new Response(JSON.stringify({ source: "hermes", reply: "您好，我是 Linda，香蕉园可以先看钾钙镁。" }), { status: 200 })
+    }
+    try {
+      const result = await resolveHermesReply(
+        [
+          { role: "user", content: "香蕉园能不能用火山灰？" },
+          { role: "assistant", content: "可以先看土壤。" },
+          { role: "user", content: "转高级顾问" },
+        ],
+        flattenKnowledge(defaultContent),
+        { SIGNED_GUIDE_FALLBACK: "1" },
+        "客户要求转接高级顾问。你现在是 Linda。\n【长期记忆（与后台共用）】\n本周报价以FOB马尼拉为准。",
+        "zh",
+        { escalate: true },
+      )
+      expect(result.source).toBe("hermes")
+      const messages = body?.messages as { content?: string }[]
+      const packed = messages?.map((item) => item.content).join("\n") || ""
+      expect(packed).toContain("香蕉园")
+      expect(packed).toContain("FOB马尼拉")
+      expect(packed).not.toContain("你现在是 Linda")
+      expect(packed).not.toMatch(/客户刚说：转高级顾问/)
+    } finally {
+      globalThis.fetch = original
+    }
+  })
+
   it("sends workbench backup turns as an on-topic Linda handoff", async () => {
     const original = globalThis.fetch
     let body: Record<string, unknown> | null = null

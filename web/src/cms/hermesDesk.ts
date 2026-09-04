@@ -1562,14 +1562,7 @@ export async function resolveCoachReply(
   const applyHint = (next: HermesMemory | undefined) => mergeSharedMemoryHint(next, staffSharedMemoryHint(lastStaff))
   const fallbackOn = signedGuideEnabled(env)
   const viaSigned = async () => {
-    const extra = [
-      memory?.shared?.trim() ? `【长期记忆（与前台共用）】\n${memory.shared.trim()}` : "",
-      memory?.desk?.trim() ? `【工作台笔记（仅后台）】\n${memory.desk.trim()}` : "",
-      inquiryCoachExtra(currentInquiry),
-    ]
-      .filter(Boolean)
-      .join("\n\n")
-    const signed = await resolveCoachViaSignedGuide(lastStaff || "请回复同事", extra)
+    const signed = await resolveCoachViaSignedGuide(lastStaff || "请回复同事", memory?.shared?.trim() || "")
     if (signed?.reply && !isAdvisorOutageJoke(signed.reply)) {
       return {
         reply: signed.reply,
