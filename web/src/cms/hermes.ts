@@ -242,13 +242,16 @@ export async function resolveHermesReply(
       ),
       {
         hosts: "exact",
-        timeoutMs: options?.timeoutMs ?? 8_000,
+        timeoutMs: options?.timeoutMs ?? (env.ADVISOR_CASE_ID_SECRET || env.SIGNED_GUIDE_FALLBACK === "1" ? 3_500 : 8_000),
         conversationId: options?.conversationId || env.ADVISOR_CASE_ID_SECRET?.trim(),
-        conversationIds: [
-          ...(options?.conversationIds || []),
-          options?.conversationId,
-          env.ADVISOR_CASE_ID_SECRET?.trim(),
-        ].filter((item): item is string => Boolean(item)),
+        conversationIds:
+          env.ADVISOR_CASE_ID_SECRET || env.SIGNED_GUIDE_FALLBACK === "1"
+            ? [options?.conversationId || env.ADVISOR_CASE_ID_SECRET?.trim()].filter((item): item is string => Boolean(item))
+            : [
+                ...(options?.conversationIds || []),
+                options?.conversationId,
+                env.ADVISOR_CASE_ID_SECRET?.trim(),
+              ].filter((item): item is string => Boolean(item)),
         identityHeaders: options?.identityHeaders,
         lean: true,
       },
