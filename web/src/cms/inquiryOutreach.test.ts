@@ -43,6 +43,7 @@ describe("inquiry outreach runner", () => {
     expect(emails).toEqual(["sales@lvtian-agri.com"])
     expect(isPublicBusinessEmail("noreply@factory.cn")).toBe(false)
     expect(isPublicBusinessEmail("sales@lvtian-agri.com")).toBe(true)
+    expect(isPublicBusinessEmail("954970ecd1ec4429ba733caf5feafd54@glitchtip.7gra.us")).toBe(false)
   })
 
   it("parses search result links and composes a product promo mail", () => {

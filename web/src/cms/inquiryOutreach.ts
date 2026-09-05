@@ -92,6 +92,9 @@ const BLOCKED_HOST = new Set([
   "instagram.com",
   "linkedin.com",
   "agentmail.to",
+  "glitchtip.com",
+  "bugsnag.com",
+  "rollbar.com",
 ])
 
 const JUNK_RESULT_HOST = new Set([
@@ -114,6 +117,8 @@ const JUNK_RESULT_HOST = new Set([
 
 const BLOCKED_LOCAL = /^(noreply|no-reply|donotreply|do-not-reply|mailer-daemon|postmaster|webmaster|abuse|privacy|legal|newsletter|news|image|img|static|assets|webpack|sentry|wix)$/i
 const PLACEHOLDER_LOCAL = /^(name|email|user|username|someone|foo|bar|sample|xxx|mailbox)$/i
+const HASH_LOCAL = /^[a-f0-9]{20,}$/i
+const TRACKER_HOST = /(^|\.)(glitchtip|sentry|bugsnag|rollbar)(\.|$)/i
 
 export function resolveSiteUrl(env: Record<string, string | undefined> = {}) {
   for (const raw of [env.PUBLIC_SITE_URL, env.SITE_URL]) {
@@ -286,8 +291,9 @@ export function isPublicBusinessEmail(value: string) {
   const local = email.slice(0, at)
   const host = email.slice(at + 1)
   if (!local || !host.includes(".") || host.startsWith(".") || host.endsWith(".")) return false
-  if (BLOCKED_LOCAL.test(local) || PLACEHOLDER_LOCAL.test(local)) return false
+  if (BLOCKED_LOCAL.test(local) || PLACEHOLDER_LOCAL.test(local) || HASH_LOCAL.test(local)) return false
   if (/\.(png|jpe?g|gif|webp|svg|css|js|woff2?)$/i.test(host)) return false
+  if (TRACKER_HOST.test(host)) return false
   const parts = host.split(".")
   const root = parts.slice(-2).join(".")
   if (BLOCKED_HOST.has(host) || BLOCKED_HOST.has(root)) return false
