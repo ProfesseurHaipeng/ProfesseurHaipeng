@@ -593,6 +593,9 @@ describe("staff inquiry seat titles and noise", () => {
     expect(created.case?.note).toBe("水稻怎么用火山灰?")
     const again = upsertFromVisit(created.cases, "vis-real", "转高级顾问", now)
     expect(again.case?.note).toBe("水稻怎么用火山灰?")
+    const named = upsertFromVisit([], "vis-wang", "我是王先生，江西水稻大概两百吨", now)
+    expect(named.case?.name).toBe("王先生")
+    expect(caseTitle(named.case!)).toBe("王先生")
   })
 
   it("sweeps leaked staff-guide tickets off the live board", () => {
@@ -620,5 +623,13 @@ describe("staff inquiry seat titles and noise", () => {
     expect(reply).toContain("王先生")
     expect(reply).not.toContain("不能透露")
     expect(reply).not.toContain("作物类型")
+    const mail = staffDeskLocalReply({
+      text: "给王先生起草一封邮件，说水稻两百吨我们先对检测指标",
+      cases: [sample({ name: "对话客户", note: "我是王先生，江西水稻大概两百吨" })],
+    })
+    expect(mail).toMatch(/起草|邮箱/)
+    expect(mail).toContain("王先生")
+    expect(mail).toMatch(/入队|草稿/)
+    expect(mail).not.toMatch(/假装已经发出/)
   })
 })

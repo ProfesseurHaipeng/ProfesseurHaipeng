@@ -156,6 +156,27 @@ export function usefulVisitNote(note: string) {
   return line
 }
 
+export function inferredVisitorName(note: string) {
+  const hit = usefulVisitNote(note).match(/我是([\u4e00-\u9fff]{2,4})/)
+  return hit?.[1] || ""
+}
+
+export function courtesyNames(text: string) {
+  const found: string[] = []
+  for (const title of ["先生", "经理", "女士"]) {
+    let from = 0
+    while (from < text.length) {
+      const index = text.indexOf(title, from)
+      if (index < 0) break
+      const before = [...text.slice(Math.max(0, index - 2), index)].filter((ch) => /[\u4e00-\u9fff]/.test(ch))
+      if (before.length) found.push(`${before.at(-1)}${title}`)
+      if (before.length > 1) found.push(`${before.slice(-2).join("")}${title}`)
+      from = index + title.length
+    }
+  }
+  return [...new Set(found)]
+}
+
 export function caseTitle(item: HermesCase) {
   const name = (item.name || "").trim()
   if (name && name !== "对话客户" && name !== "AI 对话客户") return name
@@ -1346,6 +1367,10 @@ export function upsertFromVisit(
         following: true,
         progress: existing.progress === "new" ? "talking" : existing.progress,
         note: keepNote || existing.note,
+        name:
+          existing.name && existing.name !== "对话客户" && existing.name !== "AI 对话客户"
+            ? existing.name
+            : inferredVisitorName(keepNote || existing.note) || existing.name,
       },
       now,
     )
@@ -1356,7 +1381,7 @@ export function upsertFromVisit(
     id: newHermesCaseId(),
     at: now,
     updatedAt: now,
-    name: "对话客户",
+    name: inferredVisitorName(keepNote) || "对话客户",
     org: "",
     ticketNo: newTicketNo(cases, now),
     contact: "",
@@ -1632,10 +1657,25 @@ export function staffDeskLocalReply(input: {
   const q = input.text.replace(/\s+/g, " ").trim()
   const live = input.cases.filter((item) => isLiveCase(item)).map(normalizeCase)
   const tasks = input.inquiry?.tasks || []
-  const hit =
-    live.find((item) => q.includes(ticketNo(item))) ||
-    live.find((item) => item.name && item.name !== "对话客户" && q.includes(item.name)) ||
-    live.find((item) => item.org && q.includes(item.org))
+  const needles = [
+    ...(q.match(/VA\d{8}-[A-Z0-9]+/gi) || []),
+    ...courtesyNames(q),
+    ...(q.match(/\d+\s*吨/g) || []),
+  ]
+  const scored = live
+    .map((item) => {
+      const blob = [ticketNo(item), item.name, item.org, item.factory, caseTitle(item), item.note].join(" ")
+      const names = courtesyNames(blob)
+      return {
+        item,
+        n:
+          needles.filter((token) => token && blob.includes(token)).length +
+          names.filter((name) => q.includes(name)).length,
+      }
+    })
+    .filter((row) => row.n > 0)
+    .sort((a, b) => b.n - a.n)
+  const hit = live.find((item) => q.includes(ticketNo(item))) || scored[0]?.item
 
   if (/全部客户|所有客户|客户情况|工单(情况|列表|全表)?/.test(q) || (/目前/.test(q) && /客户|工单/.test(q))) {
     if (!live.length) {
@@ -1650,8 +1690,12 @@ export function staffDeskLocalReply(input: {
   }
 
   if (/发(邮件|信)|写信|邮件/.test(q)) {
-    if (hit?.contact) {
-      return `可以。工单 ${ticketNo(hit)}（${caseTitle(hit)}）已留联系方式 ${hit.contact}。请补事由和要点，我按 Hermes 自己的邮箱身份起草。生产口若还没挂上发出信箱，只入队为草稿，不会写成已经发出。`
+    if (hit) {
+      const who = [...new Set([hit.name, inferredVisitorName(hit.note), caseTitle(hit)].filter((item) => item && item !== "对话客户" && item !== "AI 对话客户"))].join(" · ")
+      if (hit.contact) {
+        return `可以。工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}已留联系方式 ${hit.contact}。请补事由和要点，我按 Hermes 自己的邮箱身份起草。生产口若还没挂上发出信箱，只入队为草稿，不会写成已经发出。`
+      }
+      return `可以。对着的是工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}，但这张还没留联系方式。补一个收件人，我按 Hermes 自己的邮箱身份起草；没挂上发出信箱时只入队为草稿。`
     }
     return "可以指挥我起草。请告诉我收件人（或工单号）、事由和要点。用 Hermes 自己的邮箱身份。生产口若还没挂上发出信箱，我只写成询单草稿并入队，不会假装已经发出。"
   }

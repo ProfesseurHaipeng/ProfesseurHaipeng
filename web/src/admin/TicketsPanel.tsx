@@ -253,7 +253,7 @@ export function TicketsPanel({
               <label className="desk-tickets__check">
                 <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggle(item.id)} />
               </label>
-              <button type="button" className="desk-ticket" onClick={() => onOpenTicket(item.id)}>
+              <button type="button" className="desk-ticket" onClick={() => { setMenuId(null); onOpenTicket(item.id) }}>
                 <i
                   className="desk-ticket__dot"
                   style={{
