@@ -21,7 +21,7 @@ import {
 } from "./guideSession"
 
 type BlobStore = {
-  get: (key: string, options: { type: "json" }) => Promise<unknown>
+  get: (key: string, options: { type: "json"; consistency?: "strong" | "eventual" }) => Promise<unknown>
   setJSON: (key: string, value: unknown) => Promise<void>
   delete?: (key: string) => Promise<void>
   list: () => Promise<{ blobs: { key: string }[] }>
@@ -29,62 +29,150 @@ type BlobStore = {
 
 export type HermesImageBlob = { mime: string; name: string; data: string }
 
+export const HERMES_CASES_SNAPSHOT_KEY = "cases"
+
 async function store(name: string): Promise<BlobStore | null> {
   try {
     const { getStore } = await import("@netlify/blobs")
-    return getStore(name) as unknown as BlobStore
+    return getStore({ name, consistency: "strong" }) as unknown as BlobStore
   } catch {
     return null
   }
 }
 
-export async function readHermesLedger(): Promise<HermesLedger> {
-  const blobs = await store("ash-hermes")
-  if (!blobs) return emptyLedger()
-  return hydrateLedger(await blobs.get("ledger", { type: "json" }))
+async function hermesStore() {
+  return store("ash-hermes")
 }
 
-export async function writeHermesLedger(ledger: HermesLedger) {
-  const blobs = await store("ash-hermes")
-  if (!blobs) return false
-  await blobs.setJSON("ledger", ledger)
-  return true
+function asCase(value: unknown): HermesCase | null {
+  if (!value || typeof value !== "object") return null
+  const row = value as HermesCase
+  return row.id ? row : null
 }
 
-export async function readHermesCases(options: { includeGone?: boolean } = {}): Promise<HermesCase[]> {
-  const blobs = await store("ash-hermes")
-  if (!blobs) return []
-  const ledger = await readHermesLedger()
+export function preferHermesCase(left: HermesCase, right: HermesCase) {
+  const leftGone = Boolean(left.gone)
+  const rightGone = Boolean(right.gone)
+  if (leftGone !== rightGone) return leftGone ? left : right
+  const leftAt = Date.parse(left.updatedAt || left.at || "") || 0
+  const rightAt = Date.parse(right.updatedAt || right.at || "") || 0
+  if (leftAt !== rightAt) return leftAt > rightAt ? left : right
+  return right
+}
+
+export function mergeStoredCases(...parts: HermesCase[][]) {
+  const byId = new Map<string, HermesCase>()
+  for (const part of parts) {
+    for (const item of part) {
+      if (!item?.id) continue
+      const prev = byId.get(item.id)
+      byId.set(item.id, prev ? preferHermesCase(prev, item) : item)
+    }
+  }
+  return [...byId.values()]
+}
+
+async function readCasesSnapshot(blobs: BlobStore): Promise<HermesCase[] | null> {
+  const raw = await blobs.get(HERMES_CASES_SNAPSHOT_KEY, { type: "json", consistency: "strong" })
+  if (!raw || typeof raw !== "object") return null
+  const rows = (raw as { cases?: unknown }).cases
+  if (!Array.isArray(rows)) return null
+  return rows.map(asCase).filter((item): item is HermesCase => Boolean(item))
+}
+
+async function writeCasesSnapshot(blobs: BlobStore, cases: HermesCase[]) {
+  await blobs.setJSON(HERMES_CASES_SNAPSHOT_KEY, { cases, updatedAt: new Date().toISOString() })
+}
+
+async function readListedCases(blobs: BlobStore): Promise<HermesCase[]> {
   const { blobs: keys } = await blobs.list()
   const rows = await Promise.all(
     keys
       .filter((item) => item.key.startsWith("case-"))
-      .map(async ({ key }) => {
-        const value = await blobs.get(key, { type: "json" })
-        if (!value || typeof value !== "object") return null
-        const row = value as HermesCase
-        return row.id ? row : null
-      }),
+      .map(async ({ key }) => asCase(await blobs.get(key, { type: "json", consistency: "strong" }))),
   )
-  const all = sortHermesCases(rows.filter((item): item is HermesCase => Boolean(item?.id)))
-  return options.includeGone ? all : liveCases(all, ledger)
+  return rows.filter((item): item is HermesCase => Boolean(item))
+}
+
+async function readAllCasesRaw(blobs: BlobStore): Promise<HermesCase[]> {
+  const snapshot = await readCasesSnapshot(blobs)
+  if (snapshot) return snapshot
+  const listed = await readListedCases(blobs)
+  if (listed.length) {
+    try {
+      await writeCasesSnapshot(blobs, listed)
+    } catch {
+      /* first read still returns the listed archive */
+    }
+  }
+  return listed
+}
+
+export async function readHermesLedger(): Promise<HermesLedger> {
+  const blobs = await hermesStore()
+  if (!blobs) return emptyLedger()
+  return hydrateLedger(await blobs.get("ledger", { type: "json", consistency: "strong" }))
+}
+
+export async function writeHermesLedger(ledger: HermesLedger) {
+  const blobs = await hermesStore()
+  if (!blobs) return false
+  try {
+    await blobs.setJSON("ledger", ledger)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function readHermesCases(options: { includeGone?: boolean } = {}): Promise<HermesCase[]> {
+  const blobs = await hermesStore()
+  if (!blobs) return []
+  const [all, ledger] = await Promise.all([readAllCasesRaw(blobs), readHermesLedger()])
+  const sorted = sortHermesCases(all)
+  return options.includeGone ? sorted : liveCases(sorted, ledger)
 }
 
 export async function writeHermesCase(item: HermesCase) {
-  const blobs = await store("ash-hermes")
+  const blobs = await hermesStore()
   if (!blobs) return false
-  if (!item.gone) {
-    const raw = await blobs.get(item.id, { type: "json" })
-    const existing = raw && typeof raw === "object" && (raw as HermesCase).id ? (raw as HermesCase) : null
-    const ledger = await readHermesLedger()
-    if (!canWriteLiveHermesCase(item, existing, ledger)) return true
+  try {
+    const all = await readAllCasesRaw(blobs)
+    const existing = all.find((row) => row.id === item.id) ?? null
+    if (!item.gone) {
+      const ledger = await readHermesLedger()
+      if (!canWriteLiveHermesCase(item, existing, ledger)) return true
+    }
+    const next = mergeStoredCases(all, [item])
+    await blobs.setJSON(item.id, item)
+    await writeCasesSnapshot(blobs, next)
+    return true
+  } catch {
+    return false
   }
-  await blobs.setJSON(item.id, item)
-  return true
 }
 
 export async function writeHermesCases(cases: HermesCase[]) {
-  for (const item of cases) await writeHermesCase(item)
+  for (const item of cases) {
+    const ok = await writeHermesCase(item)
+    if (!ok) return false
+  }
+  return true
+}
+
+export async function persistDeletedCases(gone: HermesCase[], ledger: HermesLedger) {
+  const blobs = await hermesStore()
+  if (!blobs) return false
+  try {
+    await blobs.setJSON("ledger", ledger)
+    if (!gone.length) return true
+    const next = mergeStoredCases(await readAllCasesRaw(blobs), gone)
+    await writeCasesSnapshot(blobs, next)
+    for (const item of gone) await blobs.setJSON(item.id, item)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export async function readHermesCoach(): Promise<HermesCoachTurn[]> {
@@ -104,12 +192,20 @@ export async function writeHermesCoach(turns: HermesCoachTurn[]) {
 }
 
 export async function deleteHermesCase(id: string) {
-  const blobs = await store("ash-hermes")
-  if (!blobs || !id.startsWith("case-")) return false
-  const existing = await blobs.get(id, { type: "json" })
-  const row = existing && typeof existing === "object" ? (existing as HermesCase) : { id }
-  await blobs.setJSON(id, { ...row, id, gone: true, updatedAt: new Date().toISOString() })
-  return true
+  if (!id.startsWith("case-")) return false
+  const blobs = await hermesStore()
+  if (!blobs) return false
+  try {
+    const all = await readAllCasesRaw(blobs)
+    const existing = all.find((item) => item.id === id)
+    const row = { ...(existing || { id }), id, gone: true, updatedAt: new Date().toISOString() } as HermesCase
+    const next = mergeStoredCases(all, [row])
+    await blobs.setJSON(id, row)
+    await writeCasesSnapshot(blobs, next)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export async function readHermesMemory(): Promise<HermesMemory> {

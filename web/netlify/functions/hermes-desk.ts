@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto"
 import type { Config } from "@netlify/functions"
 import { advisorConversationIdentity } from "../../src/cms/advisorIdentity"
-import { hermesLinkInfo, hermesReady, probeHermes } from "../../src/cms/hermes"
+import { hermesLinkInfo, hermesReady, probeHermes, rememberHermesHealth } from "../../src/cms/hermes"
 import {
   appendHermesEvent,
   readHermesCases,
@@ -12,6 +12,7 @@ import {
   readHermesLedger,
   readHermesMemory,
   readInquiryState,
+  persistDeletedCases,
   writeHermesCase,
   writeHermesCoach,
   writeHermesHealth,
@@ -30,10 +31,11 @@ import {
   applyInquiryTaskAction,
   applyStaffCaseUpdate,
   applyStaffCasesBatch,
+  applyGoneToLedger,
+  applyStaffCasesClear,
   applyStaffCasesDelete,
   attachLead,
   liveCases,
-  markGoneOnLedger,
   attachableLeads,
   decorateDeskPayload,
   emptyMemory,
@@ -160,25 +162,30 @@ async function loadInquiry() {
 }
 
 async function loadDesk() {
-  const ledger = await readHermesLedger()
-  const raw = liveCases(await readHermesCases({ includeGone: true }), ledger)
+  let ledger = await readHermesLedger()
+  const raw = await readHermesCases({ includeGone: true })
   const swept = sweepBoardNoise(raw)
   if (swept.changed) {
-    for (const item of swept.gone) {
-      try {
-        await persistCase(item)
-      } catch {
-        /* keep serving the cleaned list even if one write fails */
-      }
+    const nextLedger = applyGoneToLedger(ledger, swept.gone)
+    try {
+      await persistDeleted(swept.gone, nextLedger)
+      ledger = nextLedger
+    } catch {
+      /* keep serving the cleaned list even if one write fails */
     }
   }
   const cases = liveCases(swept.cases, ledger)
   const leads = await loadLeads()
-  return { cases, leads, ledger }
+  return { all: swept.cases, cases, leads, ledger }
 }
 
 async function persistCase(item: HermesCase) {
   const ok = await writeHermesCase(item)
+  if (!ok) throw new Error("persist")
+}
+
+async function persistDeleted(gone: HermesCase[], ledger: Awaited<ReturnType<typeof readHermesLedger>>) {
+  const ok = await persistDeletedCases(gone, ledger)
   if (!ok) throw new Error("persist")
 }
 
@@ -241,13 +248,12 @@ export default async (req: Request) => {
     return json({ error: "hermes-only" }, 403)
   }
   try {
-  let { cases, ledger } = await loadDesk()
-  const now = new Date().toISOString()
-
   if (action === "health") {
-    const health = await probeHermes(envBag())
+    const env = envBag()
+    const probed = await probeHermes(env)
     const prev = await readHermesHealth()
-    await writeHermesHealth(health)
+    const health = rememberHermesHealth(prev, probed)
+    if (health.status === "connected" || prev?.status !== "connected") await writeHermesHealth(health)
     if (prev?.status !== health.status) {
       await appendHermesEvent(
         eventOf(
@@ -258,8 +264,11 @@ export default async (req: Request) => {
         ),
       )
     }
-    return json({ ...(await payload()), health })
+    return json({ health, hermesReady: hermesReady(env), link: hermesLinkInfo(env) })
   }
+
+  let { all, cases, ledger } = await loadDesk()
+  const now = new Date().toISOString()
 
   if (action === "targets") {
     const inquiry = await readInquiryState()
@@ -283,7 +292,7 @@ export default async (req: Request) => {
   if (action === "file") {
     const findingId = typeof body.findingId === "string" ? body.findingId : ""
     const inquiry = await readInquiryState()
-    const result = fileFinding(inquiry, cases, findingId, now)
+    const result = fileFinding(inquiry, all, findingId, now)
     if (result.error) return json({ error: result.error }, 400)
     await writeInquiryState(result.inquiry)
     if (result.case) await persistCase(result.case)
@@ -294,7 +303,7 @@ export default async (req: Request) => {
   if (action === "attach") {
     const leadId = typeof body.leadId === "string" ? body.leadId : ""
     const leads = await loadLeads()
-    const result = attachLead(cases, leads, leadId, now, ledger)
+    const result = attachLead(all, leads, leadId, now, ledger)
     if (result.error === "missing") return json({ error: "missing" }, 400)
     if (result.case && result.error !== "exists") {
       await persistLedger(result.ledger)
@@ -306,9 +315,9 @@ export default async (req: Request) => {
 
   if (action === "import") {
     const leads = await loadLeads()
-    const next = importLeads(cases, leads, now, ledger)
+    const next = importLeads(all, leads, now, ledger)
     for (const item of next) {
-      if (!cases.some((row) => row.id === item.id)) await persistCase(item)
+      if (!all.some((row) => row.id === item.id)) await persistCase(item)
     }
     await appendHermesEvent(eventOf("update", `接入前台线索 ${Math.max(0, next.length - cases.length)} 条`))
     return json(await payload())
@@ -316,23 +325,19 @@ export default async (req: Request) => {
 
   if (action === "cases") {
     const op = typeof body.op === "string" ? body.op : ""
-    if (op === "delete") {
+    if (op === "delete" || op === "clear") {
       const ids = Array.isArray(body.ids) ? body.ids.filter((item): item is string => typeof item === "string") : []
-      const result = applyStaffCasesDelete(cases, ids, now)
+      const result = op === "clear" ? applyStaffCasesClear(all, now) : applyStaffCasesDelete(all, ids, now)
       if (result.error) return json({ error: result.error }, 400)
-      let nextLedger = ledger
-      for (const item of result.gone) {
-        await persistCase(item)
-        nextLedger = markGoneOnLedger(nextLedger, item, now)
-      }
-      await persistLedger(nextLedger)
-      await appendHermesEvent(eventOf("update", `删除 ${result.count} 张工单`))
+      const nextLedger = applyGoneToLedger(ledger, result.gone, now)
+      await persistDeleted(result.gone, nextLedger)
+      await appendHermesEvent(eventOf("update", op === "clear" ? `清空 ${result.count} 张工单` : `删除 ${result.count} 张工单`))
       return json(await payload())
     }
     if (op === "update") {
       const id = typeof body.id === "string" ? body.id : ""
       const patch = body.patch && typeof body.patch === "object" ? (body.patch as Record<string, unknown>) : body
-      const result = applyStaffCaseUpdate(cases, id, patch, now)
+      const result = applyStaffCaseUpdate(all, id, patch, now)
       if (result.error === "empty") return json({ error: "empty" }, 400)
       if (result.error === "missing") return json({ error: "missing" }, 404)
       if (result.case) await persistCase(result.case)
@@ -342,7 +347,7 @@ export default async (req: Request) => {
     if (op === "batch") {
       const ids = Array.isArray(body.ids) ? body.ids.filter((item): item is string => typeof item === "string") : []
       const patch = body.patch && typeof body.patch === "object" ? (body.patch as Record<string, unknown>) : {}
-      const result = applyStaffCasesBatch(cases, ids, patch, now)
+      const result = applyStaffCasesBatch(all, ids, patch, now)
       if (result.error) return json({ error: result.error }, 400)
       for (const item of result.cases.filter((row) => ids.includes(row.id))) await persistCase(item)
       await appendHermesEvent(eventOf("update", `批量编辑 ${result.count} 张工单`))
@@ -353,13 +358,13 @@ export default async (req: Request) => {
 
   if (action === "task") {
     const inquiry = await loadInquiry()
-    const result = applyInquiryTaskAction(inquiry, cases, ledger, body, now)
+    const result = applyInquiryTaskAction(inquiry, all, ledger, body, now)
     if (result.error === "missing") return json({ error: result.error }, 404)
     if (result.error) return json({ error: result.error }, 400)
     await writeInquiryState(result.inquiry)
     for (const item of result.touched) await persistCase(item)
-    for (const item of result.gone) await persistCase(item)
-    if (result.gone.length || result.ledger !== ledger) await persistLedger(result.ledger)
+    if (result.gone.length) await persistDeleted(result.gone, result.ledger)
+    else if (result.ledger !== ledger) await persistLedger(result.ledger)
     if (result.event) await appendHermesEvent(eventOf("update", result.event, result.caseId))
     return json({
       ...(await payload()),

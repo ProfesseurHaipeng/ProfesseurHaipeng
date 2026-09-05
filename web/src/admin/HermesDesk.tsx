@@ -254,23 +254,35 @@ export function HermesDesk({
     [auth.user, auth.pass],
   )
 
-  const apply = useCallback((payload: DeskPayload) => {
-    if (Array.isArray(payload.cases)) {
-      const next = payload.cases.map(normalizeCase)
+  const hiddenIds = useRef(new Set<string>())
+
+  const apply = useCallback((payload: DeskPayload, mode: "full" | "health" = "full") => {
+    if (mode === "full" && Array.isArray(payload.cases)) {
+      const next = payload.cases
+        .map(normalizeCase)
+        .filter((item) => !item.gone && !hiddenIds.current.has(item.id))
       setCases((prev) => (sameJson(prev, next) ? prev : next))
     }
-    if (Array.isArray(payload.coach)) setCoach((prev) => (sameJson(prev, payload.coach) ? prev : payload.coach!))
-    if (Array.isArray(payload.events)) setEvents((prev) => (sameJson(prev, payload.events) ? prev : payload.events!))
-    if (payload.inquiry) setInquiry((prev) => (sameJson(prev, payload.inquiry) ? prev : payload.inquiry!))
+    if (mode === "full" && Array.isArray(payload.coach)) setCoach((prev) => (sameJson(prev, payload.coach) ? prev : payload.coach!))
+    if (mode === "full" && Array.isArray(payload.events)) setEvents((prev) => (sameJson(prev, payload.events) ? prev : payload.events!))
+    if (mode === "full" && payload.inquiry) setInquiry((prev) => (sameJson(prev, payload.inquiry) ? prev : payload.inquiry!))
     if (typeof payload.hermesReady === "boolean") setHermesReady(payload.hermesReady)
     if (payload.health) {
-      setStatus(payload.health.status === "connected" ? "connected" : "disconnected")
-      setHealthDetail(payload.health.detail || "")
+      if (payload.health.status === "connected") {
+        setStatus("connected")
+        setHealthDetail(payload.health.detail || "")
+      } else if (payload.hermesReady) {
+        setStatus("connected")
+        setHealthDetail(payload.health.detail || "备用线路仍可用")
+      } else {
+        setStatus("disconnected")
+        setHealthDetail(payload.health.detail || "")
+      }
     }
   }, [])
 
   const post = useCallback(
-    async (body: Record<string, unknown>) => {
+    async (body: Record<string, unknown>, mode: "full" | "health" = "full") => {
       const response = await fetch(deskEndpoint(), {
         method: "POST",
         headers,
@@ -278,7 +290,7 @@ export function HermesDesk({
       })
       const payload = (await response.json()) as DeskPayload
       if (!response.ok) throw new Error(payload.error === "hermes-only" ? `这项只能由 ${AGENT_NAME} 改` : payload.error || `接口返回 ${response.status}`)
-      apply(payload)
+      apply(payload, mode)
       return payload
     },
     [apply, headers],
@@ -301,10 +313,10 @@ export function HermesDesk({
   const probe = useCallback(async () => {
     setStatus((current) => (current === "connected" || current === "disconnected" ? "reconnecting" : "connecting"))
     try {
-      await post({ action: "health" })
+      await post({ action: "health" }, "health")
     } catch {
-      setStatus("disconnected")
-      setHealthDetail("探测失败")
+      setStatus((current) => (current === "connected" ? "connected" : "disconnected"))
+      setHealthDetail((current) => current || "探测失败")
     }
   }, [post])
 
@@ -328,23 +340,34 @@ export function HermesDesk({
     async (ids: string[]) => {
       const wanted = ids.filter((id) => id.startsWith("case-"))
       if (!wanted.length) return
+      const liveIds = cases.filter((item) => !item.gone).map((item) => item.id)
+      const clear = liveIds.length > 0 && liveIds.every((id) => wanted.includes(id))
+      for (const id of clear ? liveIds : wanted) hiddenIds.current.add(id)
       setError("")
       const snapshot = cases
-      setCases(snapshot.filter((item) => !wanted.includes(item.id)))
+      setCases(snapshot.filter((item) => !hiddenIds.current.has(item.id)))
       if (focus.kind === "ticket" && wanted.includes(focus.id)) {
         setFocus({ kind: "home" })
         setArchiveOpen(false)
         setMobileChat(false)
       }
       try {
-        await post({ action: "cases", op: "delete", ids: wanted })
+        const payload = await post({ action: "cases", op: clear ? "clear" : "delete", ids: wanted })
+        const leftover = (payload.cases || []).filter((item) => !item.gone && !hiddenIds.current.has(item.id))
+        if (clear) {
+          for (const item of leftover) hiddenIds.current.add(item.id)
+          apply({ ...payload, cases: [] })
+        } else if (leftover.some((item) => wanted.includes(item.id))) {
+          setError("工单还在储存里，这次没删干净。")
+        }
       } catch (err) {
+        for (const id of wanted) hiddenIds.current.delete(id)
         setCases(snapshot)
         setError(err instanceof Error ? err.message : "删除失败")
         throw err
       }
     },
-    [cases, focus, post],
+    [apply, cases, focus, post],
   )
 
   const updateCase = useCallback(

@@ -1,7 +1,93 @@
 import { Buffer } from "node:buffer"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { dirname, join } from "node:path"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import react from "@vitejs/plugin-react"
 import { defineConfig, loadEnv, type Plugin, type ViteDevServer } from "vite"
+
+type LocalLead = {
+  id: string
+  source?: string
+  contact?: string
+  email?: string
+  name?: string
+  org?: string
+  note?: string
+  at?: string
+}
+
+type LocalDeskFile = {
+  cases: { id: string; gone?: boolean }[]
+  coach: unknown[]
+  events: unknown[]
+  memory: { shared: string; desk: string; updatedAt: string }
+  health: { status: "connected" | "disconnected"; checkedAt: string; model?: string; detail?: string } | null
+  inquiry: {
+    targets: unknown[]
+    findings: unknown[]
+    job: { status: string; brief: string; updatedAt: string }
+    tasks?: unknown[]
+    currentId?: string
+  }
+  ledger: { goneIds: string[]; goneLeadIds: string[]; goneVisitorIds: string[]; goneContacts: string[]; updatedAt: string }
+  sessions: Record<string, unknown>
+  ipVisitors: Record<string, { visitorId: string; at: string }>
+  leads: LocalLead[]
+}
+
+function emptyLocalDeskFile(): LocalDeskFile {
+  return {
+    cases: [],
+    coach: [],
+    events: [],
+    memory: { shared: "", desk: "", updatedAt: "" },
+    health: null,
+    inquiry: { targets: [], findings: [], job: { status: "idle", brief: "", updatedAt: "" }, tasks: [] },
+    ledger: { goneIds: [], goneLeadIds: [], goneVisitorIds: [], goneContacts: [], updatedAt: "" },
+    sessions: {},
+    ipVisitors: {},
+    leads: [],
+  }
+}
+
+function loadLocalHermesDesk(file: string): LocalDeskFile {
+  try {
+    const raw = JSON.parse(readFileSync(file, "utf8")) as Partial<LocalDeskFile>
+    const base = emptyLocalDeskFile()
+    const health = raw.health
+    return {
+      cases: Array.isArray(raw.cases) ? raw.cases.filter((item) => item && typeof item.id === "string") : [],
+      coach: Array.isArray(raw.coach) ? raw.coach : [],
+      events: Array.isArray(raw.events) ? raw.events : [],
+      memory: {
+        shared: typeof raw.memory?.shared === "string" ? raw.memory.shared : "",
+        desk: typeof raw.memory?.desk === "string" ? raw.memory.desk : "",
+        updatedAt: typeof raw.memory?.updatedAt === "string" ? raw.memory.updatedAt : "",
+      },
+      health:
+        health && (health.status === "connected" || health.status === "disconnected")
+          ? {
+              status: health.status,
+              checkedAt: typeof health.checkedAt === "string" ? health.checkedAt : "",
+              model: health.model,
+              detail: health.detail,
+            }
+          : null,
+      inquiry: raw.inquiry && typeof raw.inquiry === "object" ? { ...base.inquiry, ...raw.inquiry } : base.inquiry,
+      ledger: raw.ledger && typeof raw.ledger === "object" ? { ...base.ledger, ...raw.ledger } : base.ledger,
+      sessions: raw.sessions && typeof raw.sessions === "object" ? raw.sessions : {},
+      ipVisitors: raw.ipVisitors && typeof raw.ipVisitors === "object" ? raw.ipVisitors : {},
+      leads: Array.isArray(raw.leads) ? raw.leads.filter((item) => item && typeof item.id === "string") : [],
+    }
+  } catch {
+    return emptyLocalDeskFile()
+  }
+}
+
+function saveLocalHermesDesk(file: string, state: LocalDeskFile) {
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, JSON.stringify(state, null, 2))
+}
 
 function localConversationId(seed: string, secret: string) {
   const clean = (seed || "anon").trim().slice(0, 120) || "anon"
@@ -35,35 +121,34 @@ function localGuide(): Plugin {
       ...loaded,
       SIGNED_GUIDE_FALLBACK: loaded.SIGNED_GUIDE_FALLBACK || process.env.SIGNED_GUIDE_FALLBACK || "1",
     }
-    const localLeads: { id: string; source?: string; contact?: string; email?: string; name?: string; org?: string; note?: string; at?: string }[] = []
-    const localDesk: {
-      cases: { id: string }[]
-      coach: unknown[]
-      events: unknown[]
-      memory: { shared: string; desk: string; updatedAt: string }
-      health: { status: "connected" | "disconnected"; checkedAt: string; model?: string; detail?: string } | null
-      images: Record<string, { mime: string; name: string; data: string }>
-      inquiry: {
-        targets: unknown[]
-        findings: unknown[]
-        job: { status: string; brief: string; updatedAt: string }
-        tasks?: unknown[]
-        currentId?: string
-      }
-      ledger: { goneIds: string[]; goneLeadIds: string[]; goneVisitorIds: string[]; goneContacts: string[]; updatedAt: string }
-      sessions: Record<string, unknown>
-      ipVisitors: Record<string, { visitorId: string; at: string }>
-    } = {
-      cases: [],
-      coach: [],
-      events: [],
-      memory: { shared: "", desk: "", updatedAt: "" },
-      health: null,
-      images: {},
-      inquiry: { targets: [], findings: [], job: { status: "idle", brief: "", updatedAt: "" }, tasks: [] },
-      ledger: { goneIds: [], goneLeadIds: [], goneVisitorIds: [], goneContacts: [], updatedAt: "" },
-      sessions: {},
-      ipVisitors: {},
+    const deskFile = join(server.config.root || process.cwd(), ".netlify", "local-hermes-desk.json")
+    const persisted = loadLocalHermesDesk(deskFile)
+    const localLeads: LocalLead[] = persisted.leads.slice()
+    const localDesk = {
+      cases: persisted.cases.slice(),
+      coach: persisted.coach.slice(),
+      events: persisted.events.slice(),
+      memory: persisted.memory,
+      health: persisted.health,
+      images: {} as Record<string, { mime: string; name: string; data: string }>,
+      inquiry: persisted.inquiry,
+      ledger: persisted.ledger,
+      sessions: { ...persisted.sessions },
+      ipVisitors: { ...persisted.ipVisitors },
+    }
+    const persistDesk = () => {
+      saveLocalHermesDesk(deskFile, {
+        cases: localDesk.cases,
+        coach: localDesk.coach,
+        events: localDesk.events,
+        memory: localDesk.memory,
+        health: localDesk.health,
+        inquiry: localDesk.inquiry,
+        ledger: localDesk.ledger,
+        sessions: localDesk.sessions,
+        ipVisitors: localDesk.ipVisitors,
+        leads: localLeads,
+      })
     }
     const staffOk = (req: IncomingMessage) => {
       const user = env.ADMIN_USER || "admin"
@@ -84,6 +169,7 @@ function localGuide(): Plugin {
               return
             }
             localLeads.unshift({ ...input, id: leadsMod.newLeadId(), at: new Date().toISOString() })
+            persistDesk()
             res.end(JSON.stringify({ ok: true }))
           } catch {
             res.statusCode = 400
@@ -110,6 +196,7 @@ function localGuide(): Plugin {
           }
           const index = localLeads.findIndex((item) => item.id === id)
           if (index >= 0) localLeads.splice(index, 1)
+          persistDesk()
           res.end(JSON.stringify({ ok: true }))
           return
         }
@@ -132,22 +219,31 @@ function localGuide(): Plugin {
         const deskMod = await server.ssrLoadModule("/src/cms/hermesDesk.ts")
         const hermesMod = await server.ssrLoadModule("/src/cms/hermes.ts")
         const inquiryMod = await server.ssrLoadModule("/src/cms/inquiryDesk.ts")
-        const liveCases = () => {
+        const boardCases = () => {
           const swept = deskMod.sweepBoardNoise(localDesk.cases)
-          if (swept.changed) localDesk.cases = swept.cases
+          if (swept.changed) {
+            localDesk.cases = swept.cases
+            for (const item of swept.gone) localDesk.ledger = deskMod.markGoneOnLedger(localDesk.ledger, item)
+            persistDesk()
+          }
           return deskMod.liveCases(localDesk.cases, localDesk.ledger)
         }
         const pack = () => {
-          localDesk.cases = liveCases()
+          const cases = boardCases()
+          try {
+            persistDesk()
+          } catch {
+            /* keep serving the in-memory board if the local file is locked */
+          }
           return deskMod.decorateDeskPayload({
-            cases: localDesk.cases,
+            cases,
             coach: localDesk.coach,
             events: localDesk.events,
             memory: localDesk.memory,
             health: localDesk.health,
             link: hermesMod.hermesLinkInfo(env),
             hermesReady: hermesMod.hermesReady(env),
-            attachable: deskMod.publicAttachable(deskMod.attachableLeads(localDesk.cases, localLeads)),
+            attachable: deskMod.publicAttachable(deskMod.attachableLeads(cases, localLeads)),
             inquiry: localDesk.inquiry,
           })
         }
@@ -192,12 +288,20 @@ function localGuide(): Plugin {
             return
           }
           if (action === "health") {
-            const health = await hermesMod.probeHermes(env)
+            const probed = await hermesMod.probeHermes(env)
+            const health = hermesMod.rememberHermesHealth(localDesk.health, probed)
             if (localDesk.health?.status !== health.status) {
               pushEvent("health", health.status === "connected" ? "网关探测：正常连接" : "网关探测：断开连接")
             }
-            localDesk.health = health
-            res.end(JSON.stringify({ ...pack(), health }))
+            if (health.status === "connected" || localDesk.health?.status !== "connected") localDesk.health = health
+            persistDesk()
+            res.end(
+              JSON.stringify({
+                health: localDesk.health,
+                hermesReady: hermesMod.hermesReady(env),
+                link: hermesMod.hermesLinkInfo(env),
+              }),
+            )
             return
           }
           if (action === "targets") {
@@ -266,9 +370,9 @@ function localGuide(): Plugin {
           }
           if (action === "cases") {
             const op = typeof body.op === "string" ? body.op : ""
-            if (op === "delete") {
+            if (op === "delete" || op === "clear") {
               const ids = Array.isArray(body.ids) ? body.ids.filter((item): item is string => typeof item === "string") : []
-              const result = deskMod.applyStaffCasesDelete(localDesk.cases, ids)
+              const result = op === "clear" ? deskMod.applyStaffCasesClear(localDesk.cases) : deskMod.applyStaffCasesDelete(localDesk.cases, ids)
               if (result.error) {
                 res.statusCode = 400
                 res.end(JSON.stringify({ error: result.error }))
@@ -278,7 +382,14 @@ function localGuide(): Plugin {
               for (const item of result.gone || []) {
                 localDesk.ledger = deskMod.markGoneOnLedger(localDesk.ledger, item)
               }
-              pushEvent("update", `删除 ${result.count} 张工单`)
+              try {
+                persistDesk()
+              } catch {
+                res.statusCode = 503
+                res.end(JSON.stringify({ error: "persist" }))
+                return
+              }
+              pushEvent("update", `${op === "clear" ? "清空" : "删除"} ${result.count} 张工单`)
               res.end(JSON.stringify(pack()))
               return
             }
@@ -322,7 +433,7 @@ function localGuide(): Plugin {
           if (action === "task") {
             const now = new Date().toISOString()
             const inquiry = inquiryMod.hydrateInquiryState(localDesk.inquiry)
-            const result = deskMod.applyInquiryTaskAction(inquiry, liveCases(), localDesk.ledger, body, now)
+            const result = deskMod.applyInquiryTaskAction(inquiry, localDesk.cases, localDesk.ledger, body, now)
             if (result.error === "missing") {
               res.statusCode = 404
               res.end(JSON.stringify({ error: result.error }))
@@ -563,11 +674,13 @@ function localGuide(): Plugin {
                 )
               : seeded
             localDesk.cases = withTicket.cases
+            persistDesk()
           }
           persistLocalChat(visitorId, messages, result.reply, result.advisor, turnLang, {
             handoffIndex: body.handoffIndex,
             takenOver: body.takenOver,
           })
+          persistDesk()
           res.statusCode = 200
           res.setHeader("Content-Type", "application/json")
           res.end(

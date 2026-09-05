@@ -13,6 +13,7 @@ import {
   hermesUnavailableReply,
   isAdvisorOutageJoke,
   probeHermes,
+  rememberHermesHealth,
   resolveCoachViaSignedGuide,
   resolveHermesReply,
   signedGuideEnabled,
@@ -77,6 +78,37 @@ describe("hermes env", () => {
     } finally {
       globalThis.fetch = original
     }
+  })
+
+  it("stays connected when the signed backup answers even if the main line is down", async () => {
+    const original = globalThis.fetch
+    globalThis.fetch = async (input, init) => {
+      const url = String(input)
+      if (url.endsWith("/models") || url.endsWith("/chat/completions")) return new Response("down", { status: 502 })
+      if (init && typeof init === "object" && "body" in init && String(init.body).includes("status")) {
+        return new Response(JSON.stringify({ ready: true }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ ready: true }), { status: 200 })
+    }
+    try {
+      const health = await probeHermes({
+        HERMES_API_BASE: "https://advisor.example.com/v1",
+        SIGNED_GUIDE_FALLBACK: "1",
+      })
+      expect(health.status).toBe("connected")
+      expect(health.detail).toContain("备用线路")
+    } finally {
+      globalThis.fetch = original
+    }
+  })
+
+  it("does not let a later miss wipe a connected health row", () => {
+    const kept = rememberHermesHealth(
+      { status: "connected", checkedAt: "2026-09-05T08:00:00.000Z", detail: "备用线路已接通" },
+      { status: "disconnected", checkedAt: "2026-09-05T08:01:00.000Z", detail: "主线路与备用线路都不可达" },
+    )
+    expect(kept.status).toBe("connected")
+    expect(kept.detail).toContain("备用线路仍按已接通处理")
   })
 
   it("marks health connected when the signed backup answers", async () => {

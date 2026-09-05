@@ -6,9 +6,12 @@ import {
   applyTakeover,
   applyStaffCaseUpdate,
   applyStaffCasesBatch,
+  applyStaffCasesClear,
   applyStaffCasesDelete,
   attachLead,
   canWriteLiveHermesCase,
+  liveCases,
+  relatedDeleteIds,
   caseFromLead,
   dedupeHermesCases,
   emptyLedger,
@@ -426,8 +429,8 @@ describe("desk board telemetry", () => {
   })
 
   it("lets staff edit, batch edit, and delete tickets", () => {
-    const first = sample({ id: "case-a", name: "测试甲" })
-    const second = sample({ id: "case-b", name: "测试乙", progress: "new" })
+    const first = sample({ id: "case-a", name: "测试甲", contact: "13800000001" })
+    const second = sample({ id: "case-b", name: "测试乙", progress: "new", contact: "13800000002" })
     const edited = applyStaffCaseUpdate([first, second], "case-a", { name: "陈经理", progress: "talking" }, now)
     expect(edited.error).toBeNull()
     expect(edited.case?.name).toBe("陈经理")
@@ -437,10 +440,53 @@ describe("desk board telemetry", () => {
     expect(batched.cases.every((item) => item.progress === "hold")).toBe(true)
     const deleted = applyStaffCasesDelete(batched.cases, ["case-a"], now)
     expect(deleted.count).toBe(1)
-    expect(deleted.cases.some((item) => item.id === "case-a")).toBe(false)
+    expect(deleted.cases.find((item) => item.id === "case-a")?.gone).toBe(true)
+    expect(liveCases(deleted.cases).some((item) => item.id === "case-a")).toBe(false)
+    expect(liveCases(deleted.cases).some((item) => item.id === "case-b")).toBe(true)
     expect(isStaffAction("cases")).toBe(true)
     expect(isStaffAction("coach-clear")).toBe(true)
     expect(isStaffAction("task")).toBe(true)
+  })
+
+  it("deletes related tickets that share visitor, lead, number, or contact", () => {
+    const visible = sample({
+      id: "case-new",
+      visitorId: "vis-dup",
+      leadId: "lead-dup",
+      ticketNo: "VA20260903-001",
+      contact: "13900002222",
+      updatedAt: "2026-09-03T13:00:00.000Z",
+    })
+    const older = sample({
+      id: "case-old",
+      visitorId: "vis-dup",
+      leadId: "lead-dup",
+      ticketNo: "VA20260903-001",
+      contact: "13900002222",
+      updatedAt: "2026-09-03T11:00:00.000Z",
+    })
+    const other = sample({ id: "case-other", visitorId: "vis-other", contact: "13700003333", name: "别人" })
+    expect(relatedDeleteIds([visible, older, other], ["case-new"]).sort()).toEqual(["case-new", "case-old"])
+    const deleted = applyStaffCasesDelete([visible, older, other], ["case-new"], now)
+    expect(deleted.count).toBe(2)
+    expect(deleted.gone.map((item) => item.id).sort()).toEqual(["case-new", "case-old"])
+    expect(liveCases(deleted.cases).map((item) => item.id)).toEqual(["case-other"])
+    expect(deleted.cases.find((item) => item.id === "case-old")?.gone).toBe(true)
+  })
+
+  it("clears every live ticket when staff select the whole board", () => {
+    const first = sample({ id: "case-a", contact: "13800000001", visitorId: "vis-a" })
+    const second = sample({ id: "case-b", contact: "13800000002", visitorId: "vis-b", name: "李厂长" })
+    const hidden = sample({
+      id: "case-hidden",
+      contact: "13800000001",
+      visitorId: "vis-a",
+      updatedAt: "2026-09-03T11:00:00.000Z",
+    })
+    const cleared = applyStaffCasesClear([first, second, hidden], now)
+    expect(cleared.count).toBe(3)
+    expect(liveCases(cleared.cases)).toHaveLength(0)
+    expect(cleared.cases.every((item) => item.gone)).toBe(true)
   })
 
   it("creates a page-owned inquiry ticket with the task and supports cancel and delete", () => {
@@ -473,7 +519,8 @@ describe("desk board telemetry", () => {
     expect(cancelled.cases[0]?.progress).toBe("hold")
     const deleted = applyInquiryTaskAction(cancelled.inquiry, cancelled.cases, cancelled.ledger, { op: "delete", id: created.inquiry.tasks[0]!.id }, now)
     expect(deleted.inquiry.tasks).toHaveLength(0)
-    expect(deleted.cases.some((item) => item.id === created.cases[0]!.id)).toBe(false)
+    expect(deleted.cases.find((item) => item.id === created.cases[0]!.id)?.gone).toBe(true)
+    expect(liveCases(deleted.cases, deleted.ledger)).toHaveLength(0)
     expect(deleted.ledger.goneIds).toContain(created.cases[0]!.id)
   })
 
@@ -492,7 +539,7 @@ describe("desk board telemetry", () => {
     expect(deleted.count).toBe(1)
     const ledger = markGoneOnLedger(emptyLedger(), deleted.gone[0]!, now)
     const revived = importLeads(deleted.cases, [lead], now, ledger)
-    expect(revived).toHaveLength(0)
+    expect(liveCases(revived, ledger)).toHaveLength(0)
     const attached = attachLead(deleted.cases, [lead], "lead-chen", now, ledger)
     expect(attached.case?.name).toBe("陈经理")
     expect(attached.ledger.goneLeadIds).not.toContain("lead-chen")
@@ -511,7 +558,9 @@ describe("desk board telemetry", () => {
     expect(isIdentitySuppressed({ visitorId: "vis-talk" }, ledger)).toBe(true)
     const again = upsertFromVisit(deleted.cases, "vis-talk", "刷新后再聊", now, ledger)
     expect(again.case).toBeNull()
-    expect(again.cases).toHaveLength(0)
+    expect(liveCases(again.cases, ledger)).toHaveLength(0)
+    const withoutLedger = upsertFromVisit(deleted.cases, "vis-talk", "刷新后再聊", now, emptyLedger())
+    expect(withoutLedger.case).toBeNull()
     const ticketed = upsertFromTicket(
       deleted.cases,
       { name: "陈经理", org: "江西绿田农业", contact: "13900001111", note: "还在" },
@@ -520,7 +569,7 @@ describe("desk board telemetry", () => {
       ledger,
     )
     expect(ticketed.case).toBeNull()
-    expect(ticketed.cases).toHaveLength(0)
+    expect(liveCases(ticketed.cases, ledger)).toHaveLength(0)
     const named = sample({ id: "case-chen", name: "陈经理", contact: "13900001111", visitorId: "vis-chen" })
     const goneNamed = applyStaffCasesDelete([named], [named.id], now)
     const namedLedger = markGoneOnLedger(emptyLedger(), goneNamed.gone[0]!, now)
@@ -561,7 +610,7 @@ describe("desk board telemetry", () => {
       { op: "update", id: created.inquiry.tasks[0]!.id, name: "还在找厂" },
       now,
     )
-    expect(updated.cases).toHaveLength(0)
+    expect(liveCases(updated.cases, ledger)).toHaveLength(0)
     expect(updated.touched).toHaveLength(0)
     expect(updated.inquiry.tasks[0]?.caseId).toBe(caseId)
   })

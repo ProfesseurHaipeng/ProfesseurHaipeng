@@ -266,7 +266,7 @@ export default async (req: Request, context: Context) => {
   let advisor: AdvisorId = body.advisor === "hermes" || escalate ? "hermes" : "lin"
   if (!escalate && !history.some((item) => item.role === "user")) return json({ error: "empty" }, 400)
 
-  const deskCases = await readHermesCases()
+  const deskCases = await readHermesCases({ includeGone: true })
   if (advisor === "hermes" && isHumanOwned(deskCases, visitorId)) {
     const geoLang = visitorLang(context.geo?.country?.code)
     const lastUser = [...history].reverse().find((item) => item.role === "user")

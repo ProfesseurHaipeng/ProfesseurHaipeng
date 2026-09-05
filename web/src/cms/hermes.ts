@@ -98,30 +98,39 @@ export async function probeSignedGuide(timeoutMs = 8_000): Promise<boolean> {
   }
 }
 
-/** Live probe, then signed fallback. Configured env is not the same as a working line. */
+/** Live and signed probes in parallel so a slow main line cannot mark the desk disconnected. */
 export async function probeHermes(source: Record<string, string | undefined>): Promise<HermesHealth> {
   const hermes = hermesEnvFrom(source)
   const checkedAt = new Date().toISOString()
-  if (hermes && (await probeLiveHermes(hermes))) {
-    return { status: "connected", checkedAt, model: hermes.model, detail: "主线路已接通" }
-  }
-  if (signedGuideEnabled(source) && (await probeSignedGuide())) {
-    return {
-      status: "connected",
-      checkedAt,
-      model: hermes?.model,
-      detail: "备用线路已接通",
-    }
-  }
-  if (!hermes && !signedGuideEnabled(source)) {
+  const signedOn = signedGuideEnabled(source)
+  if (!hermes && !signedOn) {
     return { status: "disconnected", checkedAt, detail: "未配置高级顾问网关" }
   }
+  const [live, signed] = await Promise.all([
+    hermes ? probeLiveHermes(hermes) : Promise.resolve(false),
+    signedOn ? probeSignedGuide(4_000) : Promise.resolve(false),
+  ])
+  if (live) return { status: "connected", checkedAt, model: hermes?.model, detail: "主线路已接通" }
+  if (signed) return { status: "connected", checkedAt, model: hermes?.model, detail: "备用线路已接通" }
   return {
     status: "disconnected",
     checkedAt,
     model: hermes?.model,
     detail: hermes ? "主线路与备用线路都不可达" : "备用线路不可达",
   }
+}
+
+/** Keep a good health row when a later probe is a one-off miss. */
+export function rememberHermesHealth(prev: HermesHealth | null | undefined, next: HermesHealth): HermesHealth {
+  if (next.status === "connected") return next
+  if (prev?.status === "connected") {
+    return {
+      ...prev,
+      checkedAt: next.checkedAt,
+      detail: `主线路这一下没探上（${next.detail || "超时"}）。备用线路仍按已接通处理。`,
+    }
+  }
+  return next
 }
 
 const GATEWAY_MESSAGE_LIMIT = 1800
