@@ -330,6 +330,39 @@ export function markGoneOnLedger(ledger: HermesLedger, item: HermesCase, now = n
   }
 }
 
+export function applyGoneToLedger(ledger: HermesLedger, gone: HermesCase[], now = new Date().toISOString()) {
+  return gone.reduce((acc, item) => markGoneOnLedger(acc, item, now), ledger)
+}
+
+/** Treat tombstones still sitting in the archive as suppression, even if the ledger write lagged. */
+export function mergeLedgerFromCases(cases: HermesCase[], ledger: HermesLedger, now = new Date().toISOString()) {
+  return applyGoneToLedger(ledger, cases.filter((item) => item.gone), now)
+}
+
+export function sameTicketFamily(a: HermesCase, b: HermesCase) {
+  if (a.id === b.id) return true
+  if (a.visitorId && a.visitorId === b.visitorId) return true
+  if (a.leadId && a.leadId === b.leadId) return true
+  const ticketA = (a.ticketNo || "").replace(/\s+/g, "").trim()
+  const ticketB = (b.ticketNo || "").replace(/\s+/g, "").trim()
+  if (ticketA && ticketA === ticketB) return true
+  const contactA = (a.contact || "").trim()
+  const contactB = (b.contact || "").trim()
+  return contactA.length >= 5 && contactA === contactB
+}
+
+export function relatedDeleteIds(cases: HermesCase[], ids: string[]) {
+  const wanted = ids.filter((id) => id.startsWith("case-"))
+  const selected = cases.filter((item) => wanted.includes(item.id))
+  const extra = new Set(wanted)
+  for (const item of selected) {
+    for (const other of cases) {
+      if (sameTicketFamily(item, other)) extra.add(other.id)
+    }
+  }
+  return [...extra]
+}
+
 export function reviveOnLedger(ledger: HermesLedger, item: Pick<HermesCase, "id" | "leadId" | "visitorId" | "contact">, now = new Date().toISOString()): HermesLedger {
   const contact = (item.contact || "").trim()
   return {
@@ -466,16 +499,16 @@ export function applyStaffCasesBatch(
 }
 
 export function applyStaffCasesDelete(cases: HermesCase[], ids: string[], now = new Date().toISOString()) {
-  const wanted = new Set(ids.filter((item) => item.startsWith("case-")))
+  const wanted = new Set(relatedDeleteIds(cases, ids))
   if (!wanted.size) return { cases, gone: [] as HermesCase[], count: 0, error: "empty" as const }
   const gone: HermesCase[] = []
   const next = cases.map((item) => {
-    if (!wanted.has(item.id) || item.gone) return item
-    const row = { ...item, gone: true, updatedAt: now }
+    if (!wanted.has(item.id)) return item
+    const row = item.gone ? item : { ...item, gone: true, updatedAt: now, following: false }
     gone.push(row)
     return row
   })
-  return { cases: sortHermesCases(next.filter((item) => !item.gone)), gone, count: gone.length, error: null }
+  return { cases: sortHermesCases(next), gone, count: gone.length, error: null }
 }
 
 export function progressRatio(progress: HermesProgress) {
@@ -834,10 +867,10 @@ export function attachLead(
   if (!lead) return { cases, case: null as HermesCase | null, ledger, error: "missing" as const }
   const live = liveCases(cases, ledger)
   const hit = findHermesCase(live, { leadId: lead.id, contact: lead.contact || lead.email })
-  if (hit) return { cases: live, case: hit, ledger, error: "exists" as const }
+  if (hit) return { cases, case: hit, ledger, error: "exists" as const }
   const created = caseFromLead(lead, now, live)
   return {
-    cases: sortHermesCases([created, ...live]),
+    cases: sortHermesCases([created, ...cases.filter((item) => item.id !== created.id)]),
     case: created,
     ledger: reviveOnLedger(ledger, created, now),
     error: null,
@@ -935,21 +968,22 @@ export function findHermesCase(
   cases: HermesCase[],
   keys: { id?: string; visitorId?: string; contact?: string; leadId?: string },
 ) {
+  const pool = cases.filter((item) => !item.gone)
   if (keys.id) {
-    const hit = cases.find((item) => item.id === keys.id)
+    const hit = pool.find((item) => item.id === keys.id)
     if (hit) return hit
   }
   if (keys.visitorId) {
-    const hit = cases.find((item) => item.visitorId && item.visitorId === keys.visitorId)
+    const hit = pool.find((item) => item.visitorId && item.visitorId === keys.visitorId)
     if (hit) return hit
   }
   const contact = (keys.contact || "").trim()
   if (contact.length >= 5) {
-    const hit = cases.find((item) => item.contact && item.contact === contact)
+    const hit = pool.find((item) => item.contact && item.contact === contact)
     if (hit) return hit
   }
   if (keys.leadId) {
-    const hit = cases.find((item) => item.leadId && item.leadId === keys.leadId)
+    const hit = pool.find((item) => item.leadId && item.leadId === keys.leadId)
     if (hit) return hit
   }
   return null
@@ -1287,10 +1321,11 @@ export function upsertFromTicket(
   now = new Date().toISOString(),
   ledger: HermesLedger = emptyLedger(),
 ) {
+  const effective = mergeLedgerFromCases(cases, ledger, now)
   if (
     isIdentitySuppressed(
       { visitorId: extra.visitorId, contact: ticket.contact, leadId: extra.leadId },
-      ledger,
+      effective,
     )
   ) {
     return { cases, case: null as HermesCase | null }
@@ -1353,7 +1388,8 @@ export function upsertFromVisit(
   now = new Date().toISOString(),
   ledger: HermesLedger = emptyLedger(),
 ) {
-  if (!visitorId.trim() || isProbeVisitorId(visitorId) || isIdentitySuppressed({ visitorId }, ledger)) {
+  const effective = mergeLedgerFromCases(cases, ledger, now)
+  if (!visitorId.trim() || isProbeVisitorId(visitorId) || isIdentitySuppressed({ visitorId }, effective)) {
     return { cases, case: null as HermesCase | null }
   }
   const existing = findHermesCase(cases, { visitorId })
@@ -1405,14 +1441,16 @@ export function upsertFromVisit(
 }
 
 export function importLeads(cases: HermesCase[], leads: Lead[], now = new Date().toISOString(), ledger: HermesLedger = emptyLedger()) {
-  let next = liveCases(cases, ledger)
+  const effective = mergeLedgerFromCases(cases, ledger, now)
+  const live = liveCases(cases, effective)
+  const imported: HermesCase[] = []
   for (const lead of leads) {
-    if (isLeadSuppressed(lead, ledger)) continue
-    const hit = findHermesCase(next, { leadId: lead.id, contact: lead.contact || lead.email })
+    if (isLeadSuppressed(lead, effective)) continue
+    const hit = findHermesCase([...imported, ...live], { leadId: lead.id, contact: lead.contact || lead.email })
     if (hit) continue
-    next = [caseFromLead(lead, now, next), ...next]
+    imported.push(caseFromLead(lead, now, [...imported, ...live]))
   }
-  return sortHermesCases(next)
+  return sortHermesCases([...imported, ...cases])
 }
 
 export function fileFinding(
@@ -1425,8 +1463,8 @@ export function fileFinding(
   if (!finding) return { inquiry, cases, case: null as HermesCase | null, error: "missing" as const }
   if (!finding.org || !finding.source) return { inquiry, cases, case: null, error: "unverified" as const }
   const existing =
-    (finding.caseId && cases.find((item) => item.id === finding.caseId)) ||
-    cases.find((item) => factoryName(item) === finding.org || item.org === finding.org)
+    (finding.caseId && cases.find((item) => item.id === finding.caseId && !item.gone)) ||
+    cases.find((item) => !item.gone && (factoryName(item) === finding.org || item.org === finding.org))
   const note = [finding.pain, `来源：${finding.source}`].filter(Boolean).join(" · ")
   const created = existing
     ? patchHermesCase(

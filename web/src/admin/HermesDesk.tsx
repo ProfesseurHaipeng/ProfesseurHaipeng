@@ -337,7 +337,11 @@ export function HermesDesk({
         setMobileChat(false)
       }
       try {
-        await post({ action: "cases", op: "delete", ids: wanted })
+        const payload = await post({ action: "cases", op: "delete", ids: wanted })
+        const still = (payload.cases || []).filter((item) => wanted.includes(item.id) && !item.gone)
+        if (still.length) {
+          setError("工单还在储存里，这次没删干净。")
+        }
       } catch (err) {
         setCases(snapshot)
         setError(err instanceof Error ? err.message : "删除失败")
