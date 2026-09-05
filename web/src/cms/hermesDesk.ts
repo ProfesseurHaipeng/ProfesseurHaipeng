@@ -17,6 +17,7 @@ import {
   type InquiryState,
   type InquiryTask,
 } from "./inquiryDesk"
+import { extractDirectedEmails, inquiryWorkSummary, isStaffTestEmail, runInquiryCoachCommand } from "./inquiryOutreach"
 import type { Lead } from "./leads"
 
 export type HermesOwner = "hermes" | "human"
@@ -1120,7 +1121,7 @@ export function caseFromInquiryTask(task: InquiryTask, cases: HermesCase[] = [],
     color: "blue",
     ...emptyTelemetry(),
     lastChannel: "unset",
-    nextAction: "按条件找真实厂商",
+    nextAction: "按条件找公开邮箱",
   }
 }
 
@@ -1187,7 +1188,7 @@ export function applyInquiryTaskAction(
     const bound = bindTaskCase(created.state, cases, created.task, now, ledger)
     const active = created.task.status === "searching"
     const patched = active
-      ? patchLinkedCase(bound.cases, bound.task.caseId, { progress: "talking", following: true, nextAction: "正在找真实厂商" }, now)
+      ? patchLinkedCase(bound.cases, bound.task.caseId, { progress: "talking", following: true, nextAction: "正在网上找公开邮箱" }, now)
       : { cases: bound.cases, touched: [] as HermesCase[] }
     return {
       inquiry: bound.inquiry,
@@ -1215,7 +1216,7 @@ export function applyInquiryTaskAction(
       {
         name: bound.task.name,
         note: [bound.task.instruction, bound.task.targets.map((item) => item.label).join("、")].filter(Boolean).join(" · "),
-        nextAction: bound.task.enabled ? "按条件找真实厂商" : "已停用",
+        nextAction: bound.task.enabled ? "按条件找公开邮箱" : "已停用",
       },
       now,
     )
@@ -1256,7 +1257,7 @@ export function applyInquiryTaskAction(
     const patched = patchLinkedCase(
       bound.cases,
       bound.task.caseId,
-      { progress: "talking", following: true, nextAction: "正在找真实厂商" },
+      { progress: "talking", following: true, nextAction: "正在网上找公开邮箱" },
       now,
     )
     return {
@@ -1600,14 +1601,21 @@ export function applyDeskUpdates(cases: HermesCase[], updates: Record<string, un
 
 const COACH_RULES = `你是皮纳图博火山灰项目的后台询单工位。说话对象是后台同事，不是来访客户。总览、工单、询单、档案里的对话都是同一席。
 前台高级顾问 Linda 是另一席：只对客户谈作物、吨位、检测和供应，看不到工单全表。你和前台只共享 memory.shared。desk 笔记、评价、其他客户、询单寻找结果只留在后台。
-对同事可以称询单工位或 Linda。不要把同事当成客户来问作物、地区、吨位。不要拒绝汇报本站已有的真实工单和客户情况。名单里没有的人，就说还没有这场记录，不要编。
+对同事称询单工位。不要把同事当成客户来问作物、地区、吨位。不要拒绝汇报本站已有的真实工单和客户情况。名单里没有的人，就说还没有这场记录，不要编。
 
 【权限】
 - 能看全部真实工单、联系方式、desk 记忆、询单任务、接管状态。
-- 同事可以指挥你：查工单、看档案、改跟进、起草邮件、安排用 Hermes 自己的邮箱发出、处理附件。
-- 发信用 Hermes 自己的邮箱身份。生产口若还没挂上发出信箱，只许起草并写入队列（outreach=draft，mailStatus=queued），不许写成已发送。
+- 同事可以指挥你：查工单、看档案、改跟进、起草邮件、处理附件。
+- 发信走 WEHO 已配置的 Hermes 发出信箱。收件人由你自己在公开网页上找厂商邮箱，不要问同事该发给谁，也不要把同事个人邮箱当成正式对象。同事写下的 163 / QQ / Gmail 等个人邮箱只当作发出测试。起草完成后立刻发给找到的厂商。同事问「发邮件了吗」时，对已起草的厂商信再试发出，只按邮局回执回答。没有邮局回执时只许起草入队，不许写成已发送。
 - 文件和附件走本站储存。没有独立虚拟机命令口，不要说已经用 VM 发出。
 - 不要编造客户、厂商、已发送的邮件或调查结果。
+
+【询单执行】
+同事点「开始询单」后，由本站询单执行器跑三步，不是前台 Linda，也不等你自己去搜网。
+1. 寻找目标：按任务里的厂家类型、痛点和补充指令，在公开网页上找对方已公布的邮箱。只收录页面上真实出现的邮箱。
+2. 编写内容：用本站皮纳图博火山灰农业项目的真实产品和官网写推广或营销信。可以按同事指令改语气，不要编检测数字。
+3. 发送邮件：走 WEHO 已配置的 Hermes 发出信箱，发给上一步找到的厂商，不要发给同事本人。有邮局回执才写 sent。
+找厂条件由同事定；收件人由执行器自己找。不要问同事该发给谁。同事个人邮箱只作发出测试。同事说「再找一轮」时由执行器再跑，不要自己编新厂商。
 
 【控制权】
 - 同事能通过工单列表改称呼、公司、联系方式、进度等基础字段；接管、邮件状态、跟单、跟踪、行为数据、记忆仍由你改。
@@ -1624,7 +1632,7 @@ const COACH_RULES = `你是皮纳图博火山灰项目的后台询单工位。�
 - mailTracking 只能是 none / on / opened / clicked。
 - factory 是工厂档案名称。每个真实客户一份客户档案，每家真实工厂一份工厂档案。没有厂名就留空，不要编。
 - ticketNo 是系统工单号。已有的不要改，也不要自己编新号。
-- 询单模块、工单模块和这席对话是同一个询单工位。同事选定的需求类型、家数上限、限时是硬性参数。按这些找真实厂商，到数即停，没有来源就不要写。用 <inquiry> 更新寻找结果，可以和 <desk> 同时出现。
+- 询单模块、工单模块和这席对话是同一个询单工位。同事选定的需求类型、家数上限、限时是硬性参数。按这些找公开邮箱，到数即停，没有来源就不要写。用 <inquiry> 更新寻找结果，可以和 <desk> 同时出现。
 - 没有真实邮件或对话记录时，不要编发送成功、跟单、速度和摘要。
 - 不要提 NAS、端口、网关、沙箱、Cursor。`
 
@@ -1733,15 +1741,38 @@ export function staffDeskLocalReply(input: {
     return `这是后台询单工位，不是前台高级顾问席。目前工作台上的真实工单如下，没有编造：\n${lines.join("\n")}${more}\n\n要看某一张档案、起草邮件或改进度，直接说工单号或称呼。`
   }
 
+  if (/询单|开始寻找|开始询单|再找一轮|再搜/.test(q)) {
+    const work = inquiryWorkSummary(input.inquiry || emptyInquiry())
+    if (work.reply) return work.reply
+    if (!tasks.length) {
+      return "还没有询单任务。先在询单页选定厂家类型，或者说一声开始，我现在就上网找公开邮箱并起草。"
+    }
+    const names = tasks.slice(0, 8).map((item) => item.name || "未命名").join("、")
+    return `当前任务是${names}。我会上网找已公布的邮箱，按本站火山灰写推广信。还没跑过就说开始，或问我发出了没有，我会按真实结果回答。`
+  }
+
   if (/发(邮件|信)|写信|邮件/.test(q)) {
+    const work = inquiryWorkSummary(input.inquiry || emptyInquiry())
+    if (/吗|有没有|了吗|怎么样|如何|怎样/.test(q)) {
+      if (work.reply) return work.reply
+      return "还没有发出。任务条件若已经定好，说一声开始我就跑；不要把草稿当成已经发出。"
+    }
+    const emailed = extractDirectedEmails(q)
+    if (emailed.length) {
+      const tests = emailed.filter((item) => isStaffTestEmail(item))
+      if (tests.length === emailed.length) {
+        return `这是发出测试，收件人是同事自己的邮箱 ${tests.join("、")}，不是厂商。正式询单信发给我找到的厂商公开邮箱；没有邮局回执不会写成已发送。`
+      }
+      return `收到厂商邮箱 ${emailed.join("、")}。我按本站皮纳图博火山灰起草，走 WEHO 已配置的发出信箱发给对方，不用再指定收件人；没有邮局回执不会写成已发送。`
+    }
     if (hit) {
       const who = [...new Set([hit.name, inferredVisitorName(hit.note), caseTitle(hit)].filter((item) => item && item !== "对话客户" && item !== "AI 对话客户"))].join(" · ")
       if (hit.contact) {
-        return `可以。工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}已留联系方式 ${hit.contact}。请补事由和要点，我按 Hermes 自己的邮箱身份起草。生产口若还没挂上发出信箱，只入队为草稿，不会写成已经发出。`
+        return `对着工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}，联系方式 ${hit.contact}。补一句事由我就起草；没有邮局回执仍是草稿。`
       }
-      return `可以。对着的是工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}，但这张还没留联系方式。补一个收件人，我按 Hermes 自己的邮箱身份起草；没挂上发出信箱时只入队为草稿。`
+      return `对着工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}，这张工单还没留邮箱。询单推广信不用你指定收件人，我自己找厂商公开邮箱再发出。`
     }
-    return "可以指挥我起草。请告诉我收件人（或工单号）、事由和要点。用 Hermes 自己的邮箱身份。生产口若还没挂上发出信箱，我只写成询单草稿并入队，不会假装已经发出。"
+    return "询单推广信发给我找到的厂商公开邮箱，不用你指定收件人。说一声开始我就去找并起草发出。我不会空口说已经发出。"
   }
 
   if (/档案|记忆|VM|虚拟机|储存|附件/.test(q)) {
@@ -1755,11 +1786,6 @@ export function staffDeskLocalReply(input: {
 
   if (hit) {
     return `工单 ${ticketNo(hit)}：${caseTitle(hit)}。称呼 ${hit.name || "未留"}，机构 ${hit.org || "尚无"}，进度 ${PROGRESS_LABEL[hit.progress]}。线索：${usefulVisitNote(hit.note) || hit.note || "尚无"}。要起草邮件、改跟进或打开档案，直接下指令。`
-  }
-
-  if (tasks.length && /询单/.test(q)) {
-    const names = tasks.slice(0, 8).map((item) => item.name || "未命名").join("、")
-    return `询单任务和这席对话是同一个工位。当前任务：${names}。选定需求、家数和限时后，我按真实来源起草，不编厂商，也不把草稿写成已发送。`
   }
 
   if (!q) return "询单工位在。查工单、看全部客户、起草邮件或处理附件，直接说。"
@@ -1780,6 +1806,17 @@ export async function resolveCoachReply(
   const hermes = hermesEnvFrom(env)
   const lastStaff = [...history].reverse().find((item) => item.role === "staff")?.content || ""
   const applyHint = (next: HermesMemory | undefined) => mergeSharedMemoryHint(next, staffSharedMemoryHint(lastStaff))
+  const ran = await runInquiryCoachCommand({ message: lastStaff, inquiry: currentInquiry, env })
+  if (ran) {
+    return {
+      reply: ran.report,
+      cases,
+      memory: applyHint(memory),
+      inquiry: ran.inquiry,
+      source: "outreach" as const,
+      outreach: { searched: ran.searched, drafted: ran.drafted, sent: ran.sent, report: ran.report },
+    }
+  }
   const local = () => ({
     reply: staffDeskLocalReply({ text: lastStaff, cases, memory, inquiry: currentInquiry }),
     cases,

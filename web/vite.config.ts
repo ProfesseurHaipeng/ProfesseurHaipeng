@@ -219,6 +219,7 @@ function localGuide(): Plugin {
         const deskMod = await server.ssrLoadModule("/src/cms/hermesDesk.ts")
         const hermesMod = await server.ssrLoadModule("/src/cms/hermes.ts")
         const inquiryMod = await server.ssrLoadModule("/src/cms/inquiryDesk.ts")
+        const outreachMod = await server.ssrLoadModule("/src/cms/inquiryOutreach.ts")
         const boardCases = () => {
           const swept = deskMod.sweepBoardNoise(localDesk.cases)
           if (swept.changed) {
@@ -448,6 +449,52 @@ function localGuide(): Plugin {
             localDesk.cases = result.cases
             localDesk.ledger = result.ledger
             if (result.event) pushEvent("update", result.event, result.caseId)
+            const op = typeof body.op === "string" ? body.op : ""
+            const shouldRun = (op === "start" || (op === "create" && result.assignMessage)) && result.inquiry.currentId
+            if (shouldRun) {
+              const task = result.inquiry.tasks.find((item: { id: string }) => item.id === result.inquiry.currentId)
+              if (task && task.status === "searching") {
+                const run = await outreachMod.runInquiryRound({
+                  inquiry: result.inquiry,
+                  task,
+                  env,
+                  now,
+                })
+                localDesk.inquiry = run.inquiry
+                localDesk.coach = [
+                  ...localDesk.coach,
+                  {
+                    id: deskMod.newCoachTurnId(),
+                    at: now,
+                    role: "staff",
+                    content: result.assignMessage || `开始询单：${task.name}`,
+                  },
+                  {
+                    id: deskMod.newCoachTurnId(Date.now() + 1),
+                    at: new Date().toISOString(),
+                    role: "hermes",
+                    content: run.report,
+                  },
+                ]
+                if (result.caseId) {
+                  localDesk.cases = localDesk.cases.map((item) =>
+                    item.id === result.caseId
+                      ? { ...item, nextAction: run.nextAction, updatedAt: now, following: true }
+                      : item,
+                  )
+                }
+                pushEvent("coach", String(run.report || "").replace(/\n/g, " ").slice(0, 180), result.caseId)
+                res.end(
+                  JSON.stringify({
+                    ...pack(),
+                    assignMessage: result.assignMessage || "",
+                    caseId: result.caseId || "",
+                    outreach: { searched: run.searched, drafted: run.drafted, sent: run.sent, report: run.report },
+                  }),
+                )
+                return
+              }
+            }
             res.end(JSON.stringify({ ...pack(), assignMessage: result.assignMessage || "", caseId: result.caseId || "" }))
             return
           }
@@ -499,7 +546,14 @@ function localGuide(): Plugin {
             if (result.inquiry) localDesk.inquiry = result.inquiry
             localDesk.coach = [...history, replyTurn]
             pushEvent("coach", (message || "附图").slice(0, 180))
-            res.end(JSON.stringify({ ...pack(), coach: localDesk.coach, reply: result.reply }))
+            res.end(
+              JSON.stringify({
+                ...pack(),
+                coach: localDesk.coach,
+                reply: result.reply,
+                ...(result.outreach ? { outreach: result.outreach } : {}),
+              }),
+            )
             return
           }
           res.statusCode = 400

@@ -57,7 +57,7 @@ import {
   upsertFromTicket,
   type HermesCase,
 } from "./hermesDesk"
-import { emptyInquiry, extractInquiryUpdates } from "./inquiryDesk"
+import { createInquiryTask, emptyInquiry, extractInquiryUpdates } from "./inquiryDesk"
 import type { Lead } from "./leads"
 
 const now = "2026-09-03T12:00:00.000Z"
@@ -219,6 +219,70 @@ describe("hermes desk cases", () => {
     expect(result.reply).toContain(ticketNo(sample()))
   })
 
+  it("executes a chat send instead of asking for the recipient again", async () => {
+    const result = await resolveCoachReply(
+      [sample()],
+      [{ id: "t1", at: now, role: "staff", content: "bear131419@163.com 给这个邮箱去发个邮件" }],
+      {},
+    )
+    expect(result.source).toBe("outreach")
+    expect(result.reply).toContain("bear131419@163.com")
+    expect(result.reply).toContain("发出测试")
+    expect(result.reply).toContain("皮纳图博火山灰")
+    expect(result.reply).not.toContain("请告诉我收件人")
+    expect(result.reply).not.toContain("把收件人写下")
+    expect(result.inquiry.findings[0]?.source).toBe("同事测试指令")
+    expect(result.inquiry.findings[0]?.draft).toContain("https://modeltest.store")
+  })
+
+  it("answers 发邮件了吗 from drafted findings instead of repeating the mail template", async () => {
+    const created = createInquiryTask(emptyInquiry(), { name: "一轮", targets: ["土壤板结"] }, now)
+    const inquiry = {
+      ...created.state,
+      findings: [
+        {
+          id: "f1",
+          at: now,
+          org: "绿田",
+          source: "同事对话",
+          contact: "sales@lvtian-agri.com",
+          outreach: "draft" as const,
+          draft: "皮纳图博火山灰",
+        },
+      ],
+    }
+    const result = await resolveCoachReply(
+      [sample()],
+      [{ id: "t1", at: now, role: "staff", content: "发邮件了吗？" }],
+      {},
+      undefined,
+      undefined,
+      inquiry,
+    )
+    expect(result.source).toBe("outreach")
+    expect(result.reply).toContain("sales@lvtian-agri.com")
+    expect(result.reply).not.toContain("请告诉我收件人")
+    expect(result.reply).not.toContain("把收件人写下")
+    expect(result.reply).not.toContain("可以指挥我起草")
+    expect(staffDeskLocalReply({ text: "发邮件了吗？", cases: [sample()], inquiry })).toContain("sales@lvtian-agri.com")
+    expect(staffDeskLocalReply({ text: "发个邮件", cases: [sample()] })).not.toContain("把收件人写下")
+    expect(staffDeskLocalReply({ text: "发个邮件", cases: [sample()] })).toContain("不用你指定收件人")
+  })
+
+  it("does not tell staff the mailbox is missing when WEHO Hermes is wired", async () => {
+    const result = await resolveCoachReply(
+      [sample()],
+      [{ id: "t1", at: now, role: "staff", content: "bear131419@163.com 给这个邮箱去发个邮件" }],
+      { HERMES_API_BASE: "https://advisor.example.com/v1", HERMES_API_KEY: "hk-test" },
+    )
+    expect(result.source).toBe("outreach")
+    expect(result.reply).toContain("发出测试")
+    expect(result.reply).toContain("WEHO 发出信箱已配置")
+    expect(result.reply).not.toContain("没读到发出信箱")
+    expect(result.reply).not.toContain("请告诉我收件人")
+    expect(result.reply).not.toContain("把收件人写下")
+  })
+
   it("lets staff write shared memory that the front can read", () => {
     expect(staffSharedMemoryHint("记住：本周报价以FOB马尼拉为准")).toBe("本周报价以FOB马尼拉为准")
     expect(staffSharedMemoryHint("同步到前台，先问作物和吨位")).toBe("先问作物和吨位")
@@ -266,6 +330,9 @@ describe("desk coach protocol", () => {
     expect(messages[0]?.content).toContain("mailStatus")
     expect(messages[0]?.content).toContain("不要编发送成功")
     expect(messages[0]?.content).toContain("询单模块")
+    expect(messages[0]?.content).toContain("找公开邮箱")
+    expect(messages[0]?.content).toContain("不要问同事该发给谁")
+    expect(messages[0]?.content).toContain("只当作发出测试")
     expect(messages[0]?.content).toContain("<inquiry>")
     expect(messages[0]?.content).not.toContain("Karmenai")
     expect(messages[0]?.content).not.toContain("同一个人")
@@ -680,5 +747,15 @@ describe("staff inquiry seat titles and noise", () => {
     expect(mail).toContain("王先生")
     expect(mail).toMatch(/入队|草稿/)
     expect(mail).not.toMatch(/假装已经发出/)
+    const created = createInquiryTask(emptyInquiry(), { name: "土壤板结一轮", targets: ["土壤板结"] }, now)
+    const inquiry = staffDeskLocalReply({
+      text: "开始询单之后你要做什么",
+      cases: [sample()],
+      inquiry: created.state,
+    })
+    expect(inquiry).toContain("已公布的邮箱")
+    expect(inquiry).toContain("推广信")
+    expect(inquiry).toContain("土壤板结一轮")
+    expect(inquiry).not.toContain("作物类型")
   })
 })

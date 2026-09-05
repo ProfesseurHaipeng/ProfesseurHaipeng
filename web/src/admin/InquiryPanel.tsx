@@ -23,6 +23,7 @@ type TaskPayload = {
   inquiry?: InquiryState
   assignMessage?: string
   caseId?: string
+  outreach?: { searched?: number; drafted?: number; sent?: number; report?: string }
 }
 
 export function InquiryPanel({
@@ -40,7 +41,7 @@ export function InquiryPanel({
   hermesReady?: boolean
   ticketNoOf: (caseId: string) => string
   onTask: (op: string, body?: Record<string, unknown>) => Promise<TaskPayload>
-  onStart: (id: string) => Promise<void>
+  onStart: (id: string) => Promise<{ flash?: string } | void>
   onFile: (findingId: string) => Promise<void>
   onOpenTicket: (caseId: string) => void
 }) {
@@ -58,7 +59,7 @@ export function InquiryPanel({
     try {
       const payload = await onTask("create", {
         name: "询单任务",
-        instruction: "按选定的需求和家数去网上找真实厂商。没有来源不要编。找到联系方式后只起草询单。",
+        instruction: "按选定的厂家类型和痛点，到网上找对方已公布的邮箱，用本站皮纳图博火山灰和官网写推广信，直接发给这些厂商。不要问同事该发给谁。发信走 WEHO 已配置的发出信箱；没有邮局回执只入队为草稿。没有公开邮箱不要编。",
         schedule: { kind: "once" },
         quota: 8,
         limitHours: 24,
@@ -101,7 +102,7 @@ export function InquiryPanel({
       <header className="inq-page__head">
         <div className="inq-page__title">
           <h2>询单任务</h2>
-          {flash ? <p className="inq-flash">{flash}</p> : <p>选定需求、家数和限时后，交给询单工位去找。</p>}
+          {flash ? <p className="inq-flash">{flash}</p> : <p>选定需求、家数和限时后，工位会上网找公开邮箱并起草推广信。</p>}
         </div>
         {inquiry.tasks.length ? (
           <button type="button" className="inq-mini-go" disabled={locked} onClick={() => void createTask()}>
@@ -112,7 +113,7 @@ export function InquiryPanel({
 
       {inquiry.tasks.length === 0 ? (
         <article className="inq-hero">
-          <p>创建后立刻有一张本页工单。选好厂家类型和家数，再交给询单工位去找。</p>
+          <p>创建后立刻有一张本页工单。选好厂家类型和家数，再开始询单。</p>
           <button type="button" className="inq-go" disabled={locked} onClick={() => void createTask()}>
             {locked ? "正在创建…" : "创建询单任务"}
           </button>
@@ -158,7 +159,7 @@ function TaskEditor({
   ticketNo: string
   onBack: () => void
   onTask: (op: string, body?: Record<string, unknown>) => Promise<TaskPayload>
-  onStart: () => Promise<void>
+  onStart: () => Promise<{ flash?: string } | void>
   onFile: (findingId: string) => Promise<void>
   onOpenTicket: (caseId: string) => void
   onDeleted: () => void
@@ -185,7 +186,7 @@ function TaskEditor({
       : task.status === "cancelled"
         ? "这轮已取消。工单还在，需要的话可以再开始。"
         : task.status === "searching" && !hermesReady
-          ? "任务和工单已记下。网关接通后 Linda 才会按这些参数找来源。"
+          ? "正在网上找公开邮箱。顾问网关没接通也不影响本轮寻找和起草。"
           : task.brief
             ? `${hint} · ${task.brief}`
             : hint
@@ -211,6 +212,27 @@ function TaskEditor({
     } finally {
       inflight.current = Math.max(0, inflight.current - 1)
     }
+  }
+
+  const startRound = () => {
+    if (starting || locked || !canStart) return
+    setStarting(true)
+    setEnabled(true)
+    setFlash("正在网上找公开邮箱并起草推广信…")
+    void onTask("update", {
+      id: task.id,
+      name: name.trim() || task.name,
+      instruction,
+      targets: targets.map((item) => item.label),
+      quota,
+      schedule,
+      limitHours: limitHours || 0,
+      enabled: true,
+    })
+      .then(() => onStart())
+      .then((result) => setFlash(result?.flash || "本轮询单已跑完"))
+      .catch(() => setFlash("没跑起来，再点一次"))
+      .finally(() => setStarting(false))
   }
 
   const toggleNeed = (label: string) => {
@@ -288,16 +310,9 @@ function TaskEditor({
             type="button"
             className="inq-go"
             disabled={starting || locked || !canStart}
-            onClick={() => {
-              setStarting(true)
-              setFlash("正在交给 Linda…")
-              void onStart()
-                .then(() => setFlash("已交给 Linda"))
-                .catch(() => setFlash("没交出去，再点一次"))
-                .finally(() => setStarting(false))
-            }}
+            onClick={() => startRound()}
           >
-            {starting ? "正在交给 Linda…" : "开始寻找"}
+            {starting ? "正在询单…" : "开始询单"}
           </button>
         </div>
       </header>
@@ -330,7 +345,7 @@ function TaskEditor({
                 rows={2}
                 value={instruction}
                 maxLength={2000}
-                placeholder="除需求和家数外，还要特别注意什么？"
+                placeholder="已知公开邮箱、对方网址，或这轮还要强调的产品卖点"
                 onChange={(event) => setInstruction(event.target.value)}
                 onBlur={() => {
                   if (instruction !== task.instruction) void persist({ instruction }, "指令已记下")
@@ -506,7 +521,7 @@ function TaskEditor({
                 {inquiry.findings.length} / {quota}
               </span>
             </div>
-            <p className="inq-step-note">{starting ? "正在交给 Linda…" : note}</p>
+            <p className="inq-step-note">{starting ? "正在网上找公开邮箱并起草推广信…" : note}</p>
             <ol className="inq-steps inq-steps--compact">
               {INQUIRY_RUN.map((step, index) => {
                 const fill = inquiryStepFill(jobStatus, targets.length, index)
@@ -521,7 +536,7 @@ function TaskEditor({
             {inquiry.findings.length === 0 ? (
               <div className="inq-wait">
                 <p className="inq-empty">等待开始</p>
-                <p>找到带真实来源的厂商后写在这里。</p>
+                <p>找到带公开邮箱或可核验来源的对象后写在这里。</p>
               </div>
             ) : (
               <ul className="inq-results">
@@ -567,9 +582,15 @@ function TaskEditor({
                   checked={enabled}
                   disabled={task.status === "cancelled"}
                   onChange={(event) => {
-                    setEnabled(event.target.checked)
-                    setFlash(event.target.checked ? "已启用" : "已停用")
-                    void persist({ enabled: event.target.checked }, event.target.checked ? "已启用" : "已停用")
+                    const on = event.target.checked
+                    setEnabled(on)
+                    if (on && canStart) {
+                      setFlash("已启用，正在开始询单…")
+                      startRound()
+                      return
+                    }
+                    setFlash(on ? "已启用" : "已停用")
+                    void persist({ enabled: on }, on ? "已启用" : "已停用")
                   }}
                 />
                 <i />
