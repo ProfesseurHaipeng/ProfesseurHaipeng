@@ -39,7 +39,8 @@ describe("inquiry module on the desk", () => {
   it("drops findings that have no real org or source", () => {
     expect(sanitizeFinding({ org: "某厂" }, now)).toBeNull()
     expect(sanitizeFinding({ org: "某厂", source: "同事提供的名片" }, now)?.org).toBe("某厂")
-    expect(sanitizeFinding({ org: "某厂", source: "公开名录", outreach: "sent" }, now)?.outreach).toBe("draft")
+    expect(sanitizeFinding({ org: "某厂", source: "公开名录", outreach: "sent" }, now)?.outreach).toBe("queued")
+    expect(sanitizeFinding({ org: "某厂", source: "公开名录", outreach: "sent", receipt: "sg-1" }, now)?.outreach).toBe("sent")
   })
 
   it("reads inquiry tags from the same coach reply as desk tags", () => {
@@ -85,7 +86,7 @@ describe("inquiry module on the desk", () => {
     })
     expect(state.targets).toHaveLength(1)
     expect(state.findings).toHaveLength(1)
-    expect(state.findings[0]?.outreach).toBe("draft")
+    expect(state.findings[0]?.outreach).toBe("queued")
     expect(state.job.status).toBe("searching")
   })
 
@@ -96,7 +97,7 @@ describe("inquiry module on the desk", () => {
     expect(inquiryStepFill("searching", 2, 1)).toBe("now")
     expect(inquiryStepFill("review", 2, 1)).toBe("done")
     expect(inquiryStepFill("review", 2, 2)).toBe("now")
-    expect(inquiryRunHint("review", 2)).toContain("核实来源")
+    expect(inquiryRunHint("review", 2)).toContain("核对邮箱")
     expect(inquiryRunHint("idle", 0)).toContain("先设定")
   })
 
@@ -125,7 +126,7 @@ describe("inquiry module on the desk", () => {
     expect(started.task?.dueAt).toBe(taskDueAt(24, now))
     expect(buildTaskAssignMessage(started.task!)).toContain("土壤板结")
     expect(buildTaskAssignMessage(started.task!)).toContain("最多找 8 家")
-    expect(buildTaskAssignMessage(started.task!)).toContain("不要写已经发出")
+    expect(buildTaskAssignMessage(started.task!)).toContain("没有邮局回执不要写已发送")
     const cancelled = cancelInquiryTask(started.state, created.task!.id, now)
     expect(cancelled.task?.status).toBe("cancelled")
     expect(cancelled.state.job.status).toBe("paused")

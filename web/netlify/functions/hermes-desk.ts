@@ -53,6 +53,12 @@ import {
   type HermesDeskFilter,
   type HermesEvent,
 } from "../../src/cms/hermesDesk"
+import {
+  pickRunnableInquiryTask,
+  runInquiryRound,
+  shouldRerunInquiry,
+  type InquiryRoundResult,
+} from "../../src/cms/inquiryOutreach"
 import { sortLeads, type Lead } from "../../src/cms/leads"
 
 /**
@@ -110,7 +116,29 @@ function envBag() {
     ADVISOR_CASE_ID_SECRET: readEnv("ADVISOR_CASE_ID_SECRET"),
     SIGNED_GUIDE_FALLBACK: readEnv("SIGNED_GUIDE_FALLBACK"),
     PROJECT_IDENTITY_DENYLIST: readEnv("PROJECT_IDENTITY_DENYLIST"),
+    AGENTMAIL_API_KEY: readEnv("AGENTMAIL_API_KEY"),
+    AGENTMAIL_INBOX_ID: readEnv("AGENTMAIL_INBOX_ID"),
+    AGENTMAIL_API_BASE: readEnv("AGENTMAIL_API_BASE"),
+    HERMES_MAIL_API_KEY: readEnv("HERMES_MAIL_API_KEY"),
+    HERMES_MAIL_INBOX_ID: readEnv("HERMES_MAIL_INBOX_ID"),
+    HERMES_MAIL_FROM: readEnv("HERMES_MAIL_FROM"),
+    HERMES_MAIL_ENDPOINT: readEnv("HERMES_MAIL_ENDPOINT"),
+    SENDGRID_API_KEY: readEnv("SENDGRID_API_KEY"),
+    SENDGRID_FROM: readEnv("SENDGRID_FROM"),
+    INQUIRY_MAIL_ENDPOINT: readEnv("INQUIRY_MAIL_ENDPOINT"),
+    INQUIRY_MAIL_KEY: readEnv("INQUIRY_MAIL_KEY"),
+    INQUIRY_MAIL_FROM: readEnv("INQUIRY_MAIL_FROM"),
+    INQUIRY_SEARCH_ENDPOINT: readEnv("INQUIRY_SEARCH_ENDPOINT"),
+    INQUIRY_SEARCH_KEY: readEnv("INQUIRY_SEARCH_KEY"),
+    BRAVE_SEARCH_API_KEY: readEnv("BRAVE_SEARCH_API_KEY"),
+    TAVILY_API_KEY: readEnv("TAVILY_API_KEY"),
+    PUBLIC_SITE_URL: readEnv("PUBLIC_SITE_URL"),
+    SITE_URL: readEnv("SITE_URL") || readEnv("URL"),
   }
+}
+
+function outreachPayload(run: InquiryRoundResult) {
+  return { searched: run.searched, drafted: run.drafted, sent: run.sent, report: run.report }
 }
 
 function isStaff(req: Request) {
@@ -366,6 +394,45 @@ export default async (req: Request) => {
     if (result.gone.length) await persistDeleted(result.gone, result.ledger)
     else if (result.ledger !== ledger) await persistLedger(result.ledger)
     if (result.event) await appendHermesEvent(eventOf("update", result.event, result.caseId))
+    const op = typeof body.op === "string" ? body.op : ""
+    const shouldRun = (op === "start" || (op === "create" && result.assignMessage)) && result.inquiry.currentId
+    if (shouldRun) {
+      const task = result.inquiry.tasks.find((item) => item.id === result.inquiry.currentId)
+      if (task && task.status === "searching") {
+        const run = await runInquiryRound({
+          inquiry: result.inquiry,
+          task,
+          env: envBag(),
+          now,
+        })
+        await writeInquiryState(run.inquiry)
+        const history = await readHermesCoach()
+        const staff: HermesCoachTurn = {
+          id: newCoachTurnId(),
+          at: now,
+          role: "staff",
+          content: result.assignMessage || `开始询单：${task.name}`,
+        }
+        const reply: HermesCoachTurn = {
+          id: newCoachTurnId(Date.now() + 1),
+          at: new Date().toISOString(),
+          role: "hermes",
+          content: run.report,
+        }
+        await writeHermesCoach([...history, staff, reply])
+        if (result.caseId) {
+          const rec = result.cases.find((item) => item.id === result.caseId)
+          if (rec) await persistCase({ ...rec, nextAction: run.nextAction, updatedAt: now, following: true })
+        }
+        await appendHermesEvent(eventOf("coach", run.report.replace(/\n/g, " ").slice(0, 180), result.caseId))
+        return json({
+          ...(await payload()),
+          assignMessage: result.assignMessage || "",
+          caseId: result.caseId || "",
+          outreach: outreachPayload(run),
+        })
+      }
+    }
     return json({
       ...(await payload()),
       assignMessage: result.assignMessage || "",
@@ -397,6 +464,27 @@ export default async (req: Request) => {
     const memory = (await readHermesMemory()) || emptyMemory()
     const inquiry = await readInquiryState()
     const env = envBag()
+    if (shouldRerunInquiry(message)) {
+      const task = pickRunnableInquiryTask(inquiry)
+      if (task) {
+        const run = await runInquiryRound({ inquiry, task, env, now })
+        await writeInquiryState(run.inquiry)
+        const replyTurn: HermesCoachTurn = {
+          id: newCoachTurnId(Date.now() + 1),
+          at: new Date().toISOString(),
+          role: "hermes",
+          content: run.report,
+        }
+        const coach = [...history, replyTurn]
+        await writeHermesCoach(coach)
+        if (task.caseId) {
+          const rec = cases.find((item) => item.id === task.caseId)
+          if (rec) await persistCase({ ...rec, nextAction: run.nextAction, updatedAt: now, following: true })
+        }
+        await appendHermesEvent(eventOf("coach", message.slice(0, 180)))
+        return json({ ...(await payload()), coach, reply: run.report, outreach: outreachPayload(run) })
+      }
+    }
     const secret = env.ADVISOR_CASE_ID_SECRET || ""
     const conversationId = advisorConversationIdentity("desk:staff-inquiry", secret)
     const coachResult = await resolveCoachReply(
@@ -440,4 +528,5 @@ export default async (req: Request) => {
 
 export const config: Config = {
   method: ["GET", "POST", "OPTIONS"],
+  timeout: 26,
 }

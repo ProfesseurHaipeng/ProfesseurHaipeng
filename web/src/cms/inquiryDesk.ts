@@ -19,6 +19,7 @@ export type InquiryFinding = {
   contact?: string
   outreach: InquiryOutreach
   draft?: string
+  receipt?: string
   caseId?: string
 }
 
@@ -136,9 +137,9 @@ export function scheduleLabel(schedule: InquirySchedule) {
 
 export const INQUIRY_RUN = [
   { key: "collect", label: "取条件" },
-  { key: "source", label: "找来源" },
-  { key: "verify", label: "核实" },
-  { key: "draft", label: "起草稿" },
+  { key: "source", label: "找公开邮箱" },
+  { key: "draft", label: "写推广信" },
+  { key: "send", label: "发出或入队" },
 ] as const
 
 export type InquiryRunFill = "done" | "now" | "wait"
@@ -163,9 +164,9 @@ export function inquiryStepFill(status: InquiryJobStatus, targetCount: number, s
 
 export function inquiryRunHint(status: InquiryJobStatus, targetCount: number) {
   if (status === "paused") return "已暂停。同事再说一声再继续。"
-  if (status === "drafting") return "来源已核实，正在起草询单。"
-  if (status === "review") return "正在核实来源，只收可查证的厂商。"
-  if (status === "searching") return "正在找可查证的来源，没有来源不建档。"
+  if (status === "drafting") return "公开邮箱已记下，正在写推广信或入队发出。"
+  if (status === "review") return "已找到公开来源，正在核对邮箱并写推广信。"
+  if (status === "searching") return "正在网上找对方已公布的邮箱，没有公开邮箱不建档。"
   if (targetCount > 0) return "条件已记下，还没开始找。"
   return "先设定弊端或对口类型。"
 }
@@ -244,9 +245,10 @@ export function applyTargetWrite(targets: InquiryTarget[], raw: Record<string, u
   return { targets, error: "empty" as const }
 }
 
-function asOutreach(value: unknown): InquiryOutreach {
-  if (value === "sent") return "draft"
-  return value === "draft" || value === "queued" || value === "blocked" || value === "none" ? value : "none"
+export function asOutreach(value: unknown, receipt?: string): InquiryOutreach {
+  if (value === "draft" || value === "queued" || value === "blocked" || value === "none") return value
+  if (value === "sent") return String(receipt || "").trim() ? "sent" : "queued"
+  return "none"
 }
 
 function asJobStatus(value: unknown): InquiryJobStatus {
@@ -351,8 +353,9 @@ export function sanitizeFinding(raw: unknown, now = new Date().toISOString()): I
     pain: clean(row.pain, 120) || undefined,
     source,
     contact: clean(row.contact, 200) || undefined,
-    outreach: asOutreach(row.outreach),
-    draft: clean(row.draft, 2000) || undefined,
+    outreach: asOutreach(row.outreach, clean(row.receipt, 240)),
+    draft: clean(row.draft, 4000) || undefined,
+    receipt: clean(row.receipt, 240) || undefined,
     caseId: clean(row.caseId, 80) || undefined,
   }
 }
@@ -444,8 +447,8 @@ export function extractInquiryUpdates(reply: string): {
 export function buildInquiryAssignMessage(targets: InquiryTarget[]) {
   const list = targets.map((item) => item.label).join("、")
   return list
-    ? `按这些厂商弊端 / 对口类型去找真实厂商：${list}。流程按 取条件 → 找来源 → 核实 → 起草稿。没有来源不要编。找到后只起草询单，不要群发。`
-    : "先记下：同事还没设定弊端。请提醒他们先设定要找的厂商类型，不要编造厂商。"
+    ? `按这些厂家类型 / 痛点去网上找对方已公布的邮箱：${list}。流程按 取条件 → 找公开邮箱 → 写推广信 → 发出或入队。没有公开邮箱不要编。本站挂了发出信箱才发，没有邮局回执不要写已发送。`
+    : "先记下：同事还没设定要找的类型。请提醒他们先选定厂家类型或写指令，不要编造厂商或邮箱。"
 }
 
 export type InquiryPromptPreview = {
@@ -493,13 +496,14 @@ export function inquiryCoachExtra(state: InquiryState) {
   const jobLine = `${JOB_LABEL[state.job.status]}${state.job.brief ? `。${state.job.brief}` : ""}`
   return [
     "【询单模块（与工单、档案同一询单工位）】",
-    "- 同事选定的需求类型、家数上限、限时都是硬性参数。按这些去网上找真实厂商，到数即停，到点即停。",
-    "- 没有真实来源就不要写厂商。不要编公司名、电话、邮箱、网址。",
-    "- 找到的每一条必须带 source，并尽量写下官网、联系方式或邮箱。同事可指挥用 Hermes 自己的邮箱发信；生产口若还没挂上发出信箱，只许起草入队，不许群发，不许写 sent。",
-    "- 对口时用本站皮纳图博火山灰农业项目的真实内容，不要编项目参数。",
-    "- 看板进度是：取条件 → 找来源 → 核实 → 起草稿。开始找写 searching，核实时 review，起草时 drafting。",
+    "- 同事点「开始询单」后，由本站询单执行器跑三步，不是前台高级顾问，也不等聊天模型自己去搜网。",
+    "- 1 寻找目标：按需求类型、家数上限、限时，在公开网页上找对方已公布的邮箱。只收录页面上真实出现的邮箱。",
+    "- 2 编写内容：用本站皮纳图博火山灰农业项目的真实产品和官网写推广或营销信。可以按同事指令改语气，不要编检测数字。",
+    "- 3 发送邮件：只用本站环境里挂好的询单发出信箱。有邮局回执才写 sent。没挂信箱就 outreach=draft 或 queued。",
+    "- 没有真实来源就不要写厂商。不要编公司名、电话、邮箱、网址。同事说「再找一轮」时由执行器再跑。",
+    "- 看板进度是：取条件 → 找公开邮箱 → 写推广信 → 发出或入队。开始找写 searching，核实时 review，起草或入队时 drafting。",
     "- 更新寻找结果时另起一行：",
-    '<inquiry>{"job":{"status":"review","brief":"本轮条件"},"findings":[{"org":"真实厂名","place":"地区","pain":"弊端","source":"来源","contact":"公开联系方式","outreach":"draft","draft":"询单草稿"}]}</inquiry>',
+    '<inquiry>{"job":{"status":"review","brief":"本轮条件"},"findings":[{"org":"真实厂名","place":"地区","pain":"弊端","source":"来源","contact":"公开邮箱","outreach":"draft","draft":"推广信草稿"}]}</inquiry>',
     "",
     `【要找的弊端 / 对口类型】\n${targetLines}`,
     `【当前询单任务】${jobLine}`,
@@ -508,11 +512,11 @@ export function inquiryCoachExtra(state: InquiryState) {
           `【本轮硬性参数】这些是同事定下的，必须遵守，不够不要编。`,
           `名称=${currentTask.name}`,
           `需求=${currentTask.targets.map((item) => item.label).join("、") || "尚未选定"}`,
-          `家数上限=${currentTask.quota || 8}。找到这么多家带真实来源的就停；不够就如实写还差几家。`,
+          `家数上限=${currentTask.quota || 8}。找到这么多家带公开邮箱或可核验来源的就停；不够就如实写还差几家。`,
           `限时=${currentTask.limitHours ? `${currentTask.limitHours} 小时` : "不限"}`,
           `节奏=${scheduleLabel(currentTask.schedule)}`,
           `工单=${currentTask.caseId || "尚未建档"}`,
-          "触达=找到官网、可核验来源、联系方式或邮箱后起草询单邮件。生产口若还没挂上发出信箱，outreach 只能写 draft，不许写 sent。",
+          "触达=网上找到已公布的邮箱后写推广信。本站挂了发出信箱才发；没有邮局回执不许写 sent。",
           "对口时按本站皮纳图博火山灰农业项目的真实内容，不要编项目参数。",
         ].join("；")
       : "",
@@ -785,12 +789,12 @@ export function buildTaskAssignMessage(task: InquiryTask) {
   const list = task.targets.map((item) => item.label).join("、")
   const extra = task.instruction ? `补充指令：${task.instruction}` : ""
   return [
-    list ? `按这些真实需求去找厂商：${list}。` : "按同事写的指令去找真实厂商。",
+    list ? `按这些真实需求去网上找对方已公布的邮箱：${list}。` : "按同事写的指令去网上找对方已公布的邮箱。",
     extra,
-    `本轮最多找 ${task.quota || 8} 家带真实来源的厂商，到数即停，不够不要编。`,
+    `本轮最多找 ${task.quota || 8} 家带公开邮箱或可核验来源的对象，到数即停，不够不要编。`,
     task.limitHours ? `本轮限时 ${task.limitHours} 小时，到点停止。` : "",
-    "流程按 取条件 → 找来源 → 核实 → 起草稿。没有来源不要编。",
-    "找到官网、可核验来源、联系方式或邮箱后起草询单邮件。生产口若还没挂上 Hermes 自己的发出信箱，只入队为草稿，不要写已经发出。",
+    "流程按 取条件 → 找公开邮箱 → 写推广信 → 发出或入队。没有公开邮箱不要编。",
+    "用本站皮纳图博火山灰和官网写推广或营销信。本站挂了询单发出信箱就发；没有邮局回执不要写已发送。",
   ]
     .filter(Boolean)
     .join("")

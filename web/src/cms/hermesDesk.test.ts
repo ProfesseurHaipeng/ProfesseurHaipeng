@@ -57,7 +57,7 @@ import {
   upsertFromTicket,
   type HermesCase,
 } from "./hermesDesk"
-import { emptyInquiry, extractInquiryUpdates } from "./inquiryDesk"
+import { createInquiryTask, emptyInquiry, extractInquiryUpdates } from "./inquiryDesk"
 import type { Lead } from "./leads"
 
 const now = "2026-09-03T12:00:00.000Z"
@@ -266,6 +266,7 @@ describe("desk coach protocol", () => {
     expect(messages[0]?.content).toContain("mailStatus")
     expect(messages[0]?.content).toContain("不要编发送成功")
     expect(messages[0]?.content).toContain("询单模块")
+    expect(messages[0]?.content).toContain("找公开邮箱")
     expect(messages[0]?.content).toContain("<inquiry>")
     expect(messages[0]?.content).not.toContain("Karmenai")
     expect(messages[0]?.content).not.toContain("同一个人")
@@ -680,5 +681,15 @@ describe("staff inquiry seat titles and noise", () => {
     expect(mail).toContain("王先生")
     expect(mail).toMatch(/入队|草稿/)
     expect(mail).not.toMatch(/假装已经发出/)
+    const created = createInquiryTask(emptyInquiry(), { name: "土壤板结一轮", targets: ["土壤板结"] }, now)
+    const inquiry = staffDeskLocalReply({
+      text: "开始询单之后你要做什么",
+      cases: [sample()],
+      inquiry: created.state,
+    })
+    expect(inquiry).toContain("已公布的邮箱")
+    expect(inquiry).toContain("推广信")
+    expect(inquiry).toContain("土壤板结一轮")
+    expect(inquiry).not.toContain("作物类型")
   })
 })
