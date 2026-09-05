@@ -132,7 +132,11 @@ function localGuide(): Plugin {
         const deskMod = await server.ssrLoadModule("/src/cms/hermesDesk.ts")
         const hermesMod = await server.ssrLoadModule("/src/cms/hermes.ts")
         const inquiryMod = await server.ssrLoadModule("/src/cms/inquiryDesk.ts")
-        const liveCases = () => deskMod.liveCases(localDesk.cases, localDesk.ledger)
+        const liveCases = () => {
+          const swept = deskMod.sweepBoardNoise(localDesk.cases)
+          if (swept.changed) localDesk.cases = swept.cases
+          return deskMod.liveCases(localDesk.cases, localDesk.ledger)
+        }
         const pack = () => {
           localDesk.cases = liveCases()
           return deskMod.decorateDeskPayload({
@@ -371,7 +375,7 @@ function localGuide(): Plugin {
               localDesk.memory,
               images.map((image: { mime: string; data: string }) => ({ mime: image.mime, data: image.data })),
               localDesk.inquiry,
-              localConversationId("desk:linda-workbench", env.ADVISOR_CASE_ID_SECRET || ""),
+              localConversationId("desk:staff-inquiry", env.ADVISOR_CASE_ID_SECRET || ""),
             )
             const replyTurn = {
               id: deskMod.newCoachTurnId(Date.now() + 1),

@@ -53,7 +53,7 @@ export function DeskBoard({
     <section className="desk-board">
       <header className="desk-board__head">
         <h2>工作总览</h2>
-        <p>数字都来自本站工单、询单和事件。没有的就显示 0。</p>
+        <p>数字都来自本站工单、询单和事件。对话是同一个询单工位。没有的就显示 0。</p>
       </header>
       <ul className="desk-board__cards">
         {cards.map((item) => (

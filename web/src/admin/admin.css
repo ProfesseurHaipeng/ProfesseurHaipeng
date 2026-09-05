@@ -4463,11 +4463,47 @@ body:has(.admin-shell--desk) #root {
 }
 
 .hermes-karmenai .hermes-grok__body--overview,
-.hermes-karmenai .hermes-grok__body--inquiry,
+.hermes-karmenai .hermes-grok__body--inquiry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(22rem, 28rem);
+  overflow: hidden;
+}
+
 .hermes-karmenai .hermes-grok__body--archives {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(22rem, 28rem) minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.karm-seat-col {
+  min-width: 0;
   overflow: auto;
+}
+
+.karm-seat-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem 0.75rem;
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--admin-line);
+  border-radius: 0.75rem;
+  background: #f7f8f6;
+  color: var(--admin-muted);
+  font-size: 0.78rem;
+}
+
+.karm-seat-bar button {
+  border: 1px solid var(--admin-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--admin-ink);
+  padding: 0.28rem 0.7rem;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
 }
 
 .hermes-karmenai .hermes-panel {
@@ -4487,12 +4523,11 @@ body:has(.admin-shell--desk) #root {
   display: none !important;
 }
 
-.hermes-karmenai .hermes-grok__body--overview .hermes-panel,
 .hermes-karmenai .hermes-grok__body--overview .hermes-grok__chat,
-.hermes-karmenai .hermes-grok__body--inquiry .hermes-panel,
 .hermes-karmenai .hermes-grok__body--inquiry .hermes-grok__chat,
 .hermes-karmenai .hermes-grok__body--archives .hermes-grok__chat {
-  display: none;
+  display: grid;
+  min-height: 0;
 }
 
 .desk-tickets__head h2 {
@@ -4581,6 +4616,7 @@ body:has(.admin-shell--desk) #root {
 
 .desk-tickets__list {
   gap: 0.2rem;
+  overflow: visible;
 }
 
 .desk-tickets__list > li {
@@ -4589,6 +4625,12 @@ body:has(.admin-shell--desk) #root {
   border-radius: 0.75rem;
   background: transparent;
   padding-left: 0.2rem;
+  overflow: visible;
+  position: relative;
+}
+
+.desk-tickets__list > li:has(.karm-menu) {
+  z-index: 8;
 }
 
 .desk-tickets__list > li::before {
@@ -4657,7 +4699,7 @@ body:has(.admin-shell--desk) #root {
   position: absolute;
   top: 2.1rem;
   right: 0;
-  z-index: 5;
+  z-index: 40;
   min-width: 7.5rem;
   display: grid;
   background: #fff;
@@ -4686,6 +4728,11 @@ body:has(.admin-shell--desk) #root {
 }
 
 .karm-chat-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   background: #fff;
   border-bottom: 0;
   padding: 0.85rem 1.05rem 0.35rem;
@@ -4695,6 +4742,7 @@ body:has(.admin-shell--desk) #root {
   display: flex;
   align-items: center;
   gap: 0.55rem;
+  flex: 1 1 12rem;
   min-width: 0;
 }
 
@@ -4711,6 +4759,8 @@ body:has(.admin-shell--desk) #root {
   position: relative;
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
+  margin-left: auto;
   gap: 0.25rem;
 }
 
@@ -4737,6 +4787,7 @@ body:has(.admin-shell--desk) #root {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.75rem;
   padding: 0.15rem 1.05rem 0.7rem;
   background: #fff;
@@ -5250,11 +5301,46 @@ body:has(.admin-shell--desk) #root {
   }
 
   .karm-ghost span {
-    display: none;
+    display: inline;
   }
 
   .karm-chat-sub > div {
-    display: none;
+    display: flex;
+    width: 100%;
+    justify-content: flex-end;
+    gap: 0.65rem;
+  }
+
+  .hermes-karmenai .hermes-grok__body--overview,
+  .hermes-karmenai .hermes-grok__body--inquiry,
+  .hermes-karmenai .hermes-grok__body--archives,
+  .hermes-karmenai .hermes-grok__body--desk {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hermes-karmenai .hermes-grok__body--overview .hermes-grok__chat,
+  .hermes-karmenai .hermes-grok__body--inquiry .hermes-grok__chat,
+  .hermes-karmenai .hermes-grok__body--archives .hermes-grok__chat,
+  .hermes-karmenai .hermes-grok__body--desk .hermes-grok__chat {
+    display: none !important;
+  }
+
+  .hermes-karmenai.is-mobile-chat .karm-seat-col,
+  .hermes-karmenai.is-mobile-chat .hermes-panel,
+  .hermes-karmenai .hermes-grok__body--overview.is-mobile-chat .karm-seat-col,
+  .hermes-karmenai .hermes-grok__body--inquiry.is-mobile-chat .karm-seat-col,
+  .hermes-karmenai .hermes-grok__body--archives.is-mobile-chat .hermes-panel,
+  .hermes-karmenai .hermes-grok__body--desk.is-mobile-chat .hermes-panel {
+    display: none !important;
+  }
+
+  .hermes-karmenai .hermes-grok__body--overview.is-mobile-chat .hermes-grok__chat,
+  .hermes-karmenai .hermes-grok__body--inquiry.is-mobile-chat .hermes-grok__chat,
+  .hermes-karmenai .hermes-grok__body--archives.is-mobile-chat .hermes-grok__chat,
+  .hermes-karmenai .hermes-grok__body--desk.is-mobile-chat .hermes-grok__chat {
+    display: grid !important;
+    flex: 1 1 auto;
   }
 
   .desk-tickets__list > li {

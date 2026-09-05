@@ -125,7 +125,7 @@ describe("inquiry module on the desk", () => {
     expect(started.task?.dueAt).toBe(taskDueAt(24, now))
     expect(buildTaskAssignMessage(started.task!)).toContain("土壤板结")
     expect(buildTaskAssignMessage(started.task!)).toContain("最多找 8 家")
-    expect(buildTaskAssignMessage(started.task!)).toContain("没有发信口")
+    expect(buildTaskAssignMessage(started.task!)).toContain("不要写已经发出")
     const cancelled = cancelInquiryTask(started.state, created.task!.id, now)
     expect(cancelled.task?.status).toBe("cancelled")
     expect(cancelled.state.job.status).toBe("paused")

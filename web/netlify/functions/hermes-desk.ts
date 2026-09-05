@@ -45,6 +45,7 @@ import {
   publicAttachable,
   resolveCoachReply,
   sanitizeCoachImages,
+  sweepBoardNoise,
   type HermesCase,
   type HermesCoachTurn,
   type HermesDeskFilter,
@@ -53,8 +54,8 @@ import {
 import { sortLeads, type Lead } from "../../src/cms/leads"
 
 /**
- * Staff Hermes desk. Same person / same shared memory as frontend Hermes.
- * Desk privilege is higher. Frontend never receives desk memory, coach, or other cases.
+ * Staff inquiry workstation. Separate seat from the public senior advisor.
+ * Shares memory.shared only. Frontend never receives desk memory, coach, or other cases.
  *
  * GET  /api/hermes-desk
  * POST /api/hermes-desk  { action }
@@ -160,7 +161,18 @@ async function loadInquiry() {
 
 async function loadDesk() {
   const ledger = await readHermesLedger()
-  const cases = liveCases(await readHermesCases({ includeGone: true }), ledger)
+  const raw = liveCases(await readHermesCases({ includeGone: true }), ledger)
+  const swept = sweepBoardNoise(raw)
+  if (swept.changed) {
+    for (const item of swept.gone) {
+      try {
+        await persistCase(item)
+      } catch {
+        /* keep serving the cleaned list even if one write fails */
+      }
+    }
+  }
+  const cases = liveCases(swept.cases, ledger)
   const leads = await loadLeads()
   return { cases, leads, ledger }
 }
@@ -381,7 +393,7 @@ export default async (req: Request) => {
     const inquiry = await readInquiryState()
     const env = envBag()
     const secret = env.ADVISOR_CASE_ID_SECRET || ""
-    const conversationId = advisorConversationIdentity("desk:linda-workbench", secret)
+    const conversationId = advisorConversationIdentity("desk:staff-inquiry", secret)
     const coachResult = await resolveCoachReply(
       cases,
       history,

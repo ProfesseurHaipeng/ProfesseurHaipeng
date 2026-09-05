@@ -38,7 +38,12 @@ import {
   publicVisitorContext,
   recordInquiry,
   resolveCoachReply,
-  coachUnavailableReply,
+  staffDeskLocalReply,
+  caseTitle,
+  isBoardNoiseCase,
+  isNoiseVisitNote,
+  sweepBoardNoise,
+  upsertFromVisit,
   sanitizeCoachImages,
   stageFill,
   ticketNo,
@@ -47,7 +52,6 @@ import {
   matchDeskSearch,
   newTicketNo,
   upsertFromTicket,
-  upsertFromVisit,
   type HermesCase,
 } from "./hermesDesk"
 import { emptyInquiry, extractInquiryUpdates } from "./inquiryDesk"
@@ -175,30 +179,41 @@ describe("hermes desk cases", () => {
     expect(extra).not.toContain("内部看好")
   })
 
-  it("uses the signed backup for workbench chat when live keys are missing", async () => {
+  it("keeps the staff inquiry seat local and never calls the public signed guide", async () => {
     const original = globalThis.fetch
-    globalThis.fetch = async () =>
-      new Response(JSON.stringify({ source: "hermes", reply: "收到。我先按这份报价跟王先生。" }), { status: 200 })
+    let called = false
+    globalThis.fetch = async () => {
+      called = true
+      return new Response(JSON.stringify({ source: "hermes", reply: "您好，我是高级顾问 Linda，请告诉我作物和吨位。" }), { status: 200 })
+    }
     try {
       const result = await resolveCoachReply(
         [sample()],
-        [{ id: "t1", at: now, role: "staff", content: "记住：本周报价以FOB马尼拉为准" }],
+        [{ id: "t1", at: now, role: "staff", content: "告诉我目前全部的客户情况" }],
         { SIGNED_GUIDE_FALLBACK: "1" },
         { shared: "", desk: "", updatedAt: now },
       )
-      expect(result.source).toBe("hermes")
-      expect(result.reply).toContain("报价")
-      expect(result.reply).not.toBe(coachUnavailableReply())
-      expect(result.memory?.shared).toContain("FOB马尼拉")
+      expect(called).toBe(false)
+      expect(result.source).toBe("local")
+      expect(result.reply).toContain("询单工位")
+      expect(result.reply).toContain("王先生")
+      expect(result.reply).toContain("不是前台高级顾问席")
+      expect(result.reply).not.toMatch(/请告诉我作物|不能透露|每场谈判/)
     } finally {
       globalThis.fetch = original
     }
   })
 
-  it("does not pretend the workbench chat is live when no line is configured", async () => {
-    const result = await resolveCoachReply([], [{ id: "t1", at: now, role: "staff", content: "先问作物" }], {})
+  it("answers staff from the real roster when the advisor gateway is down", async () => {
+    const result = await resolveCoachReply(
+      [sample()],
+      [{ id: "t1", at: now, role: "staff", content: "你跟我说一下目前我们全部的客户情况" }],
+      {},
+    )
     expect(result.source).toBe("local")
-    expect(result.reply).toBe(coachUnavailableReply())
+    expect(result.reply).toContain("询单工位")
+    expect(result.reply).toContain("王先生")
+    expect(result.reply).toContain(ticketNo(sample()))
   })
 
   it("lets staff write shared memory that the front can read", () => {
@@ -237,20 +252,20 @@ describe("desk coach protocol", () => {
     expect(parsed.updates[0]?.progress).toBe("sample")
   })
 
-  it("briefs Hermes without putting raw emails in the roster line", () => {
+  it("briefs the staff inquiry seat with contacts and does not play visitor Linda", () => {
     const messages = buildCoachMessages([sample({ contact: "boss@example.com" })], [])
-    expect(messages[0]?.content).toContain("已留联系方式")
-    expect(messages[0]?.content).not.toContain("boss@example.com")
+    expect(messages[0]?.content).toContain("询单工位")
+    expect(messages[0]?.content).toContain("不是来访客户")
+    expect(messages[0]?.content).toContain("boss@example.com")
     expect(messages[0]?.content).toContain("不要提 NAS")
-    expect(messages[0]?.content).toContain("同一个人")
-    expect(messages[0]?.content).toContain("权限更高")
+    expect(messages[0]?.content).toContain("前台高级顾问 Linda 是另一席")
     expect(messages[0]?.content).toContain("一键接管也只能由你执行")
     expect(messages[0]?.content).toContain("mailStatus")
     expect(messages[0]?.content).toContain("不要编发送成功")
     expect(messages[0]?.content).toContain("询单模块")
     expect(messages[0]?.content).toContain("<inquiry>")
-    expect(messages[0]?.content).toContain("Linda")
     expect(messages[0]?.content).not.toContain("Karmenai")
+    expect(messages[0]?.content).not.toContain("同一个人")
   })
 
   it("keeps desk and inquiry tags on the same coach reply without mixing them", () => {
@@ -549,5 +564,61 @@ describe("desk board telemetry", () => {
     expect(updated.cases).toHaveLength(0)
     expect(updated.touched).toHaveLength(0)
     expect(updated.inquiry.tasks[0]?.caseId).toBe(caseId)
+  })
+})
+
+describe("staff inquiry seat titles and noise", () => {
+  it("does not use probe notes or staff instructions as ticket titles", () => {
+    expect(isNoiseVisitNote("转高级顾问")).toBe(true)
+    expect(isNoiseVisitNote("皮纳图博火山灰项目")).toBe(true)
+    expect(isNoiseVisitNote("水稻怎么用火山灰?")).toBe(false)
+    const leaked = sample({
+      id: "case-leak",
+      name: "对话客户",
+      org: "",
+      contact: "",
+      note: "水稻用火山灰，同事让你先问王先生吨位",
+      visitorId: "probe-1",
+    })
+    expect(isBoardNoiseCase(leaked)).toBe(true)
+    expect(caseTitle(sample({ name: "对话客户", org: "", note: "转高级顾问" }))).toBe(ticketNo(sample()))
+    expect(caseTitle(sample({ name: "对话客户", org: "", note: "水稻怎么用火山灰?" }))).toBe("水稻怎么用火山灰?")
+    expect(caseTitle(sample())).toBe("王先生")
+  })
+
+  it("does not mint tickets from probe visitors or escalate-only notes", () => {
+    expect(upsertFromVisit([], "probe-dep", "转高级顾问", now).case).toBeNull()
+    expect(upsertFromVisit([], "vis-real", "转高级顾问", now).case).toBeNull()
+    const created = upsertFromVisit([], "vis-real", "水稻怎么用火山灰?", now)
+    expect(created.case?.note).toBe("水稻怎么用火山灰?")
+    const again = upsertFromVisit(created.cases, "vis-real", "转高级顾问", now)
+    expect(again.case?.note).toBe("水稻怎么用火山灰?")
+  })
+
+  it("sweeps leaked staff-guide tickets off the live board", () => {
+    const leak = sample({
+      id: "case-staff",
+      name: "对话客户",
+      org: "",
+      contact: "",
+      note: "同事要求：先问王先生作物",
+      visitorId: "local-1",
+    })
+    const kept = sample()
+    const swept = sweepBoardNoise([leak, kept], now)
+    expect(swept.changed).toBe(true)
+    expect(swept.cases.find((item) => item.id === "case-staff")?.gone).toBe(true)
+    expect(filterHermesCases(swept.cases, { origin: "live" }).map((item) => item.id)).toEqual(["case-1"])
+  })
+
+  it("lists real tickets when staff ask for all customers", () => {
+    const reply = staffDeskLocalReply({
+      text: "你跟我说一下目前我们全部的客户情况",
+      cases: [sample()],
+    })
+    expect(reply).toContain("询单工位")
+    expect(reply).toContain("王先生")
+    expect(reply).not.toContain("不能透露")
+    expect(reply).not.toContain("作物类型")
   })
 })
