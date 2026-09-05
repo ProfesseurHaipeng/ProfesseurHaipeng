@@ -13,6 +13,9 @@
 [functions."hermes-desk"]
   timeout = 26
 
+[functions."inquiry-cron"]
+  timeout = 26
+
 [[redirects]]
   from = "/api/content"
   to = "/.netlify/functions/content"

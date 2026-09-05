@@ -391,7 +391,10 @@ export default async (req: Request) => {
     else if (result.ledger !== ledger) await persistLedger(result.ledger)
     if (result.event) await appendHermesEvent(eventOf("update", result.event, result.caseId))
     const op = typeof body.op === "string" ? body.op : ""
-    const shouldRun = (op === "start" || (op === "create" && result.assignMessage)) && result.inquiry.currentId
+    const shouldRun =
+      (op === "start" || op === "tick" || (op === "create" && result.assignMessage)) &&
+      result.assignMessage &&
+      result.inquiry.currentId
     if (shouldRun) {
       const task = result.inquiry.tasks.find((item) => item.id === result.inquiry.currentId)
       if (task && task.status === "searching") {

@@ -42,6 +42,18 @@ export type InquiryRunRecord = {
   note?: string
 }
 
+export type InquiryWorkKind = "think" | "search" | "skip" | "open" | "found" | "draft" | "send" | "sent" | "fail" | "note"
+
+export type InquiryWorkEvent = {
+  id: string
+  at: string
+  kind: InquiryWorkKind
+  text: string
+  url?: string
+  contact?: string
+  taskId?: string
+}
+
 export type InquiryTask = {
   id: string
   name: string
@@ -69,6 +81,8 @@ export type InquiryState = {
   job: InquiryJob
   tasks: InquiryTask[]
   currentId?: string
+  journal: InquiryWorkEvent[]
+  lastReport?: string
 }
 
 export const OUTREACH_LABEL: Record<InquiryOutreach, string> = {
@@ -176,7 +190,7 @@ export function emptyInquiryJob(): InquiryJob {
 }
 
 export function emptyInquiry(): InquiryState {
-  return { targets: [], findings: [], job: emptyInquiryJob(), tasks: [] }
+  return { targets: [], findings: [], job: emptyInquiryJob(), tasks: [], journal: [] }
 }
 
 export function hydrateInquiryState(raw: unknown): InquiryState {
@@ -207,7 +221,59 @@ export function hydrateInquiryState(raw: unknown): InquiryState {
       : base.job,
     tasks: Array.isArray(row.tasks) ? row.tasks.map((item) => sanitizeTask(item)).filter((item): item is InquiryTask => Boolean(item)) : [],
     currentId: clean(row.currentId, 80) || undefined,
+    journal: Array.isArray(row.journal)
+      ? row.journal.map((item) => sanitizeWorkEvent(item)).filter((item): item is InquiryWorkEvent => Boolean(item)).slice(-80)
+      : [],
+    lastReport: clean(row.lastReport, 4000) || undefined,
   }
+}
+
+const WORK_KINDS = new Set<InquiryWorkKind>([
+  "think",
+  "search",
+  "skip",
+  "open",
+  "found",
+  "draft",
+  "send",
+  "sent",
+  "fail",
+  "note",
+])
+
+export function sanitizeWorkEvent(raw: unknown): InquiryWorkEvent | null {
+  if (!raw || typeof raw !== "object") return null
+  const row = raw as Record<string, unknown>
+  const kind = WORK_KINDS.has(row.kind as InquiryWorkKind) ? (row.kind as InquiryWorkKind) : "note"
+  const text = clean(row.text, 400)
+  const at = clean(row.at, 40)
+  if (!text || !at) return null
+  return {
+    id: clean(row.id, 80) || newInquiryId("log"),
+    at,
+    kind,
+    text,
+    url: clean(row.url, 240) || undefined,
+    contact: clean(row.contact, 200) || undefined,
+    taskId: clean(row.taskId, 80) || undefined,
+  }
+}
+
+export function appendInquiryJournal(
+  state: InquiryState,
+  events: Array<Omit<InquiryWorkEvent, "id"> & { id?: string }>,
+  now = new Date().toISOString(),
+): InquiryState {
+  const next = events.flatMap((item) => {
+    const event = sanitizeWorkEvent({
+      ...item,
+      id: item.id || newInquiryId("log"),
+      at: item.at || now,
+    })
+    return event ? [event] : []
+  })
+  if (!next.length) return state
+  return { ...state, journal: [...(state.journal || []), ...next].slice(-80) }
 }
 
 export function newInquiryId(prefix: string, now = Date.now()) {
@@ -395,6 +461,8 @@ export function applyInquiryState(current: InquiryState, raw: { findings?: unkno
         : task,
     ),
     currentId,
+    journal: current.journal || [],
+    lastReport: current.lastReport,
   }
 }
 
@@ -497,9 +565,11 @@ export function inquiryCoachExtra(state: InquiryState) {
   return [
     "【询单模块（与工单、档案同一询单工位）】",
     "- 同事点「开始询单」后，由本站询单执行器跑三步，不是前台高级顾问，也不等聊天模型自己去搜网。",
-    "- 1 寻找目标：按需求类型、家数上限、限时，在公开网页上找对方已公布的邮箱。只收录页面上真实出现的邮箱。",
+    "- 1 寻找目标：按需求类型找肥料厂、合作社、农产品客户。跳过政府官网、新闻站和零售品牌。只收录页面上真实出现的邮箱。",
     "- 2 编写内容：用本站皮纳图博火山灰农业项目的真实产品和官网写推广或营销信。可以按同事指令改语气，不要编检测数字。",
     "- 3 发送邮件：走 WEHO 已配置的 Hermes 发出信箱，发给找到的厂商，不要发给同事本人，也不要问同事该发给谁。同事个人邮箱只作发出测试。有邮局回执才写 sent。没有回执就 outreach=draft 或 queued，不要说没挂信箱。",
+    "- 4 留下记录：每一步写入操作日志。同事问日报、周报、发给了谁、做到哪一步，按日志和回执回答，不要只回一句套话。",
+    "- 工作要真实做：公开网页搜索和发信都留下日志。NAS / 沙箱工作台若没接到，就如实写还没接到，不要假装已经在虚拟机里做完。",
     "- 没有真实来源就不要写厂商。不要编公司名、电话、邮箱、网址。同事说「再找一轮」时由执行器再跑。",
     "- 看板进度是：取条件 → 找公开邮箱 → 写推广信 → 发出或入队。开始找写 searching，核实时 review，起草或入队时 drafting。",
     "- 更新寻找结果时另起一行：",

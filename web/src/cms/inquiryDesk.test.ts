@@ -88,6 +88,14 @@ describe("inquiry module on the desk", () => {
     expect(state.findings).toHaveLength(1)
     expect(state.findings[0]?.outreach).toBe("queued")
     expect(state.job.status).toBe("searching")
+    expect(state.journal).toEqual([])
+    const withLog = hydrateInquiryState({
+      ...state,
+      journal: [{ id: "l1", at: now, kind: "search", text: "正在搜索肥料厂" }],
+      lastReport: "本轮已跑完",
+    })
+    expect(withLog.journal[0]?.text).toContain("肥料厂")
+    expect(withLog.lastReport).toContain("已跑完")
   })
 
   it("maps the same four-step run the board shows", () => {

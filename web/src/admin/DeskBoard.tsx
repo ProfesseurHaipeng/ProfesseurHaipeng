@@ -10,6 +10,7 @@ import {
   type HermesProgress,
 } from "../cms/hermesDesk"
 import type { InquiryState } from "../cms/inquiryDesk"
+import { buildOutreachDigest } from "../cms/inquirySkill"
 
 const PIPE_COLOR: Record<HermesProgress, string> = {
   new: "#c5d5ce",
@@ -40,10 +41,13 @@ export function DeskBoard({
   if (pipeline.hold) bars.push({ key: "hold", label: PROGRESS_LABEL.hold, value: pipeline.hold })
   const series = eventSeries(events)
   const recent = [...events].reverse().slice(0, 8)
+  const today = buildOutreachDigest(inquiry, "day")
   const cards = [
     { label: "在跟工单", value: board.live },
     { label: "询单任务", value: inquiry.tasks.length },
-    { label: "找到厂商", value: inquiry.findings.length },
+    { label: "找到客户", value: inquiry.findings.length },
+    { label: "今日已发出", value: today.sent.length },
+    { label: "今日未发出", value: today.drafted.length },
     { label: "工作台对话", value: coachTurns },
     { label: "客户档案", value: customers.length },
     { label: "工厂档案", value: factories.length },

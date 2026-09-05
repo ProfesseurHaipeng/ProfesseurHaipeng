@@ -3,10 +3,13 @@ import { createInquiryTask, emptyInquiry, startInquiryTask } from "./inquiryDesk
 import {
   classifyInquiryCoachCommand,
   inquiryWorkSummary,
+  isCustomerProspect,
+  isGovernmentSource,
   isInquiryStatusQuestion,
   composeOutreachMail,
   extractPublicEmails,
   harvestTaskSeeds,
+  buildSearchQueries,
   isPublicBusinessEmail,
   isStaffTestEmail,
   parseSearchHtml,
@@ -16,6 +19,7 @@ import {
   shouldRerunInquiry,
   unwrapSearchUrl,
 } from "./inquiryOutreach"
+import { buildOutreachDigest } from "./inquirySkill"
 
 const now = "2026-09-05T12:00:00.000Z"
 
@@ -394,5 +398,55 @@ describe("inquiry outreach runner", () => {
     expect(run.inquiry.findings).toHaveLength(0)
     expect(run.report).toContain("没有编造")
     expect(run.inquiry.job.status).toBe("searching")
+  })
+
+  it("skips government and retail pages when looking for customers", () => {
+    expect(isGovernmentSource("https://www.moa.gov.cn/contact", "农业农村部")).toBe(true)
+    expect(isGovernmentSource("https://www.lvtian-agri.com/contact", "绿田农业合作社")).toBe(false)
+    expect(isCustomerProspect("https://www.lvtian-agri.com/contact", "绿田农业合作社")).toBe(true)
+    expect(isCustomerProspect("https://oldnavy.gap.com/shop/clearance", "Old Navy")).toBe(false)
+    expect(isCustomerProspect("https://www.gov.cn/", "中华人民共和国中央人民政府")).toBe(false)
+    expect(unwrapSearchUrl("https://www.moa.gov.cn/contact")).toBe("")
+    expect(classifyInquiryCoachCommand("发给了谁")).toBe("report")
+    expect(classifyInquiryCoachCommand("给我一份日报")).toBe("report")
+    expect(buildSearchQueries(createInquiryTask(emptyInquiry(), { name: "一轮", targets: ["肥料 / 土壤改良厂家"] }, now).task!)).toEqual(
+      expect.arrayContaining([expect.stringContaining("-政府")]),
+    )
+  })
+
+  it("answers 发给了谁 from a real digest and keeps a work journal", async () => {
+    const created = createInquiryTask(emptyInquiry(), { name: "一轮", targets: ["土壤板结"] }, now)
+    const inquiry = {
+      ...created.state,
+      findings: [
+        {
+          id: "f1",
+          at: now,
+          org: "绿田",
+          source: "https://www.lvtian-agri.com/contact",
+          contact: "sales@lvtian-agri.com",
+          outreach: "sent" as const,
+          receipt: "sg-1",
+        },
+      ],
+      lastReport: "本轮打开了客户页并已发出。",
+      journal: [
+        { id: "l1", at: now, kind: "search" as const, text: "正在搜索：肥料厂家 销售 邮箱" },
+        { id: "l2", at: now, kind: "sent" as const, text: "已发出给 sales@lvtian-agri.com，回执 sg-1", contact: "sales@lvtian-agri.com" },
+      ],
+    }
+    const digest = buildOutreachDigest(inquiry, "day", new Date(now))
+    expect(digest.sent.map((item) => item.contact)).toEqual(["sales@lvtian-agri.com"])
+    const report = await runInquiryCoachCommand({
+      message: "发给了谁",
+      inquiry,
+      env: {},
+      now,
+      fetchImpl: mockFetch([]) as typeof fetch,
+    })
+    expect(report?.report).toContain("sales@lvtian-agri.com")
+    expect(report?.report).toContain("操作日志")
+    expect(report?.report).toContain("已发出")
+    expect(report?.searched).toBe(0)
   })
 })

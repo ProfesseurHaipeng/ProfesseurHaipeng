@@ -18,6 +18,7 @@ import {
   type InquiryTarget,
   type InquiryTask,
 } from "../cms/inquiryDesk"
+import { INQUIRY_SKILL, buildOutreachDigest, workKindLabel, type OutreachDigestRange } from "../cms/inquirySkill"
 
 type TaskPayload = {
   inquiry?: InquiryState
@@ -102,7 +103,11 @@ export function InquiryPanel({
       <header className="inq-page__head">
         <div className="inq-page__title">
           <h2>询单任务</h2>
-          {flash ? <p className="inq-flash">{flash}</p> : <p>选定需求、家数和限时后，工位会上网找公开邮箱并起草推广信。</p>}
+          {flash ? (
+            <p className="inq-flash">{flash}</p>
+          ) : (
+            <p>选定需求后开始。工位会真实上网找客户、写推广信并尝试发出，操作和发出名单都留在任务页。</p>
+          )}
         </div>
         {inquiry.tasks.length ? (
           <button type="button" className="inq-mini-go" disabled={locked} onClick={() => void createTask()}>
@@ -176,6 +181,7 @@ function TaskEditor({
   const [flash, setFlash] = useState("")
   const [starting, setStarting] = useState(false)
   const [open, setOpen] = useState<{ id: string; kind: "source" | "draft" } | null>(null)
+  const [digestRange, setDigestRange] = useState<OutreachDigestRange>("day")
   const jobStatus = taskJobStatus(task.status)
   const canStart = Boolean(targets.length || instruction.trim()) && task.status !== "cancelled"
   const canCancel = task.status === "searching" || task.status === "review" || task.status === "drafting"
@@ -201,6 +207,14 @@ function TaskEditor({
     setLimitHours(task.limitHours)
     setEnabled(task.enabled)
   }, [task.id, task.updatedAt])
+
+  useEffect(() => {
+    if (locked || !enabled || task.status === "cancelled") return
+    const timer = window.setInterval(() => {
+      void onTask("tick", { id: task.id }).catch(() => undefined)
+    }, 60_000)
+    return () => window.clearInterval(timer)
+  }, [enabled, locked, onTask, task.id, task.status])
 
   const persist = async (patch: Record<string, unknown>, ok = "已记下") => {
     inflight.current += 1
@@ -536,7 +550,7 @@ function TaskEditor({
             {inquiry.findings.length === 0 ? (
               <div className="inq-wait">
                 <p className="inq-empty">等待开始</p>
-                <p>找到带公开邮箱或可核验来源的对象后写在这里。</p>
+                <p>找到肥料厂、合作社这类客户的公开邮箱后写在这里。政府官网不会入列。</p>
               </div>
             ) : (
               <ul className="inq-results">
@@ -548,6 +562,10 @@ function TaskEditor({
               </ul>
             )}
           </section>
+
+          <WorkReport inquiry={inquiry} range={digestRange} onRange={setDigestRange} />
+          <WorkJournal inquiry={inquiry} />
+          <SkillBox />
 
           <details className="inq-more">
             <summary>运行历史{task.runs.length ? ` · ${task.runs.length}` : ""}</summary>
@@ -644,6 +662,100 @@ function TaskEditor({
   )
 }
 
+function WorkReport({
+  inquiry,
+  range,
+  onRange,
+}: {
+  inquiry: InquiryState
+  range: OutreachDigestRange
+  onRange: (next: OutreachDigestRange) => void
+}) {
+  const digest = buildOutreachDigest(inquiry, range)
+  return (
+    <section className="inq-box">
+      <div className="inq-box__head">
+        <h3 className="inq-box__title">发出报告</h3>
+        <div className="inq-seg" role="group" aria-label="报告范围">
+          <button type="button" className={range === "day" ? "is-on" : ""} onClick={() => onRange("day")}>
+            今日
+          </button>
+          <button type="button" className={range === "week" ? "is-on" : ""} onClick={() => onRange("week")}>
+            近7天
+          </button>
+        </div>
+      </div>
+      <p className="inq-step-note">{digest.text.split("\n")[0]}</p>
+      {digest.sent.length === 0 && digest.drafted.length === 0 ? (
+        <p className="inq-empty">这个窗口里还没有发出或起草记录。开始询单后，发给谁、有没有回执都会写在这里。</p>
+      ) : (
+        <ul className="inq-digest">
+          {digest.sent.map((item) => (
+            <li key={item.id}>
+              <strong>已发出</strong>
+              <span>
+                {item.org} · {item.contact}
+              </span>
+              <em>回执 {item.receipt}</em>
+            </li>
+          ))}
+          {digest.drafted.map((item) => (
+            <li key={item.id}>
+              <strong>未发出</strong>
+              <span>
+                {item.org} · {item.contact}
+              </span>
+              <em>仍是草稿</em>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function WorkJournal({ inquiry }: { inquiry: InquiryState }) {
+  const events = [...(inquiry.journal || [])].reverse().slice(0, 24)
+  return (
+    <section className="inq-box">
+      <div className="inq-box__head">
+        <h3 className="inq-box__title">本轮操作</h3>
+        <span>{events.length ? `${inquiry.journal?.length || 0} 步` : "尚无"}</span>
+      </div>
+      {inquiry.lastReport ? <p className="inq-step-note">{inquiry.lastReport}</p> : null}
+      {events.length === 0 ? (
+        <p className="inq-empty">开始后这里会记下搜索、跳过政府站、打开客户页、起草和发信。不会只回一句然后消失。</p>
+      ) : (
+        <ol className="inq-log">
+          {events.map((item) => (
+            <li key={item.id}>
+              <strong>{workKindLabel(item.kind)}</strong>
+              <span>{clock(item.at)}</span>
+              <p>{item.text}</p>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  )
+}
+
+function SkillBox() {
+  return (
+    <details className="inq-more">
+      <summary>操作思路</summary>
+      <ol className="inq-skill">
+        {INQUIRY_SKILL.steps.map((item) => (
+          <li key={item.key}>
+            <strong>{item.title}</strong>
+            <p>{item.detail}</p>
+          </li>
+        ))}
+      </ol>
+    </details>
+  )
+}
+
 function FindingCard({
   item,
   open,
@@ -667,6 +779,7 @@ function FindingCard({
       <p>{item.pain || "对口类型尚无"}</p>
       <p className="inq-result__meta">
         来源：{item.source || "尚无"} · 联系：{item.contact || "尚无"} · 草稿：{item.draft ? "有" : "尚无"}
+        {item.receipt ? ` · 回执：${item.receipt}` : ""}
       </p>
       <span className="inq-ops">
         <button type="button" onClick={() => onOpen(shown === "source" ? null : { id: item.id, kind: "source" })}>

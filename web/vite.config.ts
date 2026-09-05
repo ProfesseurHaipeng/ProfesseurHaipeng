@@ -450,7 +450,10 @@ function localGuide(): Plugin {
             localDesk.ledger = result.ledger
             if (result.event) pushEvent("update", result.event, result.caseId)
             const op = typeof body.op === "string" ? body.op : ""
-            const shouldRun = (op === "start" || (op === "create" && result.assignMessage)) && result.inquiry.currentId
+            const shouldRun =
+              (op === "start" || op === "tick" || (op === "create" && result.assignMessage)) &&
+              result.assignMessage &&
+              result.inquiry.currentId
             if (shouldRun) {
               const task = result.inquiry.tasks.find((item: { id: string }) => item.id === result.inquiry.currentId)
               if (task && task.status === "searching") {

@@ -649,7 +649,7 @@ export function HermesDesk({
         try {
           const payload = await post({ action: "task", op: "start", id })
           const report = payload.outreach?.report || ""
-          const line = report.split("\n").find(Boolean) || "本轮询单已跑完"
+          const line = report.split("\n").filter(Boolean).slice(0, 3).join(" ") || "本轮询单已跑完"
           return { flash: line }
         } catch (err) {
           setError(err instanceof Error ? err.message : "安排失败")
