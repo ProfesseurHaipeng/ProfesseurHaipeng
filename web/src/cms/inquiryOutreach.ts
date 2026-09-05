@@ -389,9 +389,11 @@ function decodeSearchTarget(value: string) {
   const raw = decodeEntities(value).trim()
   if (/^https?:\/\//i.test(raw)) return raw
   const packed = raw.startsWith("a1") ? raw.slice(2) : raw
-  const pad = "=".repeat((4 - (packed.length % 4)) % 4)
+  const padded = packed.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (packed.length % 4)) % 4)
   try {
-    const decoded = Buffer.from(packed.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")
+    const decoded = decodeURIComponent(
+      Array.from(atob(padded), (ch) => `%${ch.charCodeAt(0).toString(16).padStart(2, "0")}`).join(""),
+    )
     if (/^https?:\/\//i.test(decoded) || decoded.startsWith("/")) return decoded
   } catch {
     /* not base64 */
