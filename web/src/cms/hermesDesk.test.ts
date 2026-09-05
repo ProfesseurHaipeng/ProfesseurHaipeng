@@ -6,6 +6,7 @@ import {
   applyTakeover,
   applyStaffCaseUpdate,
   applyStaffCasesBatch,
+  applyStaffCasesClear,
   applyStaffCasesDelete,
   attachLead,
   canWriteLiveHermesCase,
@@ -471,6 +472,21 @@ describe("desk board telemetry", () => {
     expect(deleted.gone.map((item) => item.id).sort()).toEqual(["case-new", "case-old"])
     expect(liveCases(deleted.cases).map((item) => item.id)).toEqual(["case-other"])
     expect(deleted.cases.find((item) => item.id === "case-old")?.gone).toBe(true)
+  })
+
+  it("clears every live ticket when staff select the whole board", () => {
+    const first = sample({ id: "case-a", contact: "13800000001", visitorId: "vis-a" })
+    const second = sample({ id: "case-b", contact: "13800000002", visitorId: "vis-b", name: "李厂长" })
+    const hidden = sample({
+      id: "case-hidden",
+      contact: "13800000001",
+      visitorId: "vis-a",
+      updatedAt: "2026-09-03T11:00:00.000Z",
+    })
+    const cleared = applyStaffCasesClear([first, second, hidden], now)
+    expect(cleared.count).toBe(3)
+    expect(liveCases(cleared.cases)).toHaveLength(0)
+    expect(cleared.cases.every((item) => item.gone)).toBe(true)
   })
 
   it("creates a page-owned inquiry ticket with the task and supports cancel and delete", () => {

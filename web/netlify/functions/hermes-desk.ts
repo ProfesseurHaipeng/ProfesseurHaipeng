@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto"
 import type { Config } from "@netlify/functions"
 import { advisorConversationIdentity } from "../../src/cms/advisorIdentity"
-import { hermesLinkInfo, hermesReady, probeHermes } from "../../src/cms/hermes"
+import { hermesLinkInfo, hermesReady, probeHermes, rememberHermesHealth } from "../../src/cms/hermes"
 import {
   appendHermesEvent,
   readHermesCases,
@@ -32,6 +32,7 @@ import {
   applyStaffCaseUpdate,
   applyStaffCasesBatch,
   applyGoneToLedger,
+  applyStaffCasesClear,
   applyStaffCasesDelete,
   attachLead,
   liveCases,
@@ -247,13 +248,12 @@ export default async (req: Request) => {
     return json({ error: "hermes-only" }, 403)
   }
   try {
-  let { all, cases, ledger } = await loadDesk()
-  const now = new Date().toISOString()
-
   if (action === "health") {
-    const health = await probeHermes(envBag())
+    const env = envBag()
+    const probed = await probeHermes(env)
     const prev = await readHermesHealth()
-    await writeHermesHealth(health)
+    const health = rememberHermesHealth(prev, probed)
+    if (health.status === "connected" || prev?.status !== "connected") await writeHermesHealth(health)
     if (prev?.status !== health.status) {
       await appendHermesEvent(
         eventOf(
@@ -264,8 +264,11 @@ export default async (req: Request) => {
         ),
       )
     }
-    return json({ ...(await payload()), health })
+    return json({ health, hermesReady: hermesReady(env), link: hermesLinkInfo(env) })
   }
+
+  let { all, cases, ledger } = await loadDesk()
+  const now = new Date().toISOString()
 
   if (action === "targets") {
     const inquiry = await readInquiryState()
@@ -322,13 +325,13 @@ export default async (req: Request) => {
 
   if (action === "cases") {
     const op = typeof body.op === "string" ? body.op : ""
-    if (op === "delete") {
+    if (op === "delete" || op === "clear") {
       const ids = Array.isArray(body.ids) ? body.ids.filter((item): item is string => typeof item === "string") : []
-      const result = applyStaffCasesDelete(all, ids, now)
+      const result = op === "clear" ? applyStaffCasesClear(all, now) : applyStaffCasesDelete(all, ids, now)
       if (result.error) return json({ error: result.error }, 400)
       const nextLedger = applyGoneToLedger(ledger, result.gone, now)
       await persistDeleted(result.gone, nextLedger)
-      await appendHermesEvent(eventOf("update", `删除 ${result.count} 张工单`))
+      await appendHermesEvent(eventOf("update", op === "clear" ? `清空 ${result.count} 张工单` : `删除 ${result.count} 张工单`))
       return json(await payload())
     }
     if (op === "update") {

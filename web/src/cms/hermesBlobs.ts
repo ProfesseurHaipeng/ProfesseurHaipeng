@@ -96,18 +96,16 @@ async function readListedCases(blobs: BlobStore): Promise<HermesCase[]> {
 
 async function readAllCasesRaw(blobs: BlobStore): Promise<HermesCase[]> {
   const snapshot = await readCasesSnapshot(blobs)
+  if (snapshot) return snapshot
   const listed = await readListedCases(blobs)
-  const merged = mergeStoredCases(snapshot ?? [], listed)
-  const snapIds = new Set((snapshot ?? []).map((item) => item.id))
-  const needsHeal = !snapshot || listed.some((item) => !snapIds.has(item.id))
-  if (needsHeal && merged.length) {
+  if (listed.length) {
     try {
-      await writeCasesSnapshot(blobs, merged)
+      await writeCasesSnapshot(blobs, listed)
     } catch {
-      /* read path still returns the merged archive */
+      /* first read still returns the listed archive */
     }
   }
-  return merged
+  return listed
 }
 
 export async function readHermesLedger(): Promise<HermesLedger> {

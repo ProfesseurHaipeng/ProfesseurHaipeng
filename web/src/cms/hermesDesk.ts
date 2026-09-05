@@ -511,6 +511,12 @@ export function applyStaffCasesDelete(cases: HermesCase[], ids: string[], now = 
   return { cases: sortHermesCases(next), gone, count: gone.length, error: null }
 }
 
+export function applyStaffCasesClear(cases: HermesCase[], now = new Date().toISOString()) {
+  const ids = cases.filter((item) => !item.gone).map((item) => item.id)
+  if (!ids.length) return { cases, gone: [] as HermesCase[], count: 0, error: null }
+  return applyStaffCasesDelete(cases, ids, now)
+}
+
 export function progressRatio(progress: HermesProgress) {
   if (progress === "hold") return 0.42
   const index = PROGRESS_TRACK.indexOf(progress)

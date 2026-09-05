@@ -288,12 +288,20 @@ function localGuide(): Plugin {
             return
           }
           if (action === "health") {
-            const health = await hermesMod.probeHermes(env)
+            const probed = await hermesMod.probeHermes(env)
+            const health = hermesMod.rememberHermesHealth(localDesk.health, probed)
             if (localDesk.health?.status !== health.status) {
               pushEvent("health", health.status === "connected" ? "网关探测：正常连接" : "网关探测：断开连接")
             }
-            localDesk.health = health
-            res.end(JSON.stringify({ ...pack(), health }))
+            if (health.status === "connected" || localDesk.health?.status !== "connected") localDesk.health = health
+            persistDesk()
+            res.end(
+              JSON.stringify({
+                health: localDesk.health,
+                hermesReady: hermesMod.hermesReady(env),
+                link: hermesMod.hermesLinkInfo(env),
+              }),
+            )
             return
           }
           if (action === "targets") {
@@ -362,9 +370,9 @@ function localGuide(): Plugin {
           }
           if (action === "cases") {
             const op = typeof body.op === "string" ? body.op : ""
-            if (op === "delete") {
+            if (op === "delete" || op === "clear") {
               const ids = Array.isArray(body.ids) ? body.ids.filter((item): item is string => typeof item === "string") : []
-              const result = deskMod.applyStaffCasesDelete(localDesk.cases, ids)
+              const result = op === "clear" ? deskMod.applyStaffCasesClear(localDesk.cases) : deskMod.applyStaffCasesDelete(localDesk.cases, ids)
               if (result.error) {
                 res.statusCode = 400
                 res.end(JSON.stringify({ error: result.error }))
@@ -381,7 +389,7 @@ function localGuide(): Plugin {
                 res.end(JSON.stringify({ error: "persist" }))
                 return
               }
-              pushEvent("update", `删除 ${result.count} 张工单`)
+              pushEvent("update", `${op === "clear" ? "清空" : "删除"} ${result.count} 张工单`)
               res.end(JSON.stringify(pack()))
               return
             }
