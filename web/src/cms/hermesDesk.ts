@@ -13,11 +13,13 @@ import {
   inquiryCoachExtra,
   startInquiryTask,
   stripInquiryTags,
+  taskIsDue,
   updateInquiryTask,
   type InquiryState,
   type InquiryTask,
 } from "./inquiryDesk"
 import { extractDirectedEmails, inquiryWorkSummary, isStaffTestEmail, runInquiryCoachCommand } from "./inquiryOutreach"
+import { buildOutreachDigest, formatWorkJournal } from "./inquirySkill"
 import type { Lead } from "./leads"
 
 export type HermesOwner = "hermes" | "human"
@@ -1272,6 +1274,30 @@ export function applyInquiryTaskAction(
     }
   }
 
+  if (op === "tick") {
+    const due = inquiry.tasks.find((item) => item.enabled && item.status !== "cancelled" && taskIsDue(item, now))
+    if (!due) return { ...empty }
+    const started = startInquiryTask(inquiry, due.id, now)
+    if (started.error || !started.task) return { ...empty, error: started.error || "missing" }
+    const bound = bindTaskCase(started.state, cases, started.task, now, ledger)
+    const patched = patchLinkedCase(
+      bound.cases,
+      bound.task.caseId,
+      { progress: "talking", following: true, nextAction: "按节奏继续找客户" },
+      now,
+    )
+    return {
+      inquiry: bound.inquiry,
+      cases: patched.cases,
+      ledger,
+      touched: [...(bound.created ? [bound.created] : []), ...patched.touched],
+      gone: [],
+      assignMessage: buildTaskAssignMessage(bound.task),
+      caseId: bound.task.caseId,
+      event: `询单：继续 ${bound.task.name}`,
+    }
+  }
+
   if (op === "cancel") {
     const cancelled = cancelInquiryTask(inquiry, id, now)
     if (cancelled.error || !cancelled.task) return { ...empty, error: cancelled.error || "missing" }
@@ -1607,7 +1633,7 @@ const COACH_RULES = `你是皮纳图博火山灰项目的后台询单工位。�
 - 能看全部真实工单、联系方式、desk 记忆、询单任务、接管状态。
 - 同事可以指挥你：查工单、看档案、改跟进、起草邮件、处理附件。
 - 发信走 WEHO 已配置的 Hermes 发出信箱。收件人由你自己在公开网页上找厂商邮箱，不要问同事该发给谁，也不要把同事个人邮箱当成正式对象。同事写下的 163 / QQ / Gmail 等个人邮箱只当作发出测试。起草完成后立刻发给找到的厂商。同事问「发邮件了吗」时，对已起草的厂商信再试发出，只按邮局回执回答。没有邮局回执时只许起草入队，不许写成已发送。
-- 文件和附件走本站储存。没有独立虚拟机命令口，不要说已经用 VM 发出。
+- 文件和附件走本站储存。NAS / 沙箱工作台只有接到本站才会走；没接到就如实说，不要假装已经在虚拟机里做完。
 - 不要编造客户、厂商、已发送的邮件或调查结果。
 
 【询单执行】
@@ -1615,7 +1641,7 @@ const COACH_RULES = `你是皮纳图博火山灰项目的后台询单工位。�
 1. 寻找目标：按任务里的厂家类型、痛点和补充指令，在公开网页上找对方已公布的邮箱。只收录页面上真实出现的邮箱。
 2. 编写内容：用本站皮纳图博火山灰农业项目的真实产品和官网写推广或营销信。可以按同事指令改语气，不要编检测数字。
 3. 发送邮件：走 WEHO 已配置的 Hermes 发出信箱，发给上一步找到的厂商，不要发给同事本人。有邮局回执才写 sent。
-找厂条件由同事定；收件人由执行器自己找。不要问同事该发给谁。同事个人邮箱只作发出测试。同事说「再找一轮」时由执行器再跑，不要自己编新厂商。
+找厂条件由同事定；收件人由执行器自己找肥料厂、合作社这类客户，不要找政府官网。不要问同事该发给谁。同事个人邮箱只作发出测试。同事问日报、周报、发给了谁、做到哪一步时，按操作日志和邮局回执回答。同事说「再找一轮」时由执行器再跑，不要自己编新厂商。
 
 【控制权】
 - 同事能通过工单列表改称呼、公司、联系方式、进度等基础字段；接管、邮件状态、跟单、跟踪、行为数据、记忆仍由你改。
@@ -1741,6 +1767,14 @@ export function staffDeskLocalReply(input: {
     return `这是后台询单工位，不是前台高级顾问席。目前工作台上的真实工单如下，没有编造：\n${lines.join("\n")}${more}\n\n要看某一张档案、起草邮件或改进度，直接说工单号或称呼。`
   }
 
+  if (/日报|周报|发给了谁|发出名单|做到哪一步|操作(思路|日志)|工作报告|发出报告/.test(q)) {
+    const range = /日报|今天/.test(q) && !/发给了谁|发出名单/.test(q) ? "day" : "week"
+    const digest = buildOutreachDigest(input.inquiry || emptyInquiry(), range)
+    const journal = formatWorkJournal(input.inquiry?.journal || [], 10)
+    const last = input.inquiry?.lastReport?.trim()
+    return [digest.text, last ? `上一轮工作：\n${last}` : "", `操作日志：\n${journal}`].filter(Boolean).join("\n\n")
+  }
+
   if (/询单|开始寻找|开始询单|再找一轮|再搜/.test(q)) {
     const work = inquiryWorkSummary(input.inquiry || emptyInquiry())
     if (work.reply) return work.reply
@@ -1781,7 +1815,7 @@ export function staffDeskLocalReply(input: {
     const mem = [shared ? `共用记忆：${shared.slice(0, 180)}` : "", desk ? `工位笔记：${desk.slice(0, 180)}` : ""]
       .filter(Boolean)
       .join("\n")
-    return `档案和附件走本站储存，没有独立虚拟机命令口，我不会说已经用 VM 发出。${mem ? `\n${mem}` : " 还没有写下的工位笔记。"}${hit ? `\n对着的是工单 ${ticketNo(hit)} ${caseTitle(hit)}。` : ""}`
+    return `档案和附件走本站储存。询单寻找和发信记在操作日志里；NAS / 沙箱工作台没接到本站时，不会假装已经在虚拟机里做完。${mem ? `\n${mem}` : " 还没有写下的工位笔记。"}${hit ? `\n对着的是工单 ${ticketNo(hit)} ${caseTitle(hit)}。` : ""}`
   }
 
   if (hit) {

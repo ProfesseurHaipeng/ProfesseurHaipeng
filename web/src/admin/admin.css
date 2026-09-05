@@ -3377,6 +3377,43 @@ body:has(.admin-shell--desk) #root {
   font-size: 0.82rem;
 }
 
+.inq-digest,
+.inq-log,
+.inq-skill {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inq-digest li,
+.inq-log li,
+.inq-skill li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid #d7ddd8;
+  border-radius: 10px;
+  background: #f7f8f6;
+}
+
+.inq-digest strong,
+.inq-log strong,
+.inq-skill strong {
+  font-size: 12px;
+}
+
+.inq-digest span,
+.inq-digest em,
+.inq-log span,
+.inq-log p,
+.inq-skill p {
+  color: #5c6560;
+  font-size: 12px;
+  font-style: normal;
+}
+
 .inq-hist span,
 .inq-hist p {
   margin: 0;

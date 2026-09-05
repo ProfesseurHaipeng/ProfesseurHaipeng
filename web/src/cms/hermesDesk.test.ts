@@ -267,6 +267,8 @@ describe("hermes desk cases", () => {
     expect(staffDeskLocalReply({ text: "发邮件了吗？", cases: [sample()], inquiry })).toContain("sales@lvtian-agri.com")
     expect(staffDeskLocalReply({ text: "发个邮件", cases: [sample()] })).not.toContain("把收件人写下")
     expect(staffDeskLocalReply({ text: "发个邮件", cases: [sample()] })).toContain("不用你指定收件人")
+    expect(staffDeskLocalReply({ text: "发给了谁", cases: [sample()], inquiry })).toContain("sales@lvtian-agri.com")
+    expect(staffDeskLocalReply({ text: "给我一份日报", cases: [sample()], inquiry })).toContain("发出报告")
   })
 
   it("does not tell staff the mailbox is missing when WEHO Hermes is wired", async () => {
@@ -333,6 +335,8 @@ describe("desk coach protocol", () => {
     expect(messages[0]?.content).toContain("找公开邮箱")
     expect(messages[0]?.content).toContain("不要问同事该发给谁")
     expect(messages[0]?.content).toContain("只当作发出测试")
+    expect(messages[0]?.content).toContain("政府官网")
+    expect(messages[0]?.content).toContain("日报")
     expect(messages[0]?.content).toContain("<inquiry>")
     expect(messages[0]?.content).not.toContain("Karmenai")
     expect(messages[0]?.content).not.toContain("同一个人")

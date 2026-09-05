@@ -1,5 +1,6 @@
 import { completeChatCompletions } from "./chatCompletions"
 import {
+  appendInquiryJournal,
   applyInquiryFindings,
   asQuota,
   buildTaskAssignMessage,
@@ -13,7 +14,9 @@ import {
   type InquiryJobStatus,
   type InquiryState,
   type InquiryTask,
+  type InquiryWorkEvent,
 } from "./inquiryDesk"
+import { buildOutreachDigest, describeWorkbench, formatWorkJournal } from "./inquirySkill"
 
 export const DEFAULT_SITE_URL = "https://modeltest.store"
 
@@ -31,7 +34,7 @@ export type OutreachMailbox =
   | { kind: "hermes"; apiKey: string; baseUrl: string; model: string; from?: string }
   | { kind: "none" }
 
-export type InquiryCoachKind = "send" | "search" | "status"
+export type InquiryCoachKind = "send" | "search" | "status" | "report"
 
 export type SearchHit = {
   title: string
@@ -113,7 +116,35 @@ const JUNK_RESULT_HOST = new Set([
   "msn.com",
   "shopify.com",
   "myshopify.com",
+  "oldnavy.com",
+  "gap.com",
+  "nike.com",
+  "adidas.com",
+  "amazon.com",
+  "amazon.cn",
+  "taobao.com",
+  "tmall.com",
+  "jd.com",
+  "suning.com",
+  "walmart.com",
+  "target.com",
+  "uniqlo.com",
+  "zara.com",
+  "xinhuanet.com",
+  "people.com.cn",
+  "cctv.com",
+  "china.com.cn",
+  "chinanews.com",
+  "thepaper.cn",
+  "caixin.com",
 ])
+
+const GOV_HOST =
+  /(^|\.)gov(\.[a-z]{2,})?$|(^|\.)gob(\.[a-z]{2,})?$|(^|\.)go\.[a-z]{2}$|(^|\.)gov\.cn$|(^|\.)gov\.ph$|moa\.gov|usda\.gov|agriculture\.gov/i
+const GOV_TEXT =
+  /人民政府|农业农村|工信局|商务局|统计局|海关|税务|市场监管|门户网站|政府网|政务服务|发改委|国务院|省政府|市政府|县政府|乡政府|镇政府|ministry of|department of agriculture|official (government )?portal/i
+const CUSTOMER_HINT =
+  /公司|厂|合作社|基地|肥|农资|土壤|有限|集团|加工|agri|fertiliz|farm|coop|soil|manure|organic|manufacturer/i
 
 const BLOCKED_LOCAL = /^(noreply|no-reply|donotreply|do-not-reply|mailer-daemon|postmaster|webmaster|abuse|privacy|legal|newsletter|news|image|img|static|assets|webpack|sentry|wix)$/i
 const PLACEHOLDER_LOCAL = /^(name|email|user|username|someone|foo|bar|sample|xxx|mailbox)$/i
@@ -194,6 +225,7 @@ export function classifyInquiryCoachCommand(message: string): InquiryCoachKind |
   if (!text) return null
   const emails = extractDirectedEmails(text)
   if (emails.length && /发(邮件|信)|写信|发给|寄给|给这个邮箱|去发|发个邮/.test(text)) return "send"
+  if (/日报|周报|发给了谁|发出名单|做到哪一步|操作(思路|日志)|工作报告|发出报告/.test(text)) return "report"
   if (isInquiryStatusQuestion(text)) return "status"
   if (shouldRerunInquiry(text)) return "search"
   if (/开始询单|开始寻找|找公开邮箱|找厂商|找厂家|按这些真实需求|去网上找|跑起来|去做|开工/.test(text)) return "search"
@@ -201,6 +233,27 @@ export function classifyInquiryCoachCommand(message: string): InquiryCoachKind |
   if (/询单|厂商|厂家|推广信/.test(text) && /开始|去找|执行|启动/.test(text)) return "search"
   if (/发(邮件|信)|发给|寄给|去发|发个邮|把(信|邮件|推广信)发出/.test(text)) return "send"
   return null
+}
+
+export function resolveWorkbench(env: Record<string, string | undefined> = {}) {
+  const url = pick(env, "INQUIRY_WORKBENCH_URL", "INQUIRY_SANDBOX_URL")
+  if (!url) return { kind: "local" as const }
+  return { kind: "remote" as const, url: url.replace(/\/$/, ""), token: pick(env, "INQUIRY_WORKBENCH_KEY", "INQUIRY_SANDBOX_KEY") }
+}
+
+export function isGovernmentSource(url: string, title = "", snippet = "") {
+  const host = hostOf(url)
+  if (!host) return GOV_TEXT.test(`${title} ${snippet}`)
+  if (GOV_HOST.test(host) || host.endsWith(".gov.cn") || host.includes(".gov.")) return true
+  return GOV_TEXT.test(`${title} ${snippet} ${host}`)
+}
+
+export function isCustomerProspect(url: string, title = "", snippet = "") {
+  if (isGovernmentSource(url, title, snippet)) return false
+  const host = hostOf(url)
+  const root = host.split(".").slice(-2).join(".")
+  if (JUNK_RESULT_HOST.has(host) || JUNK_RESULT_HOST.has(root)) return false
+  return CUSTOMER_HINT.test(`${title} ${snippet} ${url}`)
 }
 
 export function isInquiryStatusQuestion(message: string) {
@@ -273,6 +326,24 @@ export async function runInquiryCoachCommand(input: {
   const now = input.now || new Date().toISOString()
   const env = input.env || {}
   const fetchImpl = input.fetchImpl || fetch
+  if (kind === "report") {
+    const range = /日报|今天/.test(input.message) && !/发给了谁|发出名单/.test(input.message) ? "day" : "week"
+    const digest = buildOutreachDigest(input.inquiry, range, new Date(now))
+    const journal = formatWorkJournal(input.inquiry.journal || [], 12)
+    const last = input.inquiry.lastReport?.trim()
+    const report = [digest.text, last ? `上一轮工作：\n${last}` : "", `操作日志：\n${journal}`].filter(Boolean).join("\n\n")
+    return {
+      inquiry: input.inquiry,
+      findings: [],
+      report,
+      searched: 0,
+      pages: 0,
+      drafted: digest.drafted.length,
+      sent: digest.sent.length,
+      queued: 0,
+      nextAction: digest.sent.length ? "已有发出记录，可继续找下一批" : "还没有发出回执，继续找客户并尝试发出",
+    }
+  }
   const directed = extractDirectedEmails(input.message)
   const testEmails = directed.filter((item) => isStaffTestEmail(item))
   const factoryEmails = directed.filter((item) => !isStaffTestEmail(item))
@@ -570,20 +641,19 @@ export function pickRunnableInquiryTask(state: InquiryState) {
 
 export function buildSearchQueries(task: InquiryTask) {
   const labels = task.targets.map((item) => item.label.trim()).filter(Boolean)
-  const extra = task.instruction.replace(/\s+/g, " ").trim()
+  const extra = stripStaffTestAddresses(task.instruction.replace(/\s+/g, " ").trim())
   const queries: string[] = []
   for (const label of labels) {
-    queries.push(`${label} 联系邮箱`)
-    queries.push(`${label} contact email`)
-    queries.push(`${label} 厂家 邮箱`)
+    queries.push(`${label} 有限公司 销售 邮箱 -政府 -site:gov.cn`)
+    queries.push(`${label} 合作社 采购 联系邮箱 -政府`)
+    queries.push(`${label} fertilizer manufacturer sales contact -gov`)
   }
-  if (extra) {
-    queries.push(`${extra} 邮箱`)
-    queries.push(`${extra} contact email`)
+  if (extra && !isBareMailCommand(extra)) {
+    queries.push(`${extra} 厂家 销售 邮箱 -政府`)
   }
   if (!queries.length) {
-    queries.push("土壤改良 肥料厂家 联系邮箱")
-    queries.push("agricultural fertilizer manufacturer contact email")
+    queries.push("土壤改良 肥料厂家 销售 邮箱 -政府 -site:gov.cn")
+    queries.push("agricultural fertilizer manufacturer sales email -gov")
   }
   return unique(queries).slice(0, 6)
 }
@@ -684,7 +754,13 @@ export function unwrapSearchUrl(href: string) {
       const inner = decodeSearchTarget(packed)
       if (inner && inner !== href) return unwrapSearchUrl(inner)
     }
-    if (isSearchHost(url.hostname) || JUNK_RESULT_HOST.has(url.hostname) || url.hostname.endsWith(".myshopify.com")) {
+    if (
+      isSearchHost(url.hostname) ||
+      JUNK_RESULT_HOST.has(url.hostname) ||
+      JUNK_RESULT_HOST.has(url.hostname.split(".").slice(-2).join(".")) ||
+      url.hostname.endsWith(".myshopify.com") ||
+      isGovernmentSource(url.href)
+    ) {
       return ""
     }
     if (url.protocol !== "http:" && url.protocol !== "https:") return ""
@@ -970,6 +1046,15 @@ export async function runInquiryRound(input: {
   const pain = input.task.targets.map((item) => item.label).join("、")
   const fresh: InquiryFinding[] = []
   const seedSource = input.seedSource || "同事补充指令"
+  const workbench = resolveWorkbench(env)
+  const logs: InquiryWorkEvent[] = []
+  const log = (kind: InquiryWorkEvent["kind"], text: string, extra: Partial<InquiryWorkEvent> = {}) => {
+    logs.push({ id: newInquiryId("log"), at: now, kind, text, taskId: input.task.id, ...extra })
+  }
+  log(
+    "think",
+    `${describeWorkbench(mailbox.kind === "none" && workbench.kind === "local" ? "none" : workbench.kind)} 本轮按「${pain || "已定条件"}」找厂家 / 合作社客户，不找政府官网。`,
+  )
 
   const addFinding = async (
     org: string,
@@ -978,6 +1063,10 @@ export async function runInquiryRound(input: {
     place?: string,
   ) => {
     if (!isSendableEmail(email, source)) return
+    if (source !== "同事测试指令" && source !== "同事补充指令" && !isCustomerProspect(source, org)) {
+      log("skip", `跳过不像客户的来源 ${org} ${email}`, { url: source, contact: email })
+      return
+    }
     const prior =
       fresh.find((item) => item.contact?.trim().toLowerCase() === email) ||
       input.inquiry.findings.find((item) => item.contact?.trim().toLowerCase() === email)
@@ -988,13 +1077,18 @@ export async function runInquiryRound(input: {
     const mail = composeOutreachMail({ org: prior?.org && prior.org !== "公开来源" ? prior.org : org, email, pain, siteUrl })
     let outreach: InquiryFinding["outreach"] = mailbox.kind === "none" ? "draft" : "queued"
     let receipt: string | undefined
+    log("found", `记下客户 ${org} ${email}`, { url: source, contact: email })
+    log("draft", `已按本站火山灰起草给 ${email}`, { contact: email })
     if (mailbox.kind !== "none" && fresh.filter((item) => item.outreach === "sent").length < 3 && Date.now() < deadline) {
+      log("send", `正在通过${mailboxLabel(mailbox)}发给 ${email}`, { contact: email })
       const sent = await sendOutreachMail(mailbox, mail, fetchImpl).catch(() => ({ ok: false as const, error: "send-failed" }))
       if (sent.ok) {
         outreach = "sent"
         receipt = sent.receipt
+        log("sent", `已发出给 ${email}，回执 ${sent.receipt}`, { contact: email })
       } else {
         outreach = "draft"
+        log("fail", `发给 ${email} 这一下没有邮局回执，仍是草稿`, { contact: email })
       }
     }
     const row: InquiryFinding = {
@@ -1025,9 +1119,14 @@ export async function runInquiryRound(input: {
 
   for (const query of queries) {
     if (Date.now() >= deadline || hits.length >= 14 || fresh.length >= quota) break
-    const batch = await searchPublicWeb(query, env, fetchImpl, Math.max(800, deadline - Date.now()))
+    log("search", `正在搜索：${query}`)
+    const batch = await searchPublicWeb(query, env, fetchImpl, Math.max(800, deadline - Date.now()), workbench)
     searched += 1
     for (const hit of batch) {
+      if (isGovernmentSource(hit.url, hit.title, hit.snippet) || !isCustomerProspect(hit.url, hit.title, hit.snippet)) {
+        log("skip", `跳过不像客户的页面 ${hit.title || hostOf(hit.url)}`, { url: hit.url })
+        continue
+      }
       if (!hits.some((row) => row.url === hit.url)) hits.push(hit)
       for (const email of extractPublicEmails(`${hit.title} ${hit.snippet} ${hit.url}`)) {
         await addFinding(inferOrgName(hit.title, hit.url, hit.snippet), email, hit.url, hostOf(hit.url).replace(/^www\./, ""))
@@ -1036,23 +1135,30 @@ export async function runInquiryRound(input: {
   }
 
   const pages: { hit: SearchHit; html: string }[] = []
-  const targets = input.skipSearch ? [] : hits.slice(0, 8)
+  const targets = input.skipSearch ? [] : hits.filter((hit) => isCustomerProspect(hit.url, hit.title, hit.snippet)).slice(0, 8)
   for (const group of chunk(targets, 3)) {
     if (Date.now() >= deadline || fresh.length >= quota) break
     const rows = await Promise.all(
-      group.map(async (hit) => ({
-        hit,
-        html: await fetchText(fetchImpl, hit.url, Math.min(4500, Math.max(600, deadline - Date.now()))),
-      })),
+      group.map(async (hit) => {
+        log("open", `打开客户页 ${hit.title || hostOf(hit.url)}`, { url: hit.url })
+        return {
+          hit,
+          html: await fetchText(fetchImpl, hit.url, Math.min(4500, Math.max(600, deadline - Date.now()))),
+        }
+      }),
     )
     pages.push(...rows.filter((row) => row.html))
   }
 
   for (const page of pages) {
     if (fresh.length >= quota) break
+    const title = page.html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || page.hit.title
+    if (isGovernmentSource(page.hit.url, title, page.hit.snippet) || !isCustomerProspect(page.hit.url, title, page.hit.snippet)) {
+      log("skip", `打开后确认不是客户页，已丢掉 ${stripTags(title).slice(0, 40)}`, { url: page.hit.url })
+      continue
+    }
     const emails = extractPublicEmails(`${page.html}\n${page.hit.snippet}\n${page.hit.title}`)
     if (!emails.length) continue
-    const title = page.html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || page.hit.title
     const org = inferOrgName(decodeEntities(stripTags(title)), page.hit.url, page.hit.snippet)
     for (const email of emails.slice(0, 2)) {
       await addFinding(org, email, page.hit.url, hostOf(page.hit.url).replace(/^www\./, "") || undefined)
@@ -1063,15 +1169,19 @@ export async function runInquiryRound(input: {
   const drafted = fresh.filter((item) => item.outreach === "draft" || item.outreach === "queued").length
   const queued = fresh.filter((item) => item.outreach === "queued").length
   const jobStatus = nextJobStatus(fresh, pages.length)
-  const report = buildRoundReport({
-    task: input.task,
-    queries: searched,
-    pages: pages.length,
-    findings: fresh,
-    mailbox,
-    hits: hits.length,
-  })
-  const job = { status: jobStatus, brief: report.split("\n")[0] || input.task.brief, updatedAt: now }
+  const report = [
+    describeWorkbench(mailbox.kind === "none" && workbench.kind === "local" ? "none" : workbench.kind),
+    buildRoundReport({
+      task: input.task,
+      queries: searched,
+      pages: pages.length,
+      findings: fresh,
+      mailbox,
+      hits: hits.length,
+      skipped: logs.filter((item) => item.kind === "skip").length,
+    }),
+  ].join("\n")
+  const job = { status: jobStatus, brief: report.split("\n").filter((line) => !line.startsWith("本轮在") && !line.startsWith("本轮接") && !line.startsWith("本轮没有"))[0] || input.task.brief, updatedAt: now }
   const findings = applyInquiryFindings(input.inquiry.findings, fresh, now)
   const tasks = input.inquiry.tasks.map((item) =>
     item.id === input.task.id
@@ -1088,13 +1198,18 @@ export async function runInquiryRound(input: {
         }
       : item,
   )
-  const inquiry: InquiryState = {
-    ...input.inquiry,
-    findings,
-    job,
-    tasks,
-    currentId: input.task.id,
-  }
+  const inquiry: InquiryState = appendInquiryJournal(
+    {
+      ...input.inquiry,
+      findings,
+      job,
+      tasks,
+      currentId: input.task.id,
+      lastReport: report,
+    },
+    logs,
+    now,
+  )
   return {
     inquiry,
     findings: fresh,
@@ -1125,6 +1240,7 @@ function buildRoundReport(input: {
   hits: number
   findings: InquiryFinding[]
   mailbox: OutreachMailbox
+  skipped?: number
 }) {
   const want = input.task.targets.map((item) => item.label).join("、") || input.task.instruction.slice(0, 40) || "已定的厂家类型"
   const contacts = input.findings.map((item) => item.contact?.trim()).filter((item): item is string => Boolean(item))
@@ -1135,20 +1251,20 @@ function buildRoundReport(input: {
   const lines = testOnly
     ? [`这是同事要求的发出测试，收件人是同事自己的邮箱，不是厂商。正式询单信发给网上找到的厂商公开邮箱，不会问同事要收件人。`]
     : input.queries
-      ? [`本轮按「${want}」在网上找厂商已公布的邮箱，查了 ${input.queries} 组搜索、打开 ${input.pages} 个公开页面。找到后直接发给对方，不问同事要收件人。`]
+      ? [`本轮按「${want}」找肥料厂 / 合作社 / 农产品客户，查了 ${input.queries} 组搜索、打开 ${input.pages} 个客户页${input.skipped ? `，跳过 ${input.skipped} 个政府或非客户站` : ""}。找到后直接发给对方。`]
       : [`本轮按已找到的厂商公开邮箱起草并尝试发出，没有再问同事要收件人。`]
   if (testOnly) {
     lines.push(`测试对象：${contacts.join("、")}。已按本站${OUTREACH_BRIEF.productName}和官网起草 ${drafted + sent} 封。`)
   } else if (emails) {
     lines.push(
-      `找到 ${emails} 个厂商公开邮箱：${contacts.join("、")}。已按本站${OUTREACH_BRIEF.productName}和官网起草推广信 ${drafted + sent} 封。`,
+      `找到 ${emails} 个客户公开邮箱：${contacts.join("、")}。已按本站${OUTREACH_BRIEF.productName}和官网起草推广信 ${drafted + sent} 封。`,
     )
   } else if (input.pages || input.hits) {
-    lines.push("打开的页面上没有可收录的公开邮箱。没有编造厂商或邮箱。")
+    lines.push("打开的页面上没有可收录的客户邮箱。政府官网和零售站已跳过。没有编造厂商或邮箱。")
   } else if (input.queries) {
-    lines.push("搜索没有返回可打开的页面。没有编造厂商或邮箱。同事可再点开始，我会继续自己找。不要把同事个人邮箱当成厂商对象。")
+    lines.push("搜索没有返回可打开的客户页。没有编造厂商或邮箱。同事可再点开始，我会继续自己找。")
   } else {
-    lines.push("还没有可发的厂商公开邮箱。我会自己去网上找，不用同事指定收件人。")
+    lines.push("还没有可发的厂商公开邮箱。我会自己去网上找客户，不用同事指定收件人。")
   }
   if (sent) lines.push(`已通过${mailboxLabel(input.mailbox)}发出 ${sent} 封，每封都留下了邮局回执。`)
   if (drafted && input.mailbox.kind === "none") {
@@ -1168,7 +1284,32 @@ async function searchPublicWeb(
   env: Record<string, string | undefined>,
   fetchImpl: FetchLike,
   budgetMs: number,
+  workbench: ReturnType<typeof resolveWorkbench> = { kind: "local" },
 ) {
+  if (workbench.kind === "remote") {
+    const response = await timedFetch(
+      fetchImpl,
+      `${workbench.url}/search`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(workbench.token ? { Authorization: `Bearer ${workbench.token}` } : {}),
+        },
+        body: JSON.stringify({ q: query, query, max_results: 8 }),
+      },
+      Math.min(5000, budgetMs),
+    )
+    if (response && response.ok) {
+      try {
+        const hits = parseSearchJson(await response.json())
+        if (hits.length) return hits
+      } catch {
+        /* fall through to public search */
+      }
+    }
+  }
+
   const custom = pick(env, "INQUIRY_SEARCH_ENDPOINT")
   if (custom) {
     const url = new URL(custom)
