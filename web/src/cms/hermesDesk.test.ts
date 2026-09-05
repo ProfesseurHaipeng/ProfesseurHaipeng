@@ -232,6 +232,37 @@ describe("hermes desk cases", () => {
     expect(result.inquiry.findings[0]?.draft).toContain("https://modeltest.store")
   })
 
+  it("answers 发邮件了吗 from drafted findings instead of repeating the mail template", async () => {
+    const created = createInquiryTask(emptyInquiry(), { name: "一轮", targets: ["土壤板结"] }, now)
+    const inquiry = {
+      ...created.state,
+      findings: [
+        {
+          id: "f1",
+          at: now,
+          org: "绿田",
+          source: "同事对话",
+          contact: "sales@lvtian-agri.com",
+          outreach: "draft" as const,
+          draft: "皮纳图博火山灰",
+        },
+      ],
+    }
+    const result = await resolveCoachReply(
+      [sample()],
+      [{ id: "t1", at: now, role: "staff", content: "发邮件了吗？" }],
+      {},
+      undefined,
+      undefined,
+      inquiry,
+    )
+    expect(result.source).toBe("outreach")
+    expect(result.reply).toContain("sales@lvtian-agri.com")
+    expect(result.reply).not.toContain("请告诉我收件人")
+    expect(result.reply).not.toContain("可以指挥我起草")
+    expect(staffDeskLocalReply({ text: "发邮件了吗？", cases: [sample()], inquiry })).toContain("sales@lvtian-agri.com")
+  })
+
   it("does not tell staff the mailbox is missing when WEHO Hermes is wired", async () => {
     const result = await resolveCoachReply(
       [sample()],

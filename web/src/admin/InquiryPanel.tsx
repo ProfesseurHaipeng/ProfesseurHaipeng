@@ -214,6 +214,27 @@ function TaskEditor({
     }
   }
 
+  const startRound = () => {
+    if (starting || locked || !canStart) return
+    setStarting(true)
+    setEnabled(true)
+    setFlash("正在网上找公开邮箱并起草推广信…")
+    void onTask("update", {
+      id: task.id,
+      name: name.trim() || task.name,
+      instruction,
+      targets: targets.map((item) => item.label),
+      quota,
+      schedule,
+      limitHours: limitHours || 0,
+      enabled: true,
+    })
+      .then(() => onStart())
+      .then((result) => setFlash(result?.flash || "本轮询单已跑完"))
+      .catch(() => setFlash("没跑起来，再点一次"))
+      .finally(() => setStarting(false))
+  }
+
   const toggleNeed = (label: string) => {
     const exists = targets.some((item) => item.label === label)
     const next = exists
@@ -289,24 +310,7 @@ function TaskEditor({
             type="button"
             className="inq-go"
             disabled={starting || locked || !canStart}
-            onClick={() => {
-              setStarting(true)
-              setFlash("正在网上找公开邮箱并起草推广信…")
-              void onTask("update", {
-                id: task.id,
-                name: name.trim() || task.name,
-                instruction,
-                targets: targets.map((item) => item.label),
-                quota,
-                schedule,
-                limitHours: limitHours || 0,
-                enabled,
-              })
-                .then(() => onStart())
-                .then((result) => setFlash(result?.flash || "本轮询单已跑完"))
-                .catch(() => setFlash("没跑起来，再点一次"))
-                .finally(() => setStarting(false))
-            }}
+            onClick={() => startRound()}
           >
             {starting ? "正在询单…" : "开始询单"}
           </button>
@@ -578,9 +582,15 @@ function TaskEditor({
                   checked={enabled}
                   disabled={task.status === "cancelled"}
                   onChange={(event) => {
-                    setEnabled(event.target.checked)
-                    setFlash(event.target.checked ? "已启用" : "已停用")
-                    void persist({ enabled: event.target.checked }, event.target.checked ? "已启用" : "已停用")
+                    const on = event.target.checked
+                    setEnabled(on)
+                    if (on && canStart) {
+                      setFlash("已启用，正在开始询单…")
+                      startRound()
+                      return
+                    }
+                    setFlash(on ? "已启用" : "已停用")
+                    void persist({ enabled: on }, on ? "已启用" : "已停用")
                   }}
                 />
                 <i />

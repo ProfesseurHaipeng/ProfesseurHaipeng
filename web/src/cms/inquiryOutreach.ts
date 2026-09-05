@@ -31,7 +31,7 @@ export type OutreachMailbox =
   | { kind: "hermes"; apiKey: string; baseUrl: string; model: string; from?: string }
   | { kind: "none" }
 
-export type InquiryCoachKind = "send" | "search"
+export type InquiryCoachKind = "send" | "search" | "status"
 
 export type SearchHit = {
   title: string
@@ -169,10 +169,50 @@ export function classifyInquiryCoachCommand(message: string): InquiryCoachKind |
   if (!text) return null
   const emails = extractDirectedEmails(text)
   if (emails.length && /发(邮件|信)|写信|发给|寄给|给这个邮箱|去发|发个邮/.test(text)) return "send"
+  if (isInquiryStatusQuestion(text)) return "status"
   if (shouldRerunInquiry(text)) return "search"
-  if (/开始询单|开始寻找|找公开邮箱|找厂商|找厂家|按这些真实需求|去网上找/.test(text)) return "search"
+  if (/开始询单|开始寻找|找公开邮箱|找厂商|找厂家|按这些真实需求|去网上找|跑起来|去做|开工/.test(text)) return "search"
   if (NEED_PRESETS.some((item) => text.includes(item.label)) && /找|询单|厂家|厂商/.test(text)) return "search"
+  if (/询单|厂商|厂家|推广信/.test(text) && /开始|去找|执行|启动/.test(text)) return "search"
   return null
+}
+
+export function isInquiryStatusQuestion(message: string) {
+  const text = message.replace(/\s+/g, " ").trim()
+  if (!text) return false
+  return /发(邮件|信)了吗|发出[去了]吗|有没有发|找到了吗|写好了吗|起草了吗|发出去了吗|询单(怎么样|如何|进度|怎样)|任务(怎么样|如何|怎样)|做了吗|开始了吗|邮件(发了|发出|怎么样|如何)/.test(
+    text,
+  )
+}
+
+export function inquiryWorkSummary(inquiry: InquiryState) {
+  const findings = inquiry.findings.filter((item) => item.contact?.trim())
+  const sent = findings.filter((item) => item.outreach === "sent")
+  const drafted = findings.filter((item) => item.outreach === "draft" || item.outreach === "queued")
+  const task = currentInquiryTask(inquiry) || pickRunnableInquiryTask(inquiry)
+  const runnable = Boolean(task && (task.targets.length || task.instruction.trim()) && task.status !== "cancelled")
+  if (!findings.length) {
+    if (runnable) {
+      return {
+        reply: "",
+        shouldRun: true,
+      }
+    }
+    return {
+      reply: "还没开始找，也还没有起草或发出的信。把厂家类型定好，或者说一声开始，我现在就跑。",
+      shouldRun: false,
+    }
+  }
+  const lines = [
+    sent.length
+      ? `已经发出 ${sent.length} 封，都有邮局回执：${sent.map((item) => item.contact).join("、")}。`
+      : "还没有一封带着邮局回执的已发送。",
+    drafted.length
+      ? `已经起草 / 入队 ${drafted.length} 封：${drafted.map((item) => item.contact).join("、")}。`
+      : "",
+    sent.length ? "" : "没有邮局回执就不会写成已发送。",
+  ]
+  return { reply: lines.filter(Boolean).join("\n"), shouldRun: false }
 }
 
 export function parseCoachInquirySpec(message: string) {
@@ -196,18 +236,35 @@ export async function runInquiryCoachCommand(input: {
   const kind = classifyInquiryCoachCommand(input.message)
   if (!kind) return null
   const now = input.now || new Date().toISOString()
+  if (kind === "status") {
+    const summary = inquiryWorkSummary(input.inquiry)
+    if (!summary.shouldRun) {
+      return {
+        inquiry: input.inquiry,
+        findings: [],
+        report: summary.reply,
+        searched: 0,
+        pages: 0,
+        drafted: input.inquiry.findings.filter((item) => item.outreach === "draft" || item.outreach === "queued").length,
+        sent: input.inquiry.findings.filter((item) => item.outreach === "sent").length,
+        queued: input.inquiry.findings.filter((item) => item.outreach === "queued").length,
+        nextAction: summary.reply.includes("还没开始") ? "先定条件再开始" : "按已有结果继续",
+      }
+    }
+  }
+  const runKind: InquiryCoachKind = kind === "status" ? "search" : kind
   const spec = parseCoachInquirySpec(input.message)
-  const directed = kind === "send" ? extractDirectedEmails(input.message) : []
+  const directed = runKind === "send" ? extractDirectedEmails(input.message) : []
   let state = input.inquiry
-  let task = kind === "send" ? undefined : pickRunnableInquiryTask(state)
+  let task = runKind === "send" ? undefined : pickRunnableInquiryTask(state)
   if (!task) {
     const created = createInquiryTask(
       state,
       {
-        name: kind === "send" ? "定向发信" : "对话询单",
+        name: runKind === "send" ? "定向发信" : "对话询单",
         instruction: input.message,
         targets: spec.targets,
-        quota: spec.quota || (kind === "send" ? Math.max(1, directed.length) : 8),
+        quota: spec.quota || (runKind === "send" ? Math.max(1, directed.length) : 8),
         limitHours: spec.limitHours,
         start: true,
       },
@@ -239,7 +296,7 @@ export async function runInquiryCoachCommand(input: {
     env: input.env,
     now,
     fetchImpl: input.fetchImpl,
-    skipSearch: kind === "send",
+    skipSearch: runKind === "send",
     seedEmails: directed,
   })
 }

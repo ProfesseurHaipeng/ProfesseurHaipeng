@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest"
 import { createInquiryTask, emptyInquiry, startInquiryTask } from "./inquiryDesk"
 import {
   classifyInquiryCoachCommand,
+  inquiryWorkSummary,
+  isInquiryStatusQuestion,
   composeOutreachMail,
   extractPublicEmails,
   harvestTaskSeeds,
@@ -165,6 +167,8 @@ describe("inquiry outreach runner", () => {
 
   it("runs a directed send from chat instead of asking for the recipient again", async () => {
     expect(classifyInquiryCoachCommand("bear131419@163.com 给这个邮箱去发个邮件")).toBe("send")
+    expect(classifyInquiryCoachCommand("发邮件了吗？")).toBe("status")
+    expect(isInquiryStatusQuestion("发邮件了吗？")).toBe(true)
     expect(
       classifyInquiryCoachCommand(
         "按这些真实需求去找厂商：农产品 / 农业、农村合作社、肥料 / 土壤改良厂家。本轮最多找 20 家带真实来源的厂商。",
@@ -234,6 +238,53 @@ describe("inquiry outreach runner", () => {
     expect(run?.report).toContain("WEHO 发出信箱已配置")
     expect(run?.report).not.toContain("没读到发出信箱")
     expect(run?.report).not.toContain("请告诉我收件人")
+  })
+
+  it("answers a send-status question from real drafts instead of the mail template", async () => {
+    const created = createInquiryTask(
+      emptyInquiry(),
+      { name: "一轮", instruction: "公开邮箱 sales@lvtian-agri.com", targets: ["土壤板结"] },
+      now,
+    )
+    const started = startInquiryTask(created.state, created.task!.id, now)
+    const drafted = await runInquiryRound({
+      inquiry: started.state,
+      task: started.task!,
+      env: {},
+      now,
+      fetchImpl: mockFetch([]) as typeof fetch,
+    })
+    expect(inquiryWorkSummary(drafted.inquiry).shouldRun).toBe(false)
+    const status = await runInquiryCoachCommand({
+      message: "发邮件了吗？",
+      inquiry: drafted.inquiry,
+      env: {},
+      now,
+      fetchImpl: mockFetch([]) as typeof fetch,
+    })
+    expect(status?.searched).toBe(0)
+    expect(status?.report).toContain("sales@lvtian-agri.com")
+    expect(status?.report).toContain("还没有一封")
+    expect(status?.report).not.toContain("请告诉我收件人")
+    expect(status?.report).not.toContain("可以指挥我起草")
+  })
+
+  it("starts the sitting task when staff ask if mail went out and nothing has run", async () => {
+    const created = createInquiryTask(
+      emptyInquiry(),
+      { name: "一轮", instruction: "公开邮箱 sales@lvtian-agri.com", targets: ["土壤板结"] },
+      now,
+    )
+    const run = await runInquiryCoachCommand({
+      message: "发邮件了吗？",
+      inquiry: created.state,
+      env: {},
+      now,
+      fetchImpl: mockFetch([]) as typeof fetch,
+    })
+    expect(run?.findings[0]?.contact).toBe("sales@lvtian-agri.com")
+    expect(run?.report).toContain("sales@lvtian-agri.com")
+    expect(run?.report).not.toContain("可以指挥我起草")
   })
 
   it("does not invent emails when search returns nothing", async () => {
