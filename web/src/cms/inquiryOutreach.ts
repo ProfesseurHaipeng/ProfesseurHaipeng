@@ -197,8 +197,9 @@ export async function runInquiryCoachCommand(input: {
   if (!kind) return null
   const now = input.now || new Date().toISOString()
   const spec = parseCoachInquirySpec(input.message)
+  const directed = kind === "send" ? extractDirectedEmails(input.message) : []
   let state = input.inquiry
-  let task = pickRunnableInquiryTask(state)
+  let task = kind === "send" ? undefined : pickRunnableInquiryTask(state)
   if (!task) {
     const created = createInquiryTask(
       state,
@@ -206,7 +207,7 @@ export async function runInquiryCoachCommand(input: {
         name: kind === "send" ? "定向发信" : "对话询单",
         instruction: input.message,
         targets: spec.targets,
-        quota: spec.quota || (kind === "send" ? Math.max(1, extractDirectedEmails(input.message).length) : 8),
+        quota: spec.quota || (kind === "send" ? Math.max(1, directed.length) : 8),
         limitHours: spec.limitHours,
         start: true,
       },
@@ -239,6 +240,7 @@ export async function runInquiryCoachCommand(input: {
     now,
     fetchImpl: input.fetchImpl,
     skipSearch: kind === "send",
+    seedEmails: directed,
   })
 }
 
@@ -573,7 +575,9 @@ async function sendViaHermes(
     const receipt = await readReceipt(response)
     if (receipt) return { ok: true as const, receipt }
   }
-  if (fetchImpl !== fetch) return { ok: false as const, error: "send-failed" }
+  if (fetchImpl !== fetch || !mailbox.apiKey || mailbox.apiKey === "local") {
+    return { ok: false as const, error: "send-failed" }
+  }
   try {
     const reply = await completeChatCompletions(
       { apiKey: mailbox.apiKey, baseUrl: mailbox.baseUrl, model: mailbox.model },
@@ -609,6 +613,7 @@ export async function runInquiryRound(input: {
   siteUrl?: string
   budgetMs?: number
   skipSearch?: boolean
+  seedEmails?: string[]
 }): Promise<InquiryRoundResult> {
   const now = input.now || new Date().toISOString()
   const env = input.env || {}
@@ -623,6 +628,7 @@ export async function runInquiryRound(input: {
   )
   const deadline = Date.now() + (input.budgetMs ?? 16_000)
   const seeds = harvestTaskSeeds(input.task)
+  if (input.seedEmails?.length) seeds.emails = unique([...input.seedEmails, ...seeds.emails])
   const pain = input.task.targets.map((item) => item.label).join("、")
   const fresh: InquiryFinding[] = []
 
@@ -632,7 +638,8 @@ export async function runInquiryRound(input: {
     source: string,
     place?: string,
   ) => {
-    if (fresh.length >= quota || known.has(email) || !isSendableEmail(email, source)) return
+    if (fresh.length >= quota || !isSendableEmail(email, source)) return
+    if (known.has(email) && !input.skipSearch) return
     known.add(email)
     const mail = composeOutreachMail({ org, email, pain, siteUrl })
     let outreach: InquiryFinding["outreach"] = mailbox.kind === "none" ? "draft" : "queued"

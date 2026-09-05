@@ -184,6 +184,16 @@ describe("inquiry outreach runner", () => {
     expect(run?.report).not.toContain("请告诉我收件人")
     expect(run?.report).toContain("bear131419@163.com")
     expect(run?.report).toContain("没读到发出信箱")
+    const again = await runInquiryCoachCommand({
+      message: "bear131419@163.com 给这个邮箱去发个邮件",
+      inquiry: run!.inquiry,
+      env: {},
+      now,
+      fetchImpl: mockFetch([]) as typeof fetch,
+    })
+    expect(again?.report).toContain("bear131419@163.com")
+    expect(again?.report).not.toContain("没有可发的公开邮箱")
+    expect(again?.findings[0]?.contact).toBe("bear131419@163.com")
   })
 
   it("treats the WEHO Hermes gateway as the outgoing mailbox", async () => {
