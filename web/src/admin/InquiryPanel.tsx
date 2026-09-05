@@ -341,7 +341,7 @@ function TaskEditor({
                 rows={2}
                 value={instruction}
                 maxLength={2000}
-                placeholder="除需求和家数外，还要特别注意什么？"
+                placeholder="已知公开邮箱、对方网址，或这轮还要强调的产品卖点"
                 onChange={(event) => setInstruction(event.target.value)}
                 onBlur={() => {
                   if (instruction !== task.instruction) void persist({ instruction }, "指令已记下")

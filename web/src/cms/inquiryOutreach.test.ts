@@ -3,11 +3,13 @@ import { createInquiryTask, emptyInquiry, startInquiryTask } from "./inquiryDesk
 import {
   composeOutreachMail,
   extractPublicEmails,
+  harvestTaskSeeds,
   isPublicBusinessEmail,
   parseSearchHtml,
   resolveMailbox,
   runInquiryRound,
   shouldRerunInquiry,
+  unwrapSearchUrl,
 } from "./inquiryOutreach"
 
 const now = "2026-09-05T12:00:00.000Z"
@@ -115,6 +117,40 @@ describe("inquiry outreach runner", () => {
     expect(run.findings[0]?.receipt).toBe("sg-receipt-9")
     expect(run.sent).toBe(1)
     expect(run.report).toContain("邮局回执")
+  })
+
+  it("unwraps Bing redirect targets and harvests emails from the instruction", () => {
+    const href =
+      "https://www.bing.com/ck/a?!&&p=abc&u=a1aHR0cHM6Ly93d3cubHZ0aWFuLWFncmkuY29tL2NvbnRhY3Q&ntb=1"
+    expect(unwrapSearchUrl(href)).toBe("https://www.lvtian-agri.com/contact")
+    const created = createInquiryTask(
+      emptyInquiry(),
+      { name: "一轮", instruction: "先写给 sales@lvtian-agri.com，官网 https://www.lvtian-agri.com/contact", targets: ["土壤板结"] },
+      now,
+    )
+    const seeds = harvestTaskSeeds(created.task!)
+    expect(seeds.emails).toEqual(["sales@lvtian-agri.com"])
+    expect(seeds.urls.some((item) => item.includes("lvtian-agri.com"))).toBe(true)
+  })
+
+  it("drafts from an email the colleague wrote, even when search is empty", async () => {
+    const created = createInquiryTask(
+      emptyInquiry(),
+      { name: "一轮", instruction: "公开邮箱 sales@lvtian-agri.com", targets: ["土壤板结"] },
+      now,
+    )
+    const started = startInquiryTask(created.state, created.task!.id, now)
+    const run = await runInquiryRound({
+      inquiry: started.state,
+      task: started.task!,
+      env: {},
+      now,
+      fetchImpl: mockFetch([]) as typeof fetch,
+    })
+    expect(run.findings[0]?.contact).toBe("sales@lvtian-agri.com")
+    expect(run.findings[0]?.source).toBe("同事补充指令")
+    expect(run.findings[0]?.draft).toContain("https://modeltest.store")
+    expect(run.findings[0]?.outreach).toBe("draft")
   })
 
   it("does not invent emails when search returns nothing", async () => {

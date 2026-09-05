@@ -85,6 +85,24 @@ const BLOCKED_HOST = new Set([
   "agentmail.to",
 ])
 
+const JUNK_RESULT_HOST = new Set([
+  ...BLOCKED_HOST,
+  "r.bing.com",
+  "th.bing.com",
+  "go.microsoft.com",
+  "stackoverflow.com",
+  "stackexchange.com",
+  "reddit.com",
+  "quora.com",
+  "wikipedia.org",
+  "youtube.com",
+  "nytimes.com",
+  "bbc.co.uk",
+  "msn.com",
+  "shopify.com",
+  "myshopify.com",
+])
+
 const BLOCKED_LOCAL = /^(noreply|no-reply|donotreply|do-not-reply|mailer-daemon|postmaster|webmaster|abuse|privacy|legal|newsletter|news|image|img|static|assets|webpack|sentry|wix)$/i
 const PLACEHOLDER_LOCAL = /^(name|email|user|username|someone|foo|bar|sample|xxx|mailbox)$/i
 
@@ -183,19 +201,45 @@ export function extractPublicEmails(text: string) {
   return [...found]
 }
 
+function decodeSearchTarget(value: string) {
+  const raw = decodeEntities(value).trim()
+  if (/^https?:\/\//i.test(raw)) return raw
+  const packed = raw.startsWith("a1") ? raw.slice(2) : raw
+  const pad = "=".repeat((4 - (packed.length % 4)) % 4)
+  try {
+    const decoded = Buffer.from(packed.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")
+    if (/^https?:\/\//i.test(decoded) || decoded.startsWith("/")) return decoded
+  } catch {
+    /* not base64 */
+  }
+  return raw.startsWith("http") ? raw : ""
+}
+
 export function unwrapSearchUrl(href: string) {
   try {
-    const url = new URL(href, "https://html.duckduckgo.com")
-    const uddg = url.searchParams.get("uddg")
-    if (uddg) return unwrapSearchUrl(uddg)
-    const u = url.searchParams.get("u")
-    if (u && /^https?:\/\//i.test(u)) return unwrapSearchUrl(u)
-    if (isSearchHost(url.hostname)) return ""
+    const url = new URL(decodeEntities(href), "https://www.bing.com")
+    const packed = url.searchParams.get("uddg") || url.searchParams.get("u")
+    if (packed) {
+      const inner = decodeSearchTarget(packed)
+      if (inner && inner !== href) return unwrapSearchUrl(inner)
+    }
+    if (isSearchHost(url.hostname) || JUNK_RESULT_HOST.has(url.hostname) || url.hostname.endsWith(".myshopify.com")) {
+      return ""
+    }
     if (url.protocol !== "http:" && url.protocol !== "https:") return ""
     return url.href
   } catch {
     return ""
   }
+}
+
+export function harvestTaskSeeds(task: InquiryTask) {
+  const blob = [task.instruction, ...task.targets.map((item) => item.label)].join("\n")
+  const emails = extractPublicEmails(blob)
+  const urls = [...blob.matchAll(/https?:\/\/[^\s<>"'）)]+/g)]
+    .map((match) => unwrapSearchUrl(match[0] || ""))
+    .filter(Boolean)
+  return { emails, urls: unique(urls) }
 }
 
 export function parseSearchHtml(html: string) {
@@ -213,10 +257,15 @@ export function parseSearchHtml(html: string) {
   }
   const block = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
   for (const match of html.matchAll(block)) push(match[1] || "", match[2] || "")
-  const generic = /<a[^>]+href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
+  const generic = /<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
   for (const match of html.matchAll(generic)) {
     if (hits.length >= 16) break
     push(match[1] || "", match[2] || "")
+  }
+  const packed = /[?&]u=([^&"]+)/gi
+  for (const match of html.matchAll(packed)) {
+    if (hits.length >= 16) break
+    push(decodeEntities(`https://www.bing.com/ck/a?u=${match[1] || ""}`), "")
   }
   return hits.slice(0, 16)
 }
@@ -386,23 +435,68 @@ export async function runInquiryRound(input: {
       .filter((item): item is string => Boolean(item)),
   )
   const deadline = Date.now() + (input.budgetMs ?? 16_000)
+  const seeds = harvestTaskSeeds(input.task)
+  const pain = input.task.targets.map((item) => item.label).join("、")
+  const fresh: InquiryFinding[] = []
+
+  const addFinding = async (
+    org: string,
+    email: string,
+    source: string,
+    place?: string,
+  ) => {
+    if (fresh.length >= quota || known.has(email) || !isPublicBusinessEmail(email)) return
+    known.add(email)
+    const mail = composeOutreachMail({ org, email, pain, siteUrl })
+    let outreach: InquiryFinding["outreach"] = mailbox.kind === "none" ? "draft" : "queued"
+    let receipt: string | undefined
+    if (mailbox.kind !== "none" && fresh.filter((item) => item.outreach === "sent").length < 3 && Date.now() < deadline) {
+      const sent = await sendOutreachMail(mailbox, mail, fetchImpl).catch(() => ({ ok: false as const, error: "send-failed" }))
+      if (sent.ok) {
+        outreach = "sent"
+        receipt = sent.receipt
+      } else {
+        outreach = "draft"
+      }
+    }
+    fresh.push({
+      id: newInquiryId("find"),
+      at: now,
+      org,
+      place,
+      pain: pain || undefined,
+      source,
+      contact: email,
+      outreach,
+      draft: `${mail.subject}\n\n${mail.text}`,
+      receipt,
+    })
+  }
+
+  for (const email of seeds.emails) {
+    await addFinding(inferOrgName("", `https://${email.split("@")[1] || "source"}`), email, "同事补充指令", email.split("@")[1])
+  }
+
   const queries = buildSearchQueries(input.task)
-  const hits: SearchHit[] = []
+  const hits: SearchHit[] = seeds.urls.map((url) => ({ title: "", url, snippet: "" }))
   let searched = 0
 
   for (const query of queries) {
-    if (Date.now() >= deadline || hits.length >= 14) break
+    if (Date.now() >= deadline || hits.length >= 14 || fresh.length >= quota) break
     const batch = await searchPublicWeb(query, env, fetchImpl, Math.max(800, deadline - Date.now()))
     searched += 1
     for (const hit of batch) {
       if (!hits.some((row) => row.url === hit.url)) hits.push(hit)
+      for (const email of extractPublicEmails(`${hit.title} ${hit.snippet} ${hit.url}`)) {
+        await addFinding(inferOrgName(hit.title, hit.url, hit.snippet), email, hit.url, hostOf(hit.url).replace(/^www\./, ""))
+      }
     }
   }
 
   const pages: { hit: SearchHit; html: string }[] = []
   const targets = hits.slice(0, 8)
   for (const group of chunk(targets, 3)) {
-    if (Date.now() >= deadline) break
+    if (Date.now() >= deadline || fresh.length >= quota) break
     const rows = await Promise.all(
       group.map(async (hit) => ({
         hit,
@@ -412,42 +506,14 @@ export async function runInquiryRound(input: {
     pages.push(...rows.filter((row) => row.html))
   }
 
-  const pain = input.task.targets.map((item) => item.label).join("、")
-  const fresh: InquiryFinding[] = []
   for (const page of pages) {
     if (fresh.length >= quota) break
     const emails = extractPublicEmails(`${page.html}\n${page.hit.snippet}\n${page.hit.title}`)
-      .filter((email) => !known.has(email))
     if (!emails.length) continue
     const title = page.html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || page.hit.title
     const org = inferOrgName(decodeEntities(stripTags(title)), page.hit.url, page.hit.snippet)
     for (const email of emails.slice(0, 2)) {
-      if (fresh.length >= quota || known.has(email)) continue
-      known.add(email)
-      const mail = composeOutreachMail({ org, email, pain, siteUrl })
-      let outreach: InquiryFinding["outreach"] = mailbox.kind === "none" ? "draft" : "queued"
-      let receipt: string | undefined
-      if (mailbox.kind !== "none" && fresh.filter((item) => item.outreach === "sent").length < 3 && Date.now() < deadline) {
-        const sent = await sendOutreachMail(mailbox, mail, fetchImpl).catch(() => ({ ok: false as const, error: "send-failed" }))
-        if (sent.ok) {
-          outreach = "sent"
-          receipt = sent.receipt
-        } else {
-          outreach = "draft"
-        }
-      }
-      fresh.push({
-        id: newInquiryId("find"),
-        at: now,
-        org,
-        place: hostOf(page.hit.url).replace(/^www\./, "") || undefined,
-        pain: pain || undefined,
-        source: page.hit.url,
-        contact: email,
-        outreach,
-        draft: `${mail.subject}\n\n${mail.text}`,
-        receipt,
-      })
+      await addFinding(org, email, page.hit.url, hostOf(page.hit.url).replace(/^www\./, "") || undefined)
     }
   }
 
@@ -609,15 +675,18 @@ async function searchPublicWeb(
   }
 
   const encoded = encodeURIComponent(query)
-  const ddg = await fetchText(fetchImpl, `https://html.duckduckgo.com/html/?q=${encoded}`, Math.min(5000, budgetMs), {
+  const bing = await fetchText(
+    fetchImpl,
+    `https://www.bing.com/search?q=${encoded}&setlang=zh-cn`,
+    Math.min(4000, budgetMs),
+    { Accept: "text/html", "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.5" },
+  )
+  const fromBing = bing ? parseSearchHtml(bing) : []
+  if (fromBing.length) return fromBing
+  const ddg = await fetchText(fetchImpl, `https://html.duckduckgo.com/html/?q=${encoded}`, Math.min(2500, budgetMs), {
     Accept: "text/html",
   })
-  const fromDdg = ddg ? parseSearchHtml(ddg) : []
-  if (fromDdg.length) return fromDdg
-  const bing = await fetchText(fetchImpl, `https://www.bing.com/search?q=${encoded}`, Math.min(4500, budgetMs), {
-    Accept: "text/html",
-  })
-  return bing ? parseSearchHtml(bing) : []
+  return ddg ? parseSearchHtml(ddg) : []
 }
 
 async function fetchText(
