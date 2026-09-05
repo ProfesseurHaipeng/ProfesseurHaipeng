@@ -17,7 +17,7 @@ import {
   type InquiryState,
   type InquiryTask,
 } from "./inquiryDesk"
-import { extractDirectedEmails, inquiryWorkSummary, runInquiryCoachCommand } from "./inquiryOutreach"
+import { extractDirectedEmails, inquiryWorkSummary, isStaffTestEmail, runInquiryCoachCommand } from "./inquiryOutreach"
 import type { Lead } from "./leads"
 
 export type HermesOwner = "hermes" | "human"
@@ -1606,7 +1606,7 @@ const COACH_RULES = `你是皮纳图博火山灰项目的后台询单工位。�
 【权限】
 - 能看全部真实工单、联系方式、desk 记忆、询单任务、接管状态。
 - 同事可以指挥你：查工单、看档案、改跟进、起草邮件、处理附件。
-- 发信走 WEHO 已配置的 Hermes 发出信箱。同事在对话里写下邮箱并说发出时，由执行器立刻写信并发，不要再问收件人。同事问「发邮件了吗」时，只按已有寻找结果和邮局回执回答，不要重复起草套话。没有邮局回执时只许起草入队，不许写成已发送。
+- 发信走 WEHO 已配置的 Hermes 发出信箱。收件人由你自己在公开网页上找厂商邮箱，不要问同事该发给谁，也不要把同事个人邮箱当成正式对象。同事写下的 163 / QQ / Gmail 等个人邮箱只当作发出测试。起草完成后立刻发给找到的厂商。同事问「发邮件了吗」时，对已起草的厂商信再试发出，只按邮局回执回答。没有邮局回执时只许起草入队，不许写成已发送。
 - 文件和附件走本站储存。没有独立虚拟机命令口，不要说已经用 VM 发出。
 - 不要编造客户、厂商、已发送的邮件或调查结果。
 
@@ -1614,8 +1614,8 @@ const COACH_RULES = `你是皮纳图博火山灰项目的后台询单工位。�
 同事点「开始询单」后，由本站询单执行器跑三步，不是前台 Linda，也不等你自己去搜网。
 1. 寻找目标：按任务里的厂家类型、痛点和补充指令，在公开网页上找对方已公布的邮箱。只收录页面上真实出现的邮箱。
 2. 编写内容：用本站皮纳图博火山灰农业项目的真实产品和官网写推广或营销信。可以按同事指令改语气，不要编检测数字。
-3. 发送邮件：走 WEHO 已配置的 Hermes 发出信箱。有邮局回执才写 sent。
-同事在这席对话写下邮箱并说「去发」，或写下找厂条件，都由执行器立刻跑，不要再问收件人，也不要只回套话。同事说「再找一轮」时由执行器再跑，不要自己编新厂商。
+3. 发送邮件：走 WEHO 已配置的 Hermes 发出信箱，发给上一步找到的厂商，不要发给同事本人。有邮局回执才写 sent。
+找厂条件由同事定；收件人由执行器自己找。不要问同事该发给谁。同事个人邮箱只作发出测试。同事说「再找一轮」时由执行器再跑，不要自己编新厂商。
 
 【控制权】
 - 同事能通过工单列表改称呼、公司、联系方式、进度等基础字段；接管、邮件状态、跟单、跟踪、行为数据、记忆仍由你改。
@@ -1759,16 +1759,20 @@ export function staffDeskLocalReply(input: {
     }
     const emailed = extractDirectedEmails(q)
     if (emailed.length) {
-      return `收件人是 ${emailed.join("、")}。我按本站皮纳图博火山灰和官网起草，走 WEHO 已配置的发出信箱；没有邮局回执不会写成已发送。`
+      const tests = emailed.filter((item) => isStaffTestEmail(item))
+      if (tests.length === emailed.length) {
+        return `这是发出测试，收件人是同事自己的邮箱 ${tests.join("、")}，不是厂商。正式询单信发给我找到的厂商公开邮箱；没有邮局回执不会写成已发送。`
+      }
+      return `收到厂商邮箱 ${emailed.join("、")}。我按本站皮纳图博火山灰起草，走 WEHO 已配置的发出信箱发给对方，不用再指定收件人；没有邮局回执不会写成已发送。`
     }
     if (hit) {
       const who = [...new Set([hit.name, inferredVisitorName(hit.note), caseTitle(hit)].filter((item) => item && item !== "对话客户" && item !== "AI 对话客户"))].join(" · ")
       if (hit.contact) {
         return `对着工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}，联系方式 ${hit.contact}。补一句事由我就起草；没有邮局回执仍是草稿。`
       }
-      return `对着工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}，这张还没留邮箱。把收件人写下我就起草；没有邮局回执仍是草稿。`
+      return `对着工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}，这张工单还没留邮箱。询单推广信不用你指定收件人，我自己找厂商公开邮箱再发出。`
     }
-    return "把收件人邮箱写下，或先开始询单去找公开邮箱。我不会空口说已经发出。"
+    return "询单推广信发给我找到的厂商公开邮箱，不用你指定收件人。说一声开始我就去找并起草发出。我不会空口说已经发出。"
   }
 
   if (/档案|记忆|VM|虚拟机|储存|附件/.test(q)) {

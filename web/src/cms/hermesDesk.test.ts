@@ -227,8 +227,11 @@ describe("hermes desk cases", () => {
     )
     expect(result.source).toBe("outreach")
     expect(result.reply).toContain("bear131419@163.com")
+    expect(result.reply).toContain("发出测试")
     expect(result.reply).toContain("皮纳图博火山灰")
     expect(result.reply).not.toContain("请告诉我收件人")
+    expect(result.reply).not.toContain("把收件人写下")
+    expect(result.inquiry.findings[0]?.source).toBe("同事测试指令")
     expect(result.inquiry.findings[0]?.draft).toContain("https://modeltest.store")
   })
 
@@ -259,8 +262,11 @@ describe("hermes desk cases", () => {
     expect(result.source).toBe("outreach")
     expect(result.reply).toContain("sales@lvtian-agri.com")
     expect(result.reply).not.toContain("请告诉我收件人")
+    expect(result.reply).not.toContain("把收件人写下")
     expect(result.reply).not.toContain("可以指挥我起草")
     expect(staffDeskLocalReply({ text: "发邮件了吗？", cases: [sample()], inquiry })).toContain("sales@lvtian-agri.com")
+    expect(staffDeskLocalReply({ text: "发个邮件", cases: [sample()] })).not.toContain("把收件人写下")
+    expect(staffDeskLocalReply({ text: "发个邮件", cases: [sample()] })).toContain("不用你指定收件人")
   })
 
   it("does not tell staff the mailbox is missing when WEHO Hermes is wired", async () => {
@@ -270,9 +276,11 @@ describe("hermes desk cases", () => {
       { HERMES_API_BASE: "https://advisor.example.com/v1", HERMES_API_KEY: "hk-test" },
     )
     expect(result.source).toBe("outreach")
+    expect(result.reply).toContain("发出测试")
     expect(result.reply).toContain("WEHO 发出信箱已配置")
     expect(result.reply).not.toContain("没读到发出信箱")
     expect(result.reply).not.toContain("请告诉我收件人")
+    expect(result.reply).not.toContain("把收件人写下")
   })
 
   it("lets staff write shared memory that the front can read", () => {
@@ -323,6 +331,8 @@ describe("desk coach protocol", () => {
     expect(messages[0]?.content).toContain("不要编发送成功")
     expect(messages[0]?.content).toContain("询单模块")
     expect(messages[0]?.content).toContain("找公开邮箱")
+    expect(messages[0]?.content).toContain("不要问同事该发给谁")
+    expect(messages[0]?.content).toContain("只当作发出测试")
     expect(messages[0]?.content).toContain("<inquiry>")
     expect(messages[0]?.content).not.toContain("Karmenai")
     expect(messages[0]?.content).not.toContain("同一个人")

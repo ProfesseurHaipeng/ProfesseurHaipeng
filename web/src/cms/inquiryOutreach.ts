@@ -119,6 +119,31 @@ const BLOCKED_LOCAL = /^(noreply|no-reply|donotreply|do-not-reply|mailer-daemon|
 const PLACEHOLDER_LOCAL = /^(name|email|user|username|someone|foo|bar|sample|xxx|mailbox)$/i
 const HASH_LOCAL = /^[a-f0-9]{20,}$/i
 const TRACKER_HOST = /(^|\.)(glitchtip|sentry|bugsnag|rollbar)(\.|$)/i
+const CONSUMER_MAIL_HOST = new Set([
+  "163.com",
+  "126.com",
+  "yeah.net",
+  "qq.com",
+  "foxmail.com",
+  "gmail.com",
+  "googlemail.com",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "msn.com",
+  "yahoo.com",
+  "ymail.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "sina.com",
+  "sina.cn",
+  "sohu.com",
+  "139.com",
+  "189.cn",
+  "aliyun.com",
+  "188.com",
+])
 
 export function resolveSiteUrl(env: Record<string, string | undefined> = {}) {
   for (const raw of [env.PUBLIC_SITE_URL, env.SITE_URL]) {
@@ -174,6 +199,7 @@ export function classifyInquiryCoachCommand(message: string): InquiryCoachKind |
   if (/开始询单|开始寻找|找公开邮箱|找厂商|找厂家|按这些真实需求|去网上找|跑起来|去做|开工/.test(text)) return "search"
   if (NEED_PRESETS.some((item) => text.includes(item.label)) && /找|询单|厂家|厂商/.test(text)) return "search"
   if (/询单|厂商|厂家|推广信/.test(text) && /开始|去找|执行|启动/.test(text)) return "search"
+  if (/发(邮件|信)|发给|寄给|去发|发个邮|把(信|邮件|推广信)发出/.test(text)) return "send"
   return null
 }
 
@@ -186,33 +212,42 @@ export function isInquiryStatusQuestion(message: string) {
 }
 
 export function inquiryWorkSummary(inquiry: InquiryState) {
-  const findings = inquiry.findings.filter((item) => item.contact?.trim())
-  const sent = findings.filter((item) => item.outreach === "sent")
-  const drafted = findings.filter((item) => item.outreach === "draft" || item.outreach === "queued")
+  const all = inquiry.findings.filter((item) => item.contact?.trim())
+  const factory = all.filter((item) => !isStaffTestEmail(item.contact || ""))
+  const tests = all.filter((item) => isStaffTestEmail(item.contact || ""))
+  const sent = factory.filter((item) => item.outreach === "sent")
+  const drafted = factory.filter((item) => item.outreach === "draft" || item.outreach === "queued")
   const task = currentInquiryTask(inquiry) || pickRunnableInquiryTask(inquiry)
   const runnable = Boolean(task && (task.targets.length || task.instruction.trim()) && task.status !== "cancelled")
-  if (!findings.length) {
+  if (!factory.length) {
     if (runnable) {
       return {
-        reply: "",
+        reply: tests.length
+          ? `同事那 ${tests.length} 封是发给自己的测试信（${tests.map((item) => item.contact).join("、")}），不是厂商对象。正式询单还没找到厂商公开邮箱。任务条件已在，我现在就去网上找并直接发给对方。`
+          : "",
         shouldRun: true,
+        shouldFlush: false,
       }
     }
     return {
-      reply: "还没开始找，也还没有起草或发出的信。把厂家类型定好，或者说一声开始，我现在就跑。",
+      reply: tests.length
+        ? `同事那封是测试信。还没有厂商询单任务。先定厂家类型或说开始，我自己去找公开邮箱并发给对方，不用指定收件人。`
+        : "还没开始找，也还没有起草或发出的信。把厂家类型定好，或者说一声开始，我现在就跑。",
       shouldRun: false,
+      shouldFlush: false,
     }
   }
   const lines = [
     sent.length
-      ? `已经发出 ${sent.length} 封，都有邮局回执：${sent.map((item) => item.contact).join("、")}。`
-      : "还没有一封带着邮局回执的已发送。",
+      ? `已经发给厂商 ${sent.length} 封，都有邮局回执：${sent.map((item) => item.contact).join("、")}。`
+      : "还没有一封带着邮局回执、发给厂商的信。",
     drafted.length
-      ? `已经起草 / 入队 ${drafted.length} 封：${drafted.map((item) => item.contact).join("、")}。`
+      ? `已经起草给厂商 ${drafted.length} 封：${drafted.map((item) => item.contact).join("、")}。发出信箱已配置的话我会直接发给这些厂商，不用同事指定收件人。`
       : "",
+    tests.length ? `另有发给同事的测试信 ${tests.length} 封，不算厂商询单。` : "",
     sent.length ? "" : "没有邮局回执就不会写成已发送。",
   ]
-  return { reply: lines.filter(Boolean).join("\n"), shouldRun: false }
+  return { reply: lines.filter(Boolean).join("\n"), shouldRun: false, shouldFlush: drafted.length > 0 }
 }
 
 export function parseCoachInquirySpec(message: string) {
@@ -236,35 +271,52 @@ export async function runInquiryCoachCommand(input: {
   const kind = classifyInquiryCoachCommand(input.message)
   if (!kind) return null
   const now = input.now || new Date().toISOString()
-  if (kind === "status") {
-    const summary = inquiryWorkSummary(input.inquiry)
-    if (!summary.shouldRun) {
-      return {
+  const env = input.env || {}
+  const fetchImpl = input.fetchImpl || fetch
+  const directed = extractDirectedEmails(input.message)
+  const testEmails = directed.filter((item) => isStaffTestEmail(item))
+  const factoryEmails = directed.filter((item) => !isStaffTestEmail(item))
+  const mailbox = resolveMailbox(env)
+
+  if (kind === "send" && testEmails.length && !factoryEmails.length) {
+    return runTestSend({
+      inquiry: input.inquiry,
+      emails: testEmails,
+      env,
+      now,
+      fetchImpl,
+    })
+  }
+
+  if (kind === "status" || (kind === "send" && !factoryEmails.length)) {
+    const unsent = factoryUnsent(input.inquiry)
+    if (unsent.length && mailbox.kind !== "none") {
+      return flushUnsentFactoryMail({
         inquiry: input.inquiry,
-        findings: [],
-        report: summary.reply,
-        searched: 0,
-        pages: 0,
-        drafted: input.inquiry.findings.filter((item) => item.outreach === "draft" || item.outreach === "queued").length,
-        sent: input.inquiry.findings.filter((item) => item.outreach === "sent").length,
-        queued: input.inquiry.findings.filter((item) => item.outreach === "queued").length,
-        nextAction: summary.reply.includes("还没开始") ? "先定条件再开始" : "按已有结果继续",
-      }
+        env,
+        now,
+        fetchImpl,
+      })
+    }
+    if (kind === "status") {
+      const summary = inquiryWorkSummary(input.inquiry)
+      if (!summary.shouldRun) return statusSnapshot(input.inquiry, summary)
     }
   }
+
   const runKind: InquiryCoachKind = kind === "status" ? "search" : kind
   const spec = parseCoachInquirySpec(input.message)
-  const directed = runKind === "send" ? extractDirectedEmails(input.message) : []
+  const extra = instructionForSearch(input.message, spec)
   let state = input.inquiry
-  let task = runKind === "send" ? undefined : pickRunnableInquiryTask(state)
+  let task = pickRunnableInquiryTask(state)
   if (!task) {
     const created = createInquiryTask(
       state,
       {
-        name: runKind === "send" ? "定向发信" : "对话询单",
-        instruction: input.message,
+        name: "对话询单",
+        instruction: extra || "找肥料、土壤改良和农业合作社的公开邮箱",
         targets: spec.targets,
-        quota: spec.quota || (runKind === "send" ? Math.max(1, directed.length) : 8),
+        quota: spec.quota || 8,
         limitHours: spec.limitHours,
         start: true,
       },
@@ -274,11 +326,14 @@ export async function runInquiryCoachCommand(input: {
     state = created.state
     task = created.task
   } else {
+    const nextInstruction = extra
+      ? [stripStaffTestAddresses(task.instruction), extra].filter(Boolean).join("\n").slice(0, 2000)
+      : stripStaffTestAddresses(task.instruction)
     const updated = updateInquiryTask(
       state,
       {
         id: task.id,
-        instruction: [task.instruction, input.message].filter(Boolean).join("\n").slice(0, 2000),
+        instruction: nextInstruction,
         targets: spec.targets.length ? spec.targets : task.targets.map((item) => item.label),
         quota: spec.quota || task.quota,
         limitHours: spec.limitHours ?? task.limitHours ?? 0,
@@ -293,16 +348,212 @@ export async function runInquiryCoachCommand(input: {
   return runInquiryRound({
     inquiry: state,
     task,
-    env: input.env,
+    env,
     now,
-    fetchImpl: input.fetchImpl,
-    skipSearch: runKind === "send",
-    seedEmails: directed,
+    fetchImpl,
+    skipSearch: runKind === "send" && factoryEmails.length > 0,
+    seedEmails: factoryEmails,
+    seedSource: "同事补充指令",
   })
 }
 
 export function shouldRerunInquiry(message: string) {
   return /再找|再搜|继续询|再跑|再寻|再发一轮|再开始/.test(message)
+}
+
+function isBareMailCommand(text: string) {
+  const compact = text.replace(/\s+/g, "")
+  if (isInquiryStatusQuestion(text)) return true
+  return /^(请)?(帮我)?(去)?发(个|一封)?(邮件|信)(吧|啊)?[!！。？?]*$/.test(compact)
+    || /^(把信|把邮件|把推广信)发出(去)?[!！。？?]*$/.test(compact)
+}
+
+function instructionForSearch(message: string, spec: { targets: string[] }) {
+  const stripped = stripStaffTestAddresses(message)
+  if (isBareMailCommand(message)) return ""
+  if (spec.targets.length || /厂家|厂商|合作社|肥料|土壤|农业|询单/.test(stripped)) return stripped
+  if (/发(邮件|信)|发给|去发/.test(message)) return "找肥料、土壤改良和农业合作社的公开邮箱"
+  return stripped
+}
+
+function factoryUnsent(inquiry: InquiryState) {
+  return inquiry.findings.filter((item) => {
+    const email = item.contact?.trim().toLowerCase() || ""
+    if (!email || isStaffTestEmail(email)) return false
+    return item.outreach === "draft" || item.outreach === "queued"
+  })
+}
+
+function factoryCounts(inquiry: InquiryState) {
+  const factory = inquiry.findings.filter((item) => item.contact?.trim() && !isStaffTestEmail(item.contact || ""))
+  return {
+    drafted: factory.filter((item) => item.outreach === "draft" || item.outreach === "queued").length,
+    sent: factory.filter((item) => item.outreach === "sent").length,
+    queued: factory.filter((item) => item.outreach === "queued").length,
+  }
+}
+
+function statusSnapshot(inquiry: InquiryState, summary: ReturnType<typeof inquiryWorkSummary>): InquiryRoundResult {
+  const counts = factoryCounts(inquiry)
+  return {
+    inquiry,
+    findings: [],
+    report: summary.reply,
+    searched: 0,
+    pages: 0,
+    drafted: counts.drafted,
+    sent: counts.sent,
+    queued: counts.queued,
+    nextAction: summary.reply.includes("还没开始") ? "先定条件再开始" : "按已有结果继续",
+  }
+}
+
+function mailFromFinding(finding: InquiryFinding, siteUrl: string): OutreachMail | null {
+  const email = finding.contact?.trim()
+  if (!email) return null
+  const composed = composeOutreachMail({ org: finding.org, email, pain: finding.pain, siteUrl })
+  if (!finding.draft) return composed
+  const parts = finding.draft.split("\n\n")
+  return {
+    to: email,
+    subject: parts[0]?.trim() || composed.subject,
+    text: parts.slice(1).join("\n\n").trim() || composed.text,
+  }
+}
+
+async function runTestSend(input: {
+  inquiry: InquiryState
+  emails: string[]
+  env: Record<string, string | undefined>
+  now: string
+  fetchImpl: FetchLike
+}) {
+  let state = input.inquiry
+  let task = pickRunnableInquiryTask(state)
+  if (!task) {
+    const created = createInquiryTask(
+      state,
+      {
+        name: "发出测试",
+        instruction: "同事要求做一次发出测试",
+        quota: Math.max(1, input.emails.length),
+        start: true,
+      },
+      input.now,
+    )
+    if (created.error || !created.task) return null
+    state = created.state
+    task = created.task
+  } else {
+    const started = startInquiryTask(state, task.id, input.now)
+    if (started.error || !started.task) return null
+    state = started.state
+    task = started.task
+  }
+  return runInquiryRound({
+    inquiry: state,
+    task,
+    env: input.env,
+    now: input.now,
+    fetchImpl: input.fetchImpl,
+    skipSearch: true,
+    seedEmails: input.emails,
+    seedSource: "同事测试指令",
+    seedOnly: true,
+  })
+}
+
+export async function flushUnsentFactoryMail(input: {
+  inquiry: InquiryState
+  env?: Record<string, string | undefined>
+  now?: string
+  fetchImpl?: FetchLike
+  siteUrl?: string
+}): Promise<InquiryRoundResult> {
+  const now = input.now || new Date().toISOString()
+  const env = input.env || {}
+  const fetchImpl = input.fetchImpl || fetch
+  const siteUrl = input.siteUrl || resolveSiteUrl(env)
+  const mailbox = resolveMailbox(env)
+  const task = currentInquiryTask(input.inquiry) || pickRunnableInquiryTask(input.inquiry)
+  const unsent = factoryUnsent(input.inquiry)
+  const fresh: InquiryFinding[] = []
+  for (const finding of unsent) {
+    const mail = mailFromFinding(finding, siteUrl)
+    if (!mail) continue
+    let outreach: InquiryFinding["outreach"] = finding.outreach
+    let receipt = finding.receipt
+    if (mailbox.kind !== "none") {
+      const sent = await sendOutreachMail(mailbox, mail, fetchImpl).catch(() => ({
+        ok: false as const,
+        error: "send-failed",
+      }))
+      if (sent.ok) {
+        outreach = "sent"
+        receipt = sent.receipt
+      } else {
+        outreach = "draft"
+      }
+    }
+    fresh.push({
+      ...finding,
+      at: now,
+      outreach,
+      receipt,
+      draft: finding.draft || `${mail.subject}\n\n${mail.text}`,
+    })
+  }
+  const findings = applyInquiryFindings(input.inquiry.findings, fresh, now)
+  const sent = fresh.filter((item) => item.outreach === "sent").length
+  const drafted = fresh.filter((item) => item.outreach === "draft" || item.outreach === "queued").length
+  const queued = fresh.filter((item) => item.outreach === "queued").length
+  const report = buildFlushReport({ findings: fresh, mailbox })
+  const job = { status: "drafting" as const, brief: report.split("\n")[0] || "发给已找到的厂商", updatedAt: now }
+  const tasks = task
+    ? input.inquiry.tasks.map((item) =>
+        item.id === task.id
+          ? {
+              ...item,
+              status: "drafting" as const,
+              brief: job.brief,
+              updatedAt: now,
+              lastRunAt: now,
+              runs: [
+                ...item.runs,
+                { id: newInquiryId("run"), at: now, status: "done" as const, note: report.replace(/\n/g, " ").slice(0, 200) },
+              ].slice(-20),
+            }
+          : item,
+      )
+    : input.inquiry.tasks
+  return {
+    inquiry: { ...input.inquiry, findings, job, tasks, currentId: task?.id || input.inquiry.currentId },
+    findings: fresh,
+    report,
+    searched: 0,
+    pages: 0,
+    drafted,
+    sent,
+    queued,
+    nextAction: sent ? "已发给找到的厂商，等回邮" : drafted ? "厂商推广信已起草，待发出" : "继续找公开邮箱",
+  }
+}
+
+function buildFlushReport(input: { findings: InquiryFinding[]; mailbox: OutreachMailbox }) {
+  const contacts = input.findings.map((item) => item.contact?.trim()).filter((item): item is string => Boolean(item))
+  const sent = input.findings.filter((item) => item.outreach === "sent").length
+  const drafted = input.findings.filter((item) => item.outreach === "draft" || item.outreach === "queued").length
+  const lines = ["本轮把已起草的推广信发给找到的厂商，没有问同事要收件人。"]
+  if (contacts.length) lines.push(`对象是 ${contacts.join("、")}。`)
+  if (sent) lines.push(`已通过${mailboxLabel(input.mailbox)}发出 ${sent} 封，每封都留下了邮局回执。`)
+  if (drafted && input.mailbox.kind === "none") {
+    lines.push("本站环境没读到发出信箱密钥，信仍是草稿，没有写成已发送。")
+  } else if (drafted && input.mailbox.kind === "hermes" && !sent) {
+    lines.push("WEHO 发出信箱已配置，这一下没有邮局回执，信仍是草稿，没有写成已发送。")
+  } else if (drafted && !sent) {
+    lines.push("发出信箱这一下没有回执，信仍是草稿，没有写成已发送。")
+  }
+  return lines.join("\n")
 }
 
 export function pickRunnableInquiryTask(state: InquiryState) {
@@ -337,13 +588,7 @@ export function buildSearchQueries(task: InquiryTask) {
   return unique(queries).slice(0, 6)
 }
 
-function isSendableEmail(value: string, source?: string) {
-  if (isPublicBusinessEmail(value)) return true
-  if (source !== "同事补充指令" && source !== "同事对话") return false
-  return /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,24}$/.test(value.trim())
-}
-
-export function isPublicBusinessEmail(value: string) {
+function isWellFormedEmail(value: string) {
   const email = value.trim().toLowerCase()
   const at = email.lastIndexOf("@")
   if (at < 1 || email.length > 190) return false
@@ -356,7 +601,29 @@ export function isPublicBusinessEmail(value: string) {
   const parts = host.split(".")
   const root = parts.slice(-2).join(".")
   if (BLOCKED_HOST.has(host) || BLOCKED_HOST.has(root)) return false
-  return true
+  return /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,24}$/.test(email)
+}
+
+function isConsumerMailHost(host: string) {
+  const root = host.split(".").slice(-2).join(".")
+  return CONSUMER_MAIL_HOST.has(host) || CONSUMER_MAIL_HOST.has(root)
+}
+
+export function isStaffTestEmail(value: string) {
+  const email = value.trim().toLowerCase()
+  const host = email.split("@")[1] || ""
+  return isWellFormedEmail(email) && isConsumerMailHost(host)
+}
+
+function isSendableEmail(value: string, source?: string) {
+  if (isPublicBusinessEmail(value)) return true
+  return source === "同事测试指令" && isStaffTestEmail(value)
+}
+
+export function isPublicBusinessEmail(value: string) {
+  if (!isWellFormedEmail(value)) return false
+  const host = value.trim().toLowerCase().split("@")[1] || ""
+  return !isConsumerMailHost(host)
 }
 
 export function extractPublicEmails(text: string) {
@@ -376,13 +643,21 @@ export function extractDirectedEmails(text: string) {
   const found = new Set<string>()
   for (const match of text.matchAll(MAILTO_RE)) {
     const email = match[1]?.trim().toLowerCase()
-    if (email && isSendableEmail(email, "同事对话")) found.add(email)
+    if (email && isWellFormedEmail(email)) found.add(email)
   }
   for (const match of text.matchAll(EMAIL_RE)) {
     const email = match[0]?.trim().toLowerCase()
-    if (email && isSendableEmail(email, "同事对话")) found.add(email)
+    if (email && isWellFormedEmail(email)) found.add(email)
   }
   return [...found]
+}
+
+export function stripStaffTestAddresses(text: string) {
+  return text
+    .replace(EMAIL_RE, (match) => (isStaffTestEmail(match) ? "" : match))
+    .replace(/[（(]\s*[）)]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim()
 }
 
 function decodeSearchTarget(value: string) {
@@ -421,7 +696,7 @@ export function unwrapSearchUrl(href: string) {
 
 export function harvestTaskSeeds(task: InquiryTask) {
   const blob = [task.instruction, ...task.targets.map((item) => item.label)].join("\n")
-  const emails = extractDirectedEmails(blob)
+  const emails = extractPublicEmails(blob)
   const urls = [...blob.matchAll(/https?:\/\/[^\s<>"'）)]+/g)]
     .map((match) => unwrapSearchUrl(match[0] || ""))
     .filter(Boolean)
@@ -673,6 +948,8 @@ export async function runInquiryRound(input: {
   budgetMs?: number
   skipSearch?: boolean
   seedEmails?: string[]
+  seedSource?: string
+  seedOnly?: boolean
 }): Promise<InquiryRoundResult> {
   const now = input.now || new Date().toISOString()
   const env = input.env || {}
@@ -686,10 +963,13 @@ export async function runInquiryRound(input: {
       .filter((item): item is string => Boolean(item)),
   )
   const deadline = Date.now() + (input.budgetMs ?? 16_000)
-  const seeds = harvestTaskSeeds(input.task)
-  if (input.seedEmails?.length) seeds.emails = unique([...input.seedEmails, ...seeds.emails])
+  const seeds = input.seedOnly
+    ? { emails: unique(input.seedEmails || []), urls: [] as string[] }
+    : harvestTaskSeeds(input.task)
+  if (!input.seedOnly && input.seedEmails?.length) seeds.emails = unique([...input.seedEmails, ...seeds.emails])
   const pain = input.task.targets.map((item) => item.label).join("、")
   const fresh: InquiryFinding[] = []
+  const seedSource = input.seedSource || "同事补充指令"
 
   const addFinding = async (
     org: string,
@@ -697,10 +977,15 @@ export async function runInquiryRound(input: {
     source: string,
     place?: string,
   ) => {
-    if (fresh.length >= quota || !isSendableEmail(email, source)) return
+    if (!isSendableEmail(email, source)) return
+    const prior =
+      fresh.find((item) => item.contact?.trim().toLowerCase() === email) ||
+      input.inquiry.findings.find((item) => item.contact?.trim().toLowerCase() === email)
+    if (prior?.outreach === "sent" && prior.receipt) return
     if (known.has(email) && !input.skipSearch) return
+    if (fresh.length >= quota && !prior) return
     known.add(email)
-    const mail = composeOutreachMail({ org, email, pain, siteUrl })
+    const mail = composeOutreachMail({ org: prior?.org && prior.org !== "公开来源" ? prior.org : org, email, pain, siteUrl })
     let outreach: InquiryFinding["outreach"] = mailbox.kind === "none" ? "draft" : "queued"
     let receipt: string | undefined
     if (mailbox.kind !== "none" && fresh.filter((item) => item.outreach === "sent").length < 3 && Date.now() < deadline) {
@@ -712,22 +997,26 @@ export async function runInquiryRound(input: {
         outreach = "draft"
       }
     }
-    fresh.push({
-      id: newInquiryId("find"),
+    const row: InquiryFinding = {
+      id: prior?.id || newInquiryId("find"),
       at: now,
-      org,
-      place,
-      pain: pain || undefined,
-      source,
+      org: prior?.org && prior.org !== "公开来源" ? prior.org : org,
+      place: prior?.place || place,
+      pain: prior?.pain || pain || undefined,
+      source: prior?.source || source,
       contact: email,
       outreach,
-      draft: `${mail.subject}\n\n${mail.text}`,
+      draft: prior?.draft || `${mail.subject}\n\n${mail.text}`,
       receipt,
-    })
+      caseId: prior?.caseId,
+    }
+    const index = fresh.findIndex((item) => item.id === row.id || item.contact === email)
+    if (index >= 0) fresh[index] = row
+    else fresh.push(row)
   }
 
   for (const email of seeds.emails) {
-    await addFinding(inferOrgName("", `https://${email.split("@")[1] || "source"}`), email, "同事补充指令", email.split("@")[1])
+    await addFinding(inferOrgName("", `https://${email.split("@")[1] || "source"}`), email, seedSource, email.split("@")[1])
   }
 
   const queries = input.skipSearch ? [] : buildSearchQueries(input.task)
@@ -837,24 +1126,29 @@ function buildRoundReport(input: {
   findings: InquiryFinding[]
   mailbox: OutreachMailbox
 }) {
-  const want = input.task.targets.map((item) => item.label).join("、") || input.task.instruction.slice(0, 40) || "同事写下的条件"
+  const want = input.task.targets.map((item) => item.label).join("、") || input.task.instruction.slice(0, 40) || "已定的厂家类型"
   const contacts = input.findings.map((item) => item.contact?.trim()).filter((item): item is string => Boolean(item))
   const emails = contacts.length
   const sent = input.findings.filter((item) => item.outreach === "sent").length
   const drafted = input.findings.filter((item) => item.outreach === "draft" || item.outreach === "queued").length
-  const lines = input.queries
-    ? [`本轮按「${want}」在网上找对方已公布的邮箱，查了 ${input.queries} 组搜索、打开 ${input.pages} 个公开页面。`]
-    : [`本轮按同事写下的邮箱起草推广信，没有再去网上搜。`]
-  if (emails) {
+  const testOnly = emails > 0 && input.findings.every((item) => isStaffTestEmail(item.contact || "") || item.source === "同事测试指令")
+  const lines = testOnly
+    ? [`这是同事要求的发出测试，收件人是同事自己的邮箱，不是厂商。正式询单信发给网上找到的厂商公开邮箱，不会问同事要收件人。`]
+    : input.queries
+      ? [`本轮按「${want}」在网上找厂商已公布的邮箱，查了 ${input.queries} 组搜索、打开 ${input.pages} 个公开页面。找到后直接发给对方，不问同事要收件人。`]
+      : [`本轮按已找到的厂商公开邮箱起草并尝试发出，没有再问同事要收件人。`]
+  if (testOnly) {
+    lines.push(`测试对象：${contacts.join("、")}。已按本站${OUTREACH_BRIEF.productName}和官网起草 ${drafted + sent} 封。`)
+  } else if (emails) {
     lines.push(
-      `找到 ${emails} 个公开邮箱：${contacts.join("、")}。已按本站${OUTREACH_BRIEF.productName}和官网起草推广信 ${drafted + sent} 封。`,
+      `找到 ${emails} 个厂商公开邮箱：${contacts.join("、")}。已按本站${OUTREACH_BRIEF.productName}和官网起草推广信 ${drafted + sent} 封。`,
     )
   } else if (input.pages || input.hits) {
     lines.push("打开的页面上没有可收录的公开邮箱。没有编造厂商或邮箱。")
   } else if (input.queries) {
-    lines.push("搜索没有返回可打开的页面。没有编造厂商或邮箱。同事可再点开始，或把已知邮箱写在补充指令里。")
+    lines.push("搜索没有返回可打开的页面。没有编造厂商或邮箱。同事可再点开始，我会继续自己找。不要把同事个人邮箱当成厂商对象。")
   } else {
-    lines.push("同事这条指令里没有可发的公开邮箱。")
+    lines.push("还没有可发的厂商公开邮箱。我会自己去网上找，不用同事指定收件人。")
   }
   if (sent) lines.push(`已通过${mailboxLabel(input.mailbox)}发出 ${sent} 封，每封都留下了邮局回执。`)
   if (drafted && input.mailbox.kind === "none") {

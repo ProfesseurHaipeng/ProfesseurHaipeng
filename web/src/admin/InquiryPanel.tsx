@@ -59,7 +59,7 @@ export function InquiryPanel({
     try {
       const payload = await onTask("create", {
         name: "询单任务",
-        instruction: "按选定的厂家类型和痛点，到网上找对方已公布的邮箱，用本站皮纳图博火山灰和官网写推广信。发信走 WEHO 已配置的发出信箱；没有邮局回执只入队为草稿。没有公开邮箱不要编。",
+        instruction: "按选定的厂家类型和痛点，到网上找对方已公布的邮箱，用本站皮纳图博火山灰和官网写推广信，直接发给这些厂商。不要问同事该发给谁。发信走 WEHO 已配置的发出信箱；没有邮局回执只入队为草稿。没有公开邮箱不要编。",
         schedule: { kind: "once" },
         quota: 8,
         limitHours: 24,
