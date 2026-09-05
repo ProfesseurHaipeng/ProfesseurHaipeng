@@ -492,10 +492,10 @@ export function inquiryCoachExtra(state: InquiryState) {
     : "还没有真实找到的厂商。"
   const jobLine = `${JOB_LABEL[state.job.status]}${state.job.brief ? `。${state.job.brief}` : ""}`
   return [
-    "【询单模块（同一工作台、同一 Linda）】",
+    "【询单模块（与工单、档案同一询单工位）】",
     "- 同事选定的需求类型、家数上限、限时都是硬性参数。按这些去网上找真实厂商，到数即停，到点即停。",
     "- 没有真实来源就不要写厂商。不要编公司名、电话、邮箱、网址。",
-    "- 找到的每一条必须带 source，并尽量写下官网、联系方式或邮箱。询单只许起草，不许群发，不许写 sent。本站没有发信口。",
+    "- 找到的每一条必须带 source，并尽量写下官网、联系方式或邮箱。同事可指挥用 Hermes 自己的邮箱发信；生产口若还没挂上发出信箱，只许起草入队，不许群发，不许写 sent。",
     "- 对口时用本站皮纳图博火山灰农业项目的真实内容，不要编项目参数。",
     "- 看板进度是：取条件 → 找来源 → 核实 → 起草稿。开始找写 searching，核实时 review，起草时 drafting。",
     "- 更新寻找结果时另起一行：",
@@ -512,7 +512,7 @@ export function inquiryCoachExtra(state: InquiryState) {
           `限时=${currentTask.limitHours ? `${currentTask.limitHours} 小时` : "不限"}`,
           `节奏=${scheduleLabel(currentTask.schedule)}`,
           `工单=${currentTask.caseId || "尚未建档"}`,
-          "触达=找到官网、可核验来源、联系方式或邮箱后只起草询单邮件。本站没有发信口，outreach 只能写 draft，不许写 sent。",
+          "触达=找到官网、可核验来源、联系方式或邮箱后起草询单邮件。生产口若还没挂上发出信箱，outreach 只能写 draft，不许写 sent。",
           "对口时按本站皮纳图博火山灰农业项目的真实内容，不要编项目参数。",
         ].join("；")
       : "",
@@ -790,7 +790,7 @@ export function buildTaskAssignMessage(task: InquiryTask) {
     `本轮最多找 ${task.quota || 8} 家带真实来源的厂商，到数即停，不够不要编。`,
     task.limitHours ? `本轮限时 ${task.limitHours} 小时，到点停止。` : "",
     "流程按 取条件 → 找来源 → 核实 → 起草稿。没有来源不要编。",
-    "找到官网、可核验来源、联系方式或邮箱后只起草询单邮件。本站没有发信口，不要写已经发出。",
+    "找到官网、可核验来源、联系方式或邮箱后起草询单邮件。生产口若还没挂上 Hermes 自己的发出信箱，只入队为草稿，不要写已经发出。",
   ]
     .filter(Boolean)
     .join("")

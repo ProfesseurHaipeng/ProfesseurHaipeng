@@ -8,6 +8,8 @@ import {
   PROGRESS_LABEL,
   PROGRESS_TRACK,
   boardMetrics,
+  caseTitle,
+  usefulVisitNote,
   customerArchives,
   customerKey,
   factoryArchives,
@@ -47,7 +49,7 @@ type BoardFocus =
   | { kind: "factory"; name: string }
 
 const AGENT_NAME = "Linda"
-const PRODUCT_NAME = "Karmenai"
+const DESK_NAME = "询单工位"
 
 function sameJson(left: unknown, right: unknown) {
   return JSON.stringify(left) === JSON.stringify(right)
@@ -58,12 +60,6 @@ const STATUS_LABEL: Record<LinkView, string> = {
   reconnecting: "正在重新连接",
   connected: "正常连接",
   disconnected: "断开连接",
-}
-
-function caseTitle(item: HermesCase) {
-  const note = item.note?.split(/[\n。]/)[0]?.trim()
-  if (note && note.length > 0 && note.length <= 40) return note
-  return item.org || item.name
 }
 
 function formatTime(iso: string) {
@@ -378,7 +374,7 @@ export function HermesDesk({
 
   const clearCoach = useCallback(async () => {
     if (!coach.length) return
-    if (!window.confirm("清空工作台对话记录？工单和询单设定不会删。")) return
+    if (!window.confirm("清空询单工位对话记录？工单和询单设定不会删。")) return
     setError("")
     try {
       await post({ action: "coach-clear" })
@@ -558,7 +554,7 @@ export function HermesDesk({
         </li>
       </ul>
       <p className="hermes-sum">{item.mailSummary || `还没有客户回邮摘要。${AGENT_NAME} 读到真邮件后再写。`}</p>
-      <p className="hermes-sum">站点没有发信接口。这里只显示顾问记下的状态，不是邮局回执。</p>
+      <p className="hermes-sum">发出邮件由询单工位起草，使用 Hermes 自己的邮箱身份。没有挂上发出信箱时只入队，不会写成已发送。</p>
     </>
   )
 
@@ -581,7 +577,7 @@ export function HermesDesk({
       <dl>
         <div>
           <dt>关注问题</dt>
-          <dd>{selected.note?.split(/[\n。]/)[0]?.trim() || "尚无"}</dd>
+          <dd>{usefulVisitNote(selected.note || "") || "尚无"}</dd>
         </div>
         <div>
           <dt>下一步</dt>
@@ -863,10 +859,11 @@ export function HermesDesk({
   )
 
   const crumb =
-    area === "overview" ? "总览" : area === "inquiry" ? "询单任务" : area === "archives" ? "客户与工厂" : "工作台 / 工单档案"
+    area === "overview" ? "总览" : area === "inquiry" ? "询单任务" : area === "archives" ? "客户与工厂" : "询单工位 / 工单档案"
 
-  const chatTitle = selected ? caseTitle(selected) : customerFile ? customerFile.name : factoryFile ? factoryFile.name : `${PRODUCT_NAME} · ${AGENT_NAME}`
+  const chatTitle = selected ? caseTitle(selected) : customerFile ? customerFile.name : factoryFile ? factoryFile.name : DESK_NAME
   const chatId = selected ? ticketNo(selected) : ""
+  const chatIdentity = `${DESK_NAME} · ${AGENT_NAME}`
 
   return (
     <div className={`hermes-grok hermes-apple hermes-karmenai hermes-karmenai--${area}${mobileChat ? " is-mobile-chat" : ""}${archiveOpen ? " is-archive" : ""}`}>
@@ -894,16 +891,33 @@ export function HermesDesk({
 
       <div className={`hermes-grok__body hermes-grok__body--${area}${mobileChat ? " is-mobile-chat" : ""}`}>
         {area === "overview" ? (
-          <DeskBoard cases={allLive} events={events} inquiry={inquiry} coachTurns={coach.length} />
+          <div className="karm-seat-col">
+            <p className="karm-seat-bar">
+              总览、工单、询单和档案都是同一个询单工位。
+              <button type="button" onClick={() => { goDesk(); if (compactBoard()) setMobileChat(true) }}>
+                打开对话
+              </button>
+            </p>
+            <DeskBoard cases={allLive} events={events} inquiry={inquiry} coachTurns={coach.length} />
+          </div>
         ) : null}
 
-        {area === "inquiry" ? inquiryPanel : null}
+        {area === "inquiry" ? (
+          <div className="karm-seat-col">
+            <p className="karm-seat-bar">
+              询单任务交给同一询单工位执行，不是前台高级顾问。
+              <button type="button" onClick={() => { if (compactBoard()) setMobileChat(true); else goDesk() }}>
+                打开对话
+              </button>
+            </p>
+            {inquiryPanel}
+          </div>
+        ) : null}
 
         {area === "desk" || area === "archives" ? <aside className="hermes-panel">{ticketsPanel}</aside> : null}
 
         <section
           className={`hermes-grok__chat guide-desk${dragOver ? " is-drop" : ""}`}
-          hidden={area !== "desk"}
           onDragOver={(event) => {
             event.preventDefault()
             setDragOver(true)
@@ -921,7 +935,7 @@ export function HermesDesk({
                 <button
                   type="button"
                   className="karm-icon-btn"
-                  aria-label="返回工单列表"
+                  aria-label="返回"
                   onClick={() => {
                     setMobileChat(false)
                     setArchiveOpen(false)
@@ -935,9 +949,7 @@ export function HermesDesk({
                 <p className="guide-desk__status">
                   {chatId ? <span className="karm-chat-head__id">{chatId}</span> : null}
                   <span>
-                    {selected || customerFile || factoryFile
-                      ? `${PRODUCT_NAME} · ${AGENT_NAME}`
-                      : "火山灰项目工作区"}
+                    {selected || customerFile || factoryFile ? chatIdentity : "后台同事席 · 工单和询单都在这里指挥"}
                   </span>
                 </p>
               </div>
@@ -986,7 +998,7 @@ export function HermesDesk({
           <div className="karm-chat-sub">
             <p>
               <IconLock />
-              {selected ? "仅此客户档案 · 火山灰项目工作区" : "火山灰项目工作区"}
+              {selected ? `仅此客户档案 · ${DESK_NAME}` : "后台同事席 · 不是前台高级顾问"}
             </p>
             <div>
               <button type="button" onClick={() => void load()} disabled={loading}>
@@ -1003,7 +1015,9 @@ export function HermesDesk({
           <div className="hermes-grok__log guide-desk__log" ref={logRef}>
             {coach.length === 0 && !sending ? (
               <div className="guide-desk__hello">
-                <p>在这里给 {PRODUCT_NAME} 发消息。询单条件会自动写进系统提示；复杂进度仍由 {AGENT_NAME} 在对话里改。</p>
+                <p>
+                  这是后台{DESK_NAME}，不是前台高级顾问席。直接指挥查工单、看全部客户、起草邮件或处理附件。询单条件会写进同一席。
+                </p>
               </div>
             ) : null}
             {coach.map((turn) => (
@@ -1017,9 +1031,7 @@ export function HermesDesk({
                 )}
                 <div className={`guide-desk__bubble guide-desk__bubble--${turn.role}`}>
                   {turn.role !== "staff" ? (
-                    <p className="karm-bubble-name">
-                      {PRODUCT_NAME} · {AGENT_NAME}
-                    </p>
+                    <p className="karm-bubble-name">{chatIdentity}</p>
                   ) : null}
                   {turn.images?.length ? (
                     <div className="hermes-grok__thumbs">
@@ -1080,7 +1092,7 @@ export function HermesDesk({
                 <IconClip />
               </button>
               <label className="sr-only" htmlFor="hermes-grok-input">
-                给 {PRODUCT_NAME} 的消息
+                给询单工位的指令
               </label>
               <textarea
                 id="hermes-grok-input"
@@ -1099,7 +1111,7 @@ export function HermesDesk({
                     void sendCoach()
                   }
                 }}
-                placeholder={`给 ${PRODUCT_NAME} 发消息…`}
+                placeholder="给询单工位发指令…"
                 rows={1}
                 maxLength={2000}
               />

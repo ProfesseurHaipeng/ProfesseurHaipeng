@@ -1,5 +1,5 @@
 import { completeChatCompletions } from "./chatCompletions"
-import { hermesEnvFrom, isAdvisorOutageJoke, resolveCoachViaSignedGuide, signedGuideEnabled } from "./hermes"
+import { hermesEnvFrom, isAdvisorOutageJoke } from "./hermes"
 import {
   applyInquiryState,
   attachTaskCase,
@@ -109,8 +109,98 @@ export function newEventId(now = Date.now()) {
   return `evt-${String(now).padStart(15, "0")}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+export function isProbeVisitorId(id: string) {
+  return /^(probe-|local-|health-|prod-dep-|dep-check-|ci-|anon-front$)/i.test(id.trim())
+}
+
+export function isNoiseVisitNote(note: string) {
+  const t = note.replace(/\s+/g, " ").trim()
+  if (!t) return true
+  if (/^转高级顾问$/.test(t)) return true
+  if (/^前台已转/.test(t)) return true
+  if (/^已转接高级顾问/.test(t)) return true
+  if (/^皮纳图博火山灰项目[。.]?$/.test(t)) return true
+  if (/^备用线路/.test(t)) return true
+  if (/^(探测|health|probe)$/i.test(t)) return true
+  return false
+}
+
+export function isStaffLeakNote(note: string) {
+  const t = note.replace(/\s+/g, " ").trim()
+  if (!t) return false
+  return /同事(让你|要求|说|先问)|请用短段中文说明你怎么跟进|先按这份报价跟|同事要求：/.test(t)
+}
+
+export function isNamelessCase(item: Pick<HermesCase, "name" | "org" | "contact" | "factory" | "place" | "leadId">) {
+  const name = (item.name || "").trim()
+  return (
+    (!name || name === "对话客户" || name === "AI 对话客户") &&
+    !item.org?.trim() &&
+    !item.contact?.trim() &&
+    !item.factory?.trim() &&
+    !item.place?.trim() &&
+    !item.leadId
+  )
+}
+
+export function isBoardNoiseCase(item: HermesCase) {
+  if (item.gone) return false
+  if (isProbeVisitorId(item.visitorId || "")) return true
+  if (isStaffLeakNote(item.note) && isNamelessCase(item)) return true
+  return false
+}
+
+export function usefulVisitNote(note: string) {
+  const line = note.split(/[\n。]/)[0]?.trim() || ""
+  if (!line || isNoiseVisitNote(line) || isStaffLeakNote(line)) return ""
+  return line
+}
+
+export function inferredVisitorName(note: string) {
+  const hit = usefulVisitNote(note).match(/我是([\u4e00-\u9fff]{2,4})/)
+  return hit?.[1] || ""
+}
+
+export function courtesyNames(text: string) {
+  const found: string[] = []
+  for (const title of ["先生", "经理", "女士"]) {
+    let from = 0
+    while (from < text.length) {
+      const index = text.indexOf(title, from)
+      if (index < 0) break
+      const before = [...text.slice(Math.max(0, index - 2), index)].filter((ch) => /[\u4e00-\u9fff]/.test(ch))
+      if (before.length) found.push(`${before.at(-1)}${title}`)
+      if (before.length > 1) found.push(`${before.slice(-2).join("")}${title}`)
+      from = index + title.length
+    }
+  }
+  return [...new Set(found)]
+}
+
+export function caseTitle(item: HermesCase) {
+  const name = (item.name || "").trim()
+  if (name && name !== "对话客户" && name !== "AI 对话客户") return name
+  if (item.org?.trim()) return item.org.trim()
+  if (item.factory?.trim()) return item.factory.trim()
+  const note = usefulVisitNote(item.note || "")
+  if (note) return note.length <= 40 ? note : `${note.slice(0, 40)}…`
+  return ticketNo(item)
+}
+
+export function sweepBoardNoise(cases: HermesCase[], now = new Date().toISOString()) {
+  const gone: HermesCase[] = []
+  const next = cases.map((item) => {
+    if (item.gone || !isBoardNoiseCase(item)) return item
+    const swept = { ...item, gone: true, updatedAt: now, following: false }
+    gone.push(swept)
+    return swept
+  })
+  return { cases: next, gone, changed: gone.length > 0 }
+}
+
 export function isLiveCase(item: HermesCase) {
   if (item.gone) return false
+  if (isBoardNoiseCase(item)) return false
   return (
     item.source === "ai" ||
     item.source === "form" ||
@@ -1263,29 +1353,39 @@ export function upsertFromVisit(
   now = new Date().toISOString(),
   ledger: HermesLedger = emptyLedger(),
 ) {
-  if (isIdentitySuppressed({ visitorId }, ledger)) {
+  if (!visitorId.trim() || isProbeVisitorId(visitorId) || isIdentitySuppressed({ visitorId }, ledger)) {
     return { cases, case: null as HermesCase | null }
   }
   const existing = findHermesCase(cases, { visitorId })
+  const keepNote = usefulVisitNote(note)
   if (existing) {
     if (existing.owner === "human") return { cases, case: existing }
     const touched = recordInquiry(existing, now)
     const next = patchHermesCase(
       touched,
-      { following: true, progress: existing.progress === "new" ? "talking" : existing.progress, note: note || existing.note },
+      {
+        following: true,
+        progress: existing.progress === "new" ? "talking" : existing.progress,
+        note: keepNote || existing.note,
+        name:
+          existing.name && existing.name !== "对话客户" && existing.name !== "AI 对话客户"
+            ? existing.name
+            : inferredVisitorName(keepNote || existing.note) || existing.name,
+      },
       now,
     )
     return { cases: [next, ...cases.filter((item) => item.id !== next.id)], case: next }
   }
+  if (!keepNote) return { cases, case: null as HermesCase | null }
   const created: HermesCase = {
     id: newHermesCaseId(),
     at: now,
     updatedAt: now,
-    name: "对话客户",
+    name: inferredVisitorName(keepNote) || "对话客户",
     org: "",
     ticketNo: newTicketNo(cases, now),
     contact: "",
-    note: note.slice(0, MAX.note),
+    note: keepNote.slice(0, MAX.note),
     visitorId,
     owner: "hermes",
     following: true,
@@ -1454,46 +1554,48 @@ export function applyDeskUpdates(cases: HermesCase[], updates: Record<string, un
   return sortHermesCases(next)
 }
 
-const COACH_RULES = `你是皮纳图博火山灰项目的高级顾问 Linda。后台工作台和前台高级顾问是同一个人、同一份长期记忆，只是这里权限更高。对同事可以讲工作台；对客户只称 Linda，不要说 Hermes。同事写入 memory.shared 的内容会同步到前台；本场客户的称呼、机构、线索、进度、下一步、工厂也会出到前台。desk 记忆、评价、邮箱和其他客户不要出到前台。
+const COACH_RULES = `你是皮纳图博火山灰项目的后台询单工位。说话对象是后台同事，不是来访客户。总览、工单、询单、档案里的对话都是同一席。
+前台高级顾问 Linda 是另一席：只对客户谈作物、吨位、检测和供应，看不到工单全表。你和前台只共享 memory.shared。desk 笔记、评价、其他客户、询单寻找结果只留在后台。
+对同事可以称询单工位或 Linda。不要把同事当成客户来问作物、地区、吨位。不要拒绝汇报本站已有的真实工单和客户情况。名单里没有的人，就说还没有这场记录，不要编。
 
-【后台权限】
-- 能看全部真实客户档案、同事指令、desk 记忆、接管状态。
-- 前台对话看不到这些。你在前台也不会、不能把工作台数据说出去。
-- 不要编造客户。档案列表没有的人，就说还没有这场对话。
+【权限】
+- 能看全部真实工单、联系方式、desk 记忆、询单任务、接管状态。
+- 同事可以指挥你：查工单、看档案、改跟进、起草邮件、安排用 Hermes 自己的邮箱发出、处理附件。
+- 发信用 Hermes 自己的邮箱身份。生产口若还没挂上发出信箱，只许起草并写入队列（outreach=draft，mailStatus=queued），不许写成已发送。
+- 文件和附件走本站储存。没有独立虚拟机命令口，不要说已经用 VM 发出。
+- 不要编造客户、厂商、已发送的邮件或调查结果。
 
 【控制权】
 - 同事能通过工单列表改称呼、公司、联系方式、进度等基础字段；接管、邮件状态、跟单、跟踪、行为数据、记忆仍由你改。
 - 同事说接管 / 交回 / 记邮件 / 改记忆，你用 <desk> 更新。一键接管也只能由你执行。
 
-【你能做的】
-- 根据同事的意图，说明你会怎么跟进哪些客户、话术怎么改、谁先谁后。
+【写法】
 - 用短段纯文本，不要 Markdown。
-- 向同事汇报时默认隐藏邮箱和其他隐私联系方式，只写称呼、机构、作物、区域、吨位和跟进事项。
+- 向同事汇报时写称呼、机构、联系方式、作物/线索、进度和下一步。
 - 需要改档案或记忆时，先用正常的话说明改了什么，再在回复最后另起一行输出：
-  <desk>{"memory":{"shared":"与前台共用的长期记忆","desk":"仅后台笔记"},"updates":[{"id":"客户档案id","following":true,"owner":"hermes","progress":"talking","energy":"high","mailStatus":"sent","mailFollowUp":true,"mailTracking":"on","mailSummary":"客户回邮大意","inquiryCount":2,"replyPaceMin":15,"emailReplyHours":6,"nextAction":"寄样品","lastChannel":"email"}]}</desk>
+  <desk>{"memory":{"shared":"与前台共用的长期记忆","desk":"仅后台笔记"},"updates":[{"id":"客户档案id","following":true,"owner":"hermes","progress":"talking","energy":"high","mailStatus":"queued","mailFollowUp":true,"mailTracking":"on","mailSummary":"客户回邮大意","inquiryCount":2,"replyPaceMin":15,"emailReplyHours":6,"nextAction":"寄样品","lastChannel":"email"}]}</desk>
 - progress 只能是 new / contacted / talking / sample / negotiate / hold / closed。
 - energy 只能是 high / mid / low / unset。
-- mailStatus 只能是 none / queued / sent / failed。
+- mailStatus 只能是 none / queued / sent / failed。没有邮局回执时不要写 sent。
 - mailTracking 只能是 none / on / opened / clicked。
 - factory 是工厂档案名称。每个真实客户一份客户档案，每家真实工厂一份工厂档案。没有厂名就留空，不要编。
 - ticketNo 是系统工单号。已有的不要改，也不要自己编新号。
-- 询单模块和工单模块是同一个工作台。同事选定的需求类型、家数上限、限时是硬性参数。按这些找真实厂商，到数即停，没有来源就不要写。询单只许起草，不许群发，不许写 sent。本站没有发信口。用 <inquiry> 更新寻找结果，可以和 <desk> 同时出现。
+- 询单模块、工单模块和这席对话是同一个询单工位。同事选定的需求类型、家数上限、限时是硬性参数。按这些找真实厂商，到数即停，没有来源就不要写。用 <inquiry> 更新寻找结果，可以和 <desk> 同时出现。
 - 没有真实邮件或对话记录时，不要编发送成功、跟单、速度和摘要。
-- 不要提 NAS、端口、网关、沙箱。`
+- 不要提 NAS、端口、网关、沙箱、Cursor。`
 
 export function caseBrief(item: HermesCase) {
-  const contact = item.contact ? "已留联系方式" : "未留联系方式"
   return [
     `id=${item.id}`,
     `工单号=${ticketNo(item)}`,
     `称呼=${item.name}`,
     item.org ? `机构=${item.org}` : "",
     factoryName(item) ? `工厂=${factoryName(item)}` : "工厂=尚未建档",
-    `跟进方=${item.owner === "human" ? "人工" : "Linda"}`,
+    `跟进方=${item.owner === "human" ? "人工" : "询单工位"}`,
     `状态=${item.following ? "正在跟进" : "未跟进"}`,
     `进度=${PROGRESS_LABEL[item.progress]}`,
     item.energy !== "unset" ? `积极性=${ENERGY_LABEL[item.energy]}` : "积极性=未评估",
-    contact,
+    item.contact ? `联系方式=${item.contact}` : "未留联系方式",
     item.note ? `线索=${item.note}` : "",
     item.reaction ? `反响=${item.reaction}` : "",
     item.evaluation ? `评价=${item.evaluation}` : "",
@@ -1520,7 +1622,7 @@ export function buildCoachMessages(
   const live = cases.filter((item) => isLiveCase(item)).map(normalizeCase)
   const roster = live.length
     ? live.slice(0, 40).map((item) => `- ${caseBrief(item)}`).join("\n")
-    : "当前还没有真实客户档案。不要编造。"
+    : "当前还没有真实工单。不要编造客户。"
   const memoryBlock = [
     memory?.shared?.trim() ? `【长期记忆（与前台共用）】\n${memory.shared.trim()}` : "",
     memory?.desk?.trim() ? `【工作台笔记（仅后台）】\n${memory.desk.trim()}` : "",
@@ -1539,11 +1641,85 @@ export function buildCoachMessages(
 }
 
 export function coachUnavailableReply() {
-  return "指令已记下。顾问网关还没接到站点上，接通后我会按这条调整跟进和话术。"
+  return "询单工位还在。顾问网关没接通时，我仍按本站真实工单回答，不会把你当成来访客户。"
 }
 
 export function coachReconnectingReply() {
-  return "网关这一下没接上。指令还在，正在重新连接，请再发一次。"
+  return "顾问网关这一下没接上。询单工位还在，可先按工单号或客户名单指挥，我用本站记录回复。"
+}
+
+export function staffDeskLocalReply(input: {
+  text: string
+  cases: HermesCase[]
+  memory?: HermesMemory
+  inquiry?: InquiryState
+}) {
+  const q = input.text.replace(/\s+/g, " ").trim()
+  const live = input.cases.filter((item) => isLiveCase(item)).map(normalizeCase)
+  const tasks = input.inquiry?.tasks || []
+  const needles = [
+    ...(q.match(/VA\d{8}-[A-Z0-9]+/gi) || []),
+    ...courtesyNames(q),
+    ...(q.match(/\d+\s*吨/g) || []),
+  ]
+  const scored = live
+    .map((item) => {
+      const blob = [ticketNo(item), item.name, item.org, item.factory, caseTitle(item), item.note].join(" ")
+      const names = courtesyNames(blob)
+      return {
+        item,
+        n:
+          needles.filter((token) => token && blob.includes(token)).length +
+          names.filter((name) => q.includes(name)).length,
+      }
+    })
+    .filter((row) => row.n > 0)
+    .sort((a, b) => b.n - a.n)
+  const hit = live.find((item) => q.includes(ticketNo(item))) || scored[0]?.item
+
+  if (/全部客户|所有客户|客户情况|工单(情况|列表|全表)?/.test(q) || (/目前/.test(q) && /客户|工单/.test(q))) {
+    if (!live.length) {
+      return "这是后台询单工位，不是前台高级顾问席。目前工作台上没有真实工单，我不会编客户名单。前台留下可跟进的对话后会出现在这里。"
+    }
+    const lines = live.slice(0, 20).map((item) => {
+      const clue = usefulVisitNote(item.note) || "无线索"
+      return `${ticketNo(item)} ${caseTitle(item)} · ${item.name || "未留称呼"} · ${item.org || "机构尚无"} · ${PROGRESS_LABEL[item.progress]} · ${clue.slice(0, 36)}`
+    })
+    const more = live.length > 20 ? `\n还有 ${live.length - 20} 张未展开。` : ""
+    return `这是后台询单工位，不是前台高级顾问席。目前工作台上的真实工单如下，没有编造：\n${lines.join("\n")}${more}\n\n要看某一张档案、起草邮件或改进度，直接说工单号或称呼。`
+  }
+
+  if (/发(邮件|信)|写信|邮件/.test(q)) {
+    if (hit) {
+      const who = [...new Set([hit.name, inferredVisitorName(hit.note), caseTitle(hit)].filter((item) => item && item !== "对话客户" && item !== "AI 对话客户"))].join(" · ")
+      if (hit.contact) {
+        return `可以。工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}已留联系方式 ${hit.contact}。请补事由和要点，我按 Hermes 自己的邮箱身份起草。生产口若还没挂上发出信箱，只入队为草稿，不会写成已经发出。`
+      }
+      return `可以。对着的是工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}，但这张还没留联系方式。补一个收件人，我按 Hermes 自己的邮箱身份起草；没挂上发出信箱时只入队为草稿。`
+    }
+    return "可以指挥我起草。请告诉我收件人（或工单号）、事由和要点。用 Hermes 自己的邮箱身份。生产口若还没挂上发出信箱，我只写成询单草稿并入队，不会假装已经发出。"
+  }
+
+  if (/档案|记忆|VM|虚拟机|储存|附件/.test(q)) {
+    const desk = input.memory?.desk?.trim()
+    const shared = input.memory?.shared?.trim()
+    const mem = [shared ? `共用记忆：${shared.slice(0, 180)}` : "", desk ? `工位笔记：${desk.slice(0, 180)}` : ""]
+      .filter(Boolean)
+      .join("\n")
+    return `档案和附件走本站储存，没有独立虚拟机命令口，我不会说已经用 VM 发出。${mem ? `\n${mem}` : " 还没有写下的工位笔记。"}${hit ? `\n对着的是工单 ${ticketNo(hit)} ${caseTitle(hit)}。` : ""}`
+  }
+
+  if (hit) {
+    return `工单 ${ticketNo(hit)}：${caseTitle(hit)}。称呼 ${hit.name || "未留"}，机构 ${hit.org || "尚无"}，进度 ${PROGRESS_LABEL[hit.progress]}。线索：${usefulVisitNote(hit.note) || hit.note || "尚无"}。要起草邮件、改跟进或打开档案，直接下指令。`
+  }
+
+  if (tasks.length && /询单/.test(q)) {
+    const names = tasks.slice(0, 8).map((item) => item.name || "未命名").join("、")
+    return `询单任务和这席对话是同一个工位。当前任务：${names}。选定需求、家数和限时后，我按真实来源起草，不编厂商，也不把草稿写成已发送。`
+  }
+
+  if (!q) return "询单工位在。查工单、看全部客户、起草邮件或处理附件，直接说。"
+  return `这是后台询单工位，给同事指挥查工单、看档案、起草邮件和处理附件用，不会把你当成来访客户问作物和吨位。刚才说的是：「${q.slice(0, 80)}」。需要我按哪一张工单处理，或先看目前全部客户情况？`
 }
 
 export async function resolveCoachReply(
@@ -1560,36 +1736,19 @@ export async function resolveCoachReply(
   const hermes = hermesEnvFrom(env)
   const lastStaff = [...history].reverse().find((item) => item.role === "staff")?.content || ""
   const applyHint = (next: HermesMemory | undefined) => mergeSharedMemoryHint(next, staffSharedMemoryHint(lastStaff))
-  const fallbackOn = signedGuideEnabled(env)
-  const viaSigned = async () => {
-    const signed = await resolveCoachViaSignedGuide(lastStaff || "请回复同事", memory?.shared?.trim() || "")
-    if (signed?.reply && !isAdvisorOutageJoke(signed.reply)) {
-      return {
-        reply: signed.reply,
-        cases,
-        memory: applyHint(memory),
-        inquiry: currentInquiry,
-        source: "hermes" as const,
-      }
-    }
-    return null
-  }
-  if (!hermes) {
-    if (fallbackOn) {
-      try {
-        const signed = await viaSigned()
-        if (signed) return signed
-      } catch (error) {
-        console.error("ash-hermes-desk coach signed-guide", error)
-      }
-    }
-    return { reply: coachUnavailableReply(), cases, memory: applyHint(memory), inquiry: currentInquiry, source: "local" as const }
-  }
+  const local = () => ({
+    reply: staffDeskLocalReply({ text: lastStaff, cases, memory, inquiry: currentInquiry }),
+    cases,
+    memory: applyHint(memory),
+    inquiry: currentInquiry,
+    source: "local" as const,
+  })
+  if (!hermes) return local()
   try {
     const raw = await completeChatCompletions(hermes, buildCoachMessages(cases, history, undefined, memory, currentInquiry), {
       hosts: "exact",
       images,
-      timeoutMs: fallbackOn ? 10_000 : 8_000,
+      timeoutMs: 20_000,
       conversationId,
       conversationIds: conversationId ? [conversationId] : undefined,
       identityHeaders,
@@ -1612,13 +1771,5 @@ export async function resolveCoachReply(
   } catch (error) {
     console.error("ash-hermes-desk coach", error)
   }
-  if (fallbackOn) {
-    try {
-      const signed = await viaSigned()
-      if (signed) return signed
-    } catch (error) {
-      console.error("ash-hermes-desk coach signed-guide", error)
-    }
-  }
-  return { reply: coachReconnectingReply(), cases, memory: applyHint(memory), inquiry: currentInquiry, source: "local" as const }
+  return local()
 }

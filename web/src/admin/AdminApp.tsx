@@ -147,7 +147,7 @@ export function AdminApp() {
               <h1>项目工作台</h1>
             </div>
           </div>
-          <p>登录后查看前台线索、工单档案，并和 Linda 对话。</p>
+          <p>登录后查看工单、询单和档案，并指挥询单工位。前台高级顾问是另一席。</p>
           <label>
             账号
             <input
@@ -339,7 +339,7 @@ function SettingsPanel({ auth, onLogout }: { auth: AdminAuth; onLogout: () => vo
     <section className="admin-settings">
       <header>
         <h2>设置</h2>
-        <p>账号与进出。工单、询单和对话仍在各自页面里处理。</p>
+        <p>账号与进出。工单、询单和档案里的对话都是同一个询单工位。</p>
       </header>
       <article className="admin-settings__card">
         <div className="admin-who">

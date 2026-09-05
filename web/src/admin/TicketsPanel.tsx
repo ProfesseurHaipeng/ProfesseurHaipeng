@@ -6,6 +6,7 @@ import {
   CASE_COLORS,
   PROGRESS_LABEL,
   PROGRESS_TRACK,
+  caseTitle,
   customerArchives,
   customerKey,
   factoryArchives,
@@ -28,12 +29,6 @@ function formatTime(iso: string) {
   } catch {
     return iso
   }
-}
-
-function caseTitle(item: HermesCase) {
-  const note = item.note?.split(/[\n。]/)[0]?.trim()
-  if (note && note.length > 0 && note.length <= 40) return note
-  return item.org || item.name
 }
 
 export function TicketsPanel({
@@ -258,7 +253,7 @@ export function TicketsPanel({
               <label className="desk-tickets__check">
                 <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggle(item.id)} />
               </label>
-              <button type="button" className="desk-ticket" onClick={() => onOpenTicket(item.id)}>
+              <button type="button" className="desk-ticket" onClick={() => { setMenuId(null); onOpenTicket(item.id) }}>
                 <i
                   className="desk-ticket__dot"
                   style={{

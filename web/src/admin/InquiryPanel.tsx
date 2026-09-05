@@ -101,7 +101,7 @@ export function InquiryPanel({
       <header className="inq-page__head">
         <div className="inq-page__title">
           <h2>询单任务</h2>
-          {flash ? <p className="inq-flash">{flash}</p> : <p>选定需求、家数和限时后开始。</p>}
+          {flash ? <p className="inq-flash">{flash}</p> : <p>选定需求、家数和限时后，交给询单工位去找。</p>}
         </div>
         {inquiry.tasks.length ? (
           <button type="button" className="inq-mini-go" disabled={locked} onClick={() => void createTask()}>
@@ -112,7 +112,7 @@ export function InquiryPanel({
 
       {inquiry.tasks.length === 0 ? (
         <article className="inq-hero">
-          <p>创建后立刻有一张本页工单。选好厂家类型和家数，再交给 Linda 去找。</p>
+          <p>创建后立刻有一张本页工单。选好厂家类型和家数，再交给询单工位去找。</p>
           <button type="button" className="inq-go" disabled={locked} onClick={() => void createTask()}>
             {locked ? "正在创建…" : "创建询单任务"}
           </button>
