@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest"
 import { createInquiryTask, emptyInquiry, startInquiryTask } from "./inquiryDesk"
 import {
+  classifyInquiryCoachCommand,
   composeOutreachMail,
   extractPublicEmails,
   harvestTaskSeeds,
   isPublicBusinessEmail,
   parseSearchHtml,
   resolveMailbox,
+  runInquiryCoachCommand,
   runInquiryRound,
   shouldRerunInquiry,
   unwrapSearchUrl,
@@ -63,6 +65,13 @@ describe("inquiry outreach runner", () => {
   it("does not resolve a mailbox from empty env", () => {
     expect(resolveMailbox({}).kind).toBe("none")
     expect(resolveMailbox({ SENDGRID_API_KEY: "sg", SENDGRID_FROM: "from@modeltest.store" }).kind).toBe("sendgrid")
+    expect(
+      resolveMailbox({
+        HERMES_API_BASE: "https://advisor.example.com/v1",
+        HERMES_API_KEY: "hk-test",
+      }).kind,
+    ).toBe("hermes")
+    expect(resolveMailbox({ HERMES_API_BASE: "https://advisor.example.com/v1" }).kind).toBe("hermes")
     expect(shouldRerunInquiry("再找一轮")).toBe(true)
     expect(shouldRerunInquiry("工单情况")).toBe(false)
   })
@@ -89,7 +98,7 @@ describe("inquiry outreach runner", () => {
     expect(run.findings[0]?.draft).toContain("https://modeltest.store")
     expect(run.sent).toBe(0)
     expect(run.report).toContain("公开邮箱")
-    expect(run.report).toContain("还没挂询单发出信箱")
+    expect(run.report).toContain("没读到发出信箱")
     expect(run.inquiry.job.status).toBe("drafting")
     expect(run.inquiry.findings).toHaveLength(1)
   })
@@ -151,6 +160,69 @@ describe("inquiry outreach runner", () => {
     expect(run.findings[0]?.source).toBe("同事补充指令")
     expect(run.findings[0]?.draft).toContain("https://modeltest.store")
     expect(run.findings[0]?.outreach).toBe("draft")
+  })
+
+  it("runs a directed send from chat instead of asking for the recipient again", async () => {
+    expect(classifyInquiryCoachCommand("bear131419@163.com 给这个邮箱去发个邮件")).toBe("send")
+    expect(
+      classifyInquiryCoachCommand(
+        "按这些真实需求去找厂商：农产品 / 农业、农村合作社、肥料 / 土壤改良厂家。本轮最多找 20 家带真实来源的厂商。",
+      ),
+    ).toBe("search")
+    const run = await runInquiryCoachCommand({
+      message: "bear131419@163.com 给这个邮箱去发个邮件",
+      inquiry: emptyInquiry(),
+      env: {},
+      now,
+      fetchImpl: mockFetch([]) as typeof fetch,
+    })
+    expect(run?.findings[0]?.contact).toBe("bear131419@163.com")
+    expect(run?.findings[0]?.draft).toContain("皮纳图博火山灰")
+    expect(run?.findings[0]?.outreach).toBe("draft")
+    expect(run?.sent).toBe(0)
+    expect(run?.report).not.toContain("请告诉我收件人")
+    expect(run?.report).toContain("bear131419@163.com")
+    expect(run?.report).toContain("没读到发出信箱")
+  })
+
+  it("treats the WEHO Hermes gateway as the outgoing mailbox", async () => {
+    const run = await runInquiryCoachCommand({
+      message: "bear131419@163.com 给这个邮箱去发个邮件",
+      inquiry: emptyInquiry(),
+      env: {
+        HERMES_API_BASE: "https://advisor.example.com/v1",
+        HERMES_API_KEY: "hk-test",
+      },
+      now,
+      fetchImpl: mockFetch([
+        {
+          test: (url) => url.includes("/send"),
+          status: 200,
+          body: JSON.stringify({ id: "weho-mail-7" }),
+        },
+      ]) as typeof fetch,
+    })
+    expect(run?.findings[0]?.contact).toBe("bear131419@163.com")
+    expect(run?.findings[0]?.outreach).toBe("sent")
+    expect(run?.findings[0]?.receipt).toBe("weho-mail-7")
+    expect(run?.sent).toBe(1)
+    expect(run?.report).toContain("WEHO 已配置的发出信箱")
+    expect(run?.report).not.toContain("没读到发出信箱")
+  })
+
+  it("does not claim the mailbox is missing when Hermes is wired but send has no receipt", async () => {
+    const run = await runInquiryCoachCommand({
+      message: "bear131419@163.com 给这个邮箱去发个邮件",
+      inquiry: emptyInquiry(),
+      env: { HERMES_API_BASE: "https://advisor.example.com/v1", HERMES_API_KEY: "hk-test" },
+      now,
+      fetchImpl: mockFetch([]) as typeof fetch,
+    })
+    expect(run?.findings[0]?.outreach).toBe("draft")
+    expect(run?.sent).toBe(0)
+    expect(run?.report).toContain("WEHO 发出信箱已配置")
+    expect(run?.report).not.toContain("没读到发出信箱")
+    expect(run?.report).not.toContain("请告诉我收件人")
   })
 
   it("does not invent emails when search returns nothing", async () => {

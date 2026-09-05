@@ -578,7 +578,7 @@ export function HermesDesk({
         </li>
       </ul>
       <p className="hermes-sum">{item.mailSummary || `还没有客户回邮摘要。${AGENT_NAME} 读到真邮件后再写。`}</p>
-      <p className="hermes-sum">发出邮件由询单工位起草，使用本站询单发出信箱。没有挂上发出信箱时只入队，不会写成已发送。</p>
+      <p className="hermes-sum">发出邮件由询单工位起草，走 WEHO 已配置的发出信箱。没有邮局回执时只入队，不会写成已发送。</p>
     </>
   )
 
@@ -926,7 +926,7 @@ export function HermesDesk({
         {area === "inquiry" ? (
           <div className="karm-seat-col">
             <p className="karm-seat-bar">
-              询单任务由同一询单工位执行：上网找公开邮箱、写推广信，有发出信箱才发。不是前台高级顾问。
+              询单任务由同一询单工位执行：上网找公开邮箱、写推广信，走 WEHO 已配置的发出信箱。不是前台高级顾问。
               <button type="button" onClick={() => { if (compactBoard()) setMobileChat(true); else goDesk() }}>
                 打开对话
               </button>

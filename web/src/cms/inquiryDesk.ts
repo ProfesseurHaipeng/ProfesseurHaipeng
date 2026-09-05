@@ -447,7 +447,7 @@ export function extractInquiryUpdates(reply: string): {
 export function buildInquiryAssignMessage(targets: InquiryTarget[]) {
   const list = targets.map((item) => item.label).join("、")
   return list
-    ? `按这些厂家类型 / 痛点去网上找对方已公布的邮箱：${list}。流程按 取条件 → 找公开邮箱 → 写推广信 → 发出或入队。没有公开邮箱不要编。本站挂了发出信箱才发，没有邮局回执不要写已发送。`
+    ? `按这些厂家类型 / 痛点去网上找对方已公布的邮箱：${list}。流程按 取条件 → 找公开邮箱 → 写推广信 → 发出或入队。没有公开邮箱不要编。发信走 WEHO 已配置的发出信箱，没有邮局回执不要写已发送。`
     : "先记下：同事还没设定要找的类型。请提醒他们先选定厂家类型或写指令，不要编造厂商或邮箱。"
 }
 
@@ -499,7 +499,7 @@ export function inquiryCoachExtra(state: InquiryState) {
     "- 同事点「开始询单」后，由本站询单执行器跑三步，不是前台高级顾问，也不等聊天模型自己去搜网。",
     "- 1 寻找目标：按需求类型、家数上限、限时，在公开网页上找对方已公布的邮箱。只收录页面上真实出现的邮箱。",
     "- 2 编写内容：用本站皮纳图博火山灰农业项目的真实产品和官网写推广或营销信。可以按同事指令改语气，不要编检测数字。",
-    "- 3 发送邮件：只用本站环境里挂好的询单发出信箱。有邮局回执才写 sent。没挂信箱就 outreach=draft 或 queued。",
+    "- 3 发送邮件：走 WEHO 已配置的 Hermes 发出信箱。有邮局回执才写 sent。没有回执就 outreach=draft 或 queued，不要说没挂信箱。",
     "- 没有真实来源就不要写厂商。不要编公司名、电话、邮箱、网址。同事说「再找一轮」时由执行器再跑。",
     "- 看板进度是：取条件 → 找公开邮箱 → 写推广信 → 发出或入队。开始找写 searching，核实时 review，起草或入队时 drafting。",
     "- 更新寻找结果时另起一行：",
@@ -516,7 +516,7 @@ export function inquiryCoachExtra(state: InquiryState) {
           `限时=${currentTask.limitHours ? `${currentTask.limitHours} 小时` : "不限"}`,
           `节奏=${scheduleLabel(currentTask.schedule)}`,
           `工单=${currentTask.caseId || "尚未建档"}`,
-          "触达=网上找到已公布的邮箱后写推广信。本站挂了发出信箱才发；没有邮局回执不许写 sent。",
+          "触达=网上找到已公布的邮箱后写推广信。发信走 WEHO 已配置的发出信箱；没有邮局回执不许写 sent，也不要说没挂信箱。",
           "对口时按本站皮纳图博火山灰农业项目的真实内容，不要编项目参数。",
         ].join("；")
       : "",
@@ -794,7 +794,7 @@ export function buildTaskAssignMessage(task: InquiryTask) {
     `本轮最多找 ${task.quota || 8} 家带公开邮箱或可核验来源的对象，到数即停，不够不要编。`,
     task.limitHours ? `本轮限时 ${task.limitHours} 小时，到点停止。` : "",
     "流程按 取条件 → 找公开邮箱 → 写推广信 → 发出或入队。没有公开邮箱不要编。",
-    "用本站皮纳图博火山灰和官网写推广或营销信。本站挂了询单发出信箱就发；没有邮局回执不要写已发送。",
+    "用本站皮纳图博火山灰和官网写推广或营销信。发信走 WEHO 已配置的发出信箱；没有邮局回执不要写已发送。",
   ]
     .filter(Boolean)
     .join("")

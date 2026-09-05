@@ -219,6 +219,31 @@ describe("hermes desk cases", () => {
     expect(result.reply).toContain(ticketNo(sample()))
   })
 
+  it("executes a chat send instead of asking for the recipient again", async () => {
+    const result = await resolveCoachReply(
+      [sample()],
+      [{ id: "t1", at: now, role: "staff", content: "bear131419@163.com 给这个邮箱去发个邮件" }],
+      {},
+    )
+    expect(result.source).toBe("outreach")
+    expect(result.reply).toContain("bear131419@163.com")
+    expect(result.reply).toContain("皮纳图博火山灰")
+    expect(result.reply).not.toContain("请告诉我收件人")
+    expect(result.inquiry.findings[0]?.draft).toContain("https://modeltest.store")
+  })
+
+  it("does not tell staff the mailbox is missing when WEHO Hermes is wired", async () => {
+    const result = await resolveCoachReply(
+      [sample()],
+      [{ id: "t1", at: now, role: "staff", content: "bear131419@163.com 给这个邮箱去发个邮件" }],
+      { HERMES_API_BASE: "https://advisor.example.com/v1", HERMES_API_KEY: "hk-test" },
+    )
+    expect(result.source).toBe("outreach")
+    expect(result.reply).toContain("WEHO 发出信箱已配置")
+    expect(result.reply).not.toContain("没读到发出信箱")
+    expect(result.reply).not.toContain("请告诉我收件人")
+  })
+
   it("lets staff write shared memory that the front can read", () => {
     expect(staffSharedMemoryHint("记住：本周报价以FOB马尼拉为准")).toBe("本周报价以FOB马尼拉为准")
     expect(staffSharedMemoryHint("同步到前台，先问作物和吨位")).toBe("先问作物和吨位")

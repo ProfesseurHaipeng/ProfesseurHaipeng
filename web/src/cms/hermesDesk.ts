@@ -17,6 +17,7 @@ import {
   type InquiryState,
   type InquiryTask,
 } from "./inquiryDesk"
+import { extractDirectedEmails, runInquiryCoachCommand } from "./inquiryOutreach"
 import type { Lead } from "./leads"
 
 export type HermesOwner = "hermes" | "human"
@@ -1605,7 +1606,7 @@ const COACH_RULES = `你是皮纳图博火山灰项目的后台询单工位。�
 【权限】
 - 能看全部真实工单、联系方式、desk 记忆、询单任务、接管状态。
 - 同事可以指挥你：查工单、看档案、改跟进、起草邮件、处理附件。
-- 发信只用本站挂好的询单发出信箱。没挂信箱时只许起草并写入队列（outreach=draft，mailStatus=queued），不许写成已发送。
+- 发信走 WEHO 已配置的 Hermes 发出信箱。同事在对话里写下邮箱并说发出时，由执行器立刻写信并发，不要再问收件人。没有邮局回执时只许起草入队，不许写成已发送。
 - 文件和附件走本站储存。没有独立虚拟机命令口，不要说已经用 VM 发出。
 - 不要编造客户、厂商、已发送的邮件或调查结果。
 
@@ -1613,8 +1614,8 @@ const COACH_RULES = `你是皮纳图博火山灰项目的后台询单工位。�
 同事点「开始询单」后，由本站询单执行器跑三步，不是前台 Linda，也不等你自己去搜网。
 1. 寻找目标：按任务里的厂家类型、痛点和补充指令，在公开网页上找对方已公布的邮箱。只收录页面上真实出现的邮箱。
 2. 编写内容：用本站皮纳图博火山灰农业项目的真实产品和官网写推广或营销信。可以按同事指令改语气，不要编检测数字。
-3. 发送邮件：只用本站环境里挂好的询单发出信箱。有邮局回执才写 sent。没挂信箱就 draft / queued。
-你在对话里的职责是向同事汇报执行器结果、按工单起草、改档案。同事说「再找一轮」时由执行器再跑，不要自己编新厂商。
+3. 发送邮件：走 WEHO 已配置的 Hermes 发出信箱。有邮局回执才写 sent。
+同事在这席对话写下邮箱并说「去发」，或写下找厂条件，都由执行器立刻跑，不要再问收件人，也不要只回套话。同事说「再找一轮」时由执行器再跑，不要自己编新厂商。
 
 【控制权】
 - 同事能通过工单列表改称呼、公司、联系方式、进度等基础字段；接管、邮件状态、跟单、跟踪、行为数据、记忆仍由你改。
@@ -1742,21 +1743,25 @@ export function staffDeskLocalReply(input: {
 
   if (/询单|开始寻找|开始询单|再找一轮|再搜/.test(q)) {
     if (!tasks.length) {
-      return "还没有询单任务。先在询单页选定厂家类型或写指令，再点开始询单。工位会自己上网找公开邮箱、按本站火山灰项目写推广信；本站挂了发出信箱才发，没挂就入队为草稿。"
+      return "还没有询单任务。先在询单页选定厂家类型或写指令，再点开始询单。工位会自己上网找公开邮箱、按本站火山灰项目写推广信，走 WEHO 已配置的发出信箱；没有邮局回执只入队为草稿。"
     }
     const names = tasks.slice(0, 8).map((item) => item.name || "未命名").join("、")
-    return `询单任务启动后，工位会自己上网找对方已公布的邮箱，按本站皮纳图博火山灰和官网写推广信。本站挂了发出信箱就发；没挂就入队为草稿，不会假装已经发出。当前任务：${names}。同事说再找一轮，执行器会再跑，不会编厂商。`
+    return `询单任务启动后，工位会自己上网找对方已公布的邮箱，按本站皮纳图博火山灰和官网写推广信。发信走 WEHO 已配置的发出信箱；没有邮局回执只入队为草稿，不会假装已经发出。当前任务：${names}。同事说再找一轮，执行器会再跑，不会编厂商。`
   }
 
   if (/发(邮件|信)|写信|邮件/.test(q)) {
+    const emailed = extractDirectedEmails(q)
+    if (emailed.length) {
+      return `收件人已记下：${emailed.join("、")}。执行器会按本站皮纳图博火山灰和官网起草，并走 WEHO 已配置的发出信箱；没有邮局回执不会写成已发送。`
+    }
     if (hit) {
       const who = [...new Set([hit.name, inferredVisitorName(hit.note), caseTitle(hit)].filter((item) => item && item !== "对话客户" && item !== "AI 对话客户"))].join(" · ")
       if (hit.contact) {
-        return `可以。工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}已留联系方式 ${hit.contact}。请补事由和要点，我按本站询单信箱身份起草。还没挂上发出信箱时只入队为草稿，不会写成已经发出。`
+        return `可以。工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}已留联系方式 ${hit.contact}。请补事由和要点，我按 WEHO 已配置的发出信箱起草。没有邮局回执时只入队为草稿。`
       }
-      return `可以。对着的是工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}，但这张还没留联系方式。补一个收件人，我按本站询单信箱身份起草；没挂上发出信箱时只入队为草稿。`
+      return `可以。对着的是工单 ${ticketNo(hit)}${who ? `（${who}）` : ""}，但这张还没留联系方式。补一个收件人，我按 WEHO 已配置的发出信箱起草。`
     }
-    return "可以指挥我起草。请告诉我收件人（或工单号）、事由和要点。用本站询单发出信箱。还没挂上发出信箱时，我只写成询单草稿并入队，不会假装已经发出。"
+    return "可以指挥我起草。请写下收件人邮箱、事由和要点。发信走 WEHO 已配置的发出信箱；没有邮局回执时只入队为草稿。"
   }
 
   if (/档案|记忆|VM|虚拟机|储存|附件/.test(q)) {
@@ -1790,6 +1795,17 @@ export async function resolveCoachReply(
   const hermes = hermesEnvFrom(env)
   const lastStaff = [...history].reverse().find((item) => item.role === "staff")?.content || ""
   const applyHint = (next: HermesMemory | undefined) => mergeSharedMemoryHint(next, staffSharedMemoryHint(lastStaff))
+  const ran = await runInquiryCoachCommand({ message: lastStaff, inquiry: currentInquiry, env })
+  if (ran) {
+    return {
+      reply: ran.report,
+      cases,
+      memory: applyHint(memory),
+      inquiry: ran.inquiry,
+      source: "outreach" as const,
+      outreach: { searched: ran.searched, drafted: ran.drafted, sent: ran.sent, report: ran.report },
+    }
+  }
   const local = () => ({
     reply: staffDeskLocalReply({ text: lastStaff, cases, memory, inquiry: currentInquiry }),
     cases,

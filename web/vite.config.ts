@@ -526,42 +526,6 @@ function localGuide(): Plugin {
               })),
             }
             const history = [...localDesk.coach, staff]
-            if (outreachMod.shouldRerunInquiry(message)) {
-              const task = outreachMod.pickRunnableInquiryTask(inquiryMod.hydrateInquiryState(localDesk.inquiry))
-              if (task) {
-                const run = await outreachMod.runInquiryRound({
-                  inquiry: inquiryMod.hydrateInquiryState(localDesk.inquiry),
-                  task,
-                  env,
-                  now,
-                })
-                localDesk.inquiry = run.inquiry
-                const replyTurn = {
-                  id: deskMod.newCoachTurnId(Date.now() + 1),
-                  at: new Date().toISOString(),
-                  role: "hermes",
-                  content: run.report,
-                }
-                localDesk.coach = [...history, replyTurn]
-                if (task.caseId) {
-                  localDesk.cases = localDesk.cases.map((item) =>
-                    item.id === task.caseId
-                      ? { ...item, nextAction: run.nextAction, updatedAt: now, following: true }
-                      : item,
-                  )
-                }
-                pushEvent("coach", message.slice(0, 180))
-                res.end(
-                  JSON.stringify({
-                    ...pack(),
-                    coach: localDesk.coach,
-                    reply: run.report,
-                    outreach: { searched: run.searched, drafted: run.drafted, sent: run.sent, report: run.report },
-                  }),
-                )
-                return
-              }
-            }
             const result = await deskMod.resolveCoachReply(
               localDesk.cases,
               history,
@@ -582,7 +546,14 @@ function localGuide(): Plugin {
             if (result.inquiry) localDesk.inquiry = result.inquiry
             localDesk.coach = [...history, replyTurn]
             pushEvent("coach", (message || "附图").slice(0, 180))
-            res.end(JSON.stringify({ ...pack(), coach: localDesk.coach, reply: result.reply }))
+            res.end(
+              JSON.stringify({
+                ...pack(),
+                coach: localDesk.coach,
+                reply: result.reply,
+                ...(result.outreach ? { outreach: result.outreach } : {}),
+              }),
+            )
             return
           }
           res.statusCode = 400

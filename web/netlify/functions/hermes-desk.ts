@@ -53,12 +53,7 @@ import {
   type HermesDeskFilter,
   type HermesEvent,
 } from "../../src/cms/hermesDesk"
-import {
-  pickRunnableInquiryTask,
-  runInquiryRound,
-  shouldRerunInquiry,
-  type InquiryRoundResult,
-} from "../../src/cms/inquiryOutreach"
+import { runInquiryRound, type InquiryRoundResult } from "../../src/cms/inquiryOutreach"
 import { sortLeads, type Lead } from "../../src/cms/leads"
 
 /**
@@ -123,6 +118,7 @@ function envBag() {
     HERMES_MAIL_INBOX_ID: readEnv("HERMES_MAIL_INBOX_ID"),
     HERMES_MAIL_FROM: readEnv("HERMES_MAIL_FROM"),
     HERMES_MAIL_ENDPOINT: readEnv("HERMES_MAIL_ENDPOINT"),
+    EMAIL_ADDRESS: readEnv("EMAIL_ADDRESS"),
     SENDGRID_API_KEY: readEnv("SENDGRID_API_KEY"),
     SENDGRID_FROM: readEnv("SENDGRID_FROM"),
     INQUIRY_MAIL_ENDPOINT: readEnv("INQUIRY_MAIL_ENDPOINT"),
@@ -464,27 +460,6 @@ export default async (req: Request) => {
     const memory = (await readHermesMemory()) || emptyMemory()
     const inquiry = await readInquiryState()
     const env = envBag()
-    if (shouldRerunInquiry(message)) {
-      const task = pickRunnableInquiryTask(inquiry)
-      if (task) {
-        const run = await runInquiryRound({ inquiry, task, env, now })
-        await writeInquiryState(run.inquiry)
-        const replyTurn: HermesCoachTurn = {
-          id: newCoachTurnId(Date.now() + 1),
-          at: new Date().toISOString(),
-          role: "hermes",
-          content: run.report,
-        }
-        const coach = [...history, replyTurn]
-        await writeHermesCoach(coach)
-        if (task.caseId) {
-          const rec = cases.find((item) => item.id === task.caseId)
-          if (rec) await persistCase({ ...rec, nextAction: run.nextAction, updatedAt: now, following: true })
-        }
-        await appendHermesEvent(eventOf("coach", message.slice(0, 180)))
-        return json({ ...(await payload()), coach, reply: run.report, outreach: outreachPayload(run) })
-      }
-    }
     const secret = env.ADVISOR_CASE_ID_SECRET || ""
     const conversationId = advisorConversationIdentity("desk:staff-inquiry", secret)
     const coachResult = await resolveCoachReply(
@@ -516,7 +491,12 @@ export default async (req: Request) => {
       await writeInquiryState(coachResult.inquiry)
     }
     await appendHermesEvent(eventOf("coach", (message || "附图").slice(0, 180)))
-    return json({ ...(await payload()), coach, reply: coachResult.reply })
+    return json({
+      ...(await payload()),
+      coach,
+      reply: coachResult.reply,
+      ...(coachResult.outreach ? { outreach: coachResult.outreach } : {}),
+    })
   }
 
   return json({ error: "action" }, 400)

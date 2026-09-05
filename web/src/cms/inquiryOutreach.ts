@@ -1,8 +1,14 @@
+import { completeChatCompletions } from "./chatCompletions"
 import {
   applyInquiryFindings,
+  asQuota,
   buildTaskAssignMessage,
+  createInquiryTask,
   currentInquiryTask,
+  NEED_PRESETS,
   newInquiryId,
+  startInquiryTask,
+  updateInquiryTask,
   type InquiryFinding,
   type InquiryJobStatus,
   type InquiryState,
@@ -22,7 +28,10 @@ export type OutreachMailbox =
   | { kind: "agentmail"; apiKey: string; inboxId: string; baseUrl: string; from?: string }
   | { kind: "sendgrid"; apiKey: string; from: string }
   | { kind: "webhook"; url: string; token?: string; from?: string }
+  | { kind: "hermes"; apiKey: string; baseUrl: string; model: string; from?: string }
   | { kind: "none" }
+
+export type InquiryCoachKind = "send" | "search"
 
 export type SearchHit = {
   title: string
@@ -124,7 +133,7 @@ export function resolveMailbox(env: Record<string, string | undefined> = {}): Ou
   const agentKey = pick(env, "AGENTMAIL_API_KEY", "HERMES_MAIL_API_KEY")
   const inboxId = pick(env, "AGENTMAIL_INBOX_ID", "HERMES_MAIL_INBOX_ID")
   const agentBase = pick(env, "AGENTMAIL_API_BASE") || "https://api.agentmail.to"
-  const from = pick(env, "HERMES_MAIL_FROM", "SENDGRID_FROM", "INQUIRY_MAIL_FROM")
+  const from = pick(env, "HERMES_MAIL_FROM", "SENDGRID_FROM", "INQUIRY_MAIL_FROM", "EMAIL_ADDRESS")
   if (agentKey && inboxId) {
     return { kind: "agentmail", apiKey: agentKey, inboxId, baseUrl: agentBase.replace(/\/$/, ""), from }
   }
@@ -134,7 +143,98 @@ export function resolveMailbox(env: Record<string, string | undefined> = {}): Ou
   if (hook) {
     return { kind: "webhook", url: hook, token: pick(env, "INQUIRY_MAIL_KEY", "HERMES_MAIL_API_KEY"), from }
   }
+  const hermesBase = pick(env, "HERMES_API_BASE", "SENIOR_ADVISOR_API_BASE")
+  const hermesKey = pick(env, "HERMES_API_KEY", "SENIOR_ADVISOR_API_KEY")
+  // WEHO Hermes keeps the SMTP / AgentMail box on the gateway host.
+  // A wired advisor base is enough to treat that box as configured.
+  if (hermesBase) {
+    return {
+      kind: "hermes",
+      apiKey: hermesKey && hermesKey !== "local" ? hermesKey : "local",
+      baseUrl: hermesBase.replace(/\/$/, ""),
+      model: pick(env, "HERMES_MODEL", "SENIOR_ADVISOR_MODEL") || "weho-senior-advisor",
+      from,
+    }
+  }
   return { kind: "none" }
+}
+
+export function classifyInquiryCoachCommand(message: string): InquiryCoachKind | null {
+  const text = message.replace(/\s+/g, " ").trim()
+  if (!text) return null
+  const emails = extractDirectedEmails(text)
+  if (emails.length && /发(邮件|信)|写信|发给|寄给|给这个邮箱|去发|发个邮/.test(text)) return "send"
+  if (shouldRerunInquiry(text)) return "search"
+  if (/开始询单|开始寻找|找公开邮箱|找厂商|找厂家|按这些真实需求|去网上找/.test(text)) return "search"
+  if (NEED_PRESETS.some((item) => text.includes(item.label)) && /找|询单|厂家|厂商/.test(text)) return "search"
+  return null
+}
+
+export function parseCoachInquirySpec(message: string) {
+  const targets = NEED_PRESETS.filter((item) => message.includes(item.label)).map((item) => item.label)
+  const quota = message.match(/最多找\s*(\d+)\s*家/)
+  const hours = message.match(/限时\s*(\d+)\s*小时/)
+  return {
+    targets,
+    quota: quota ? asQuota(Number(quota[1])) : undefined,
+    limitHours: hours ? Math.min(168, Math.max(1, Number(hours[1]))) : undefined,
+  }
+}
+
+export async function runInquiryCoachCommand(input: {
+  message: string
+  inquiry: InquiryState
+  env?: Record<string, string | undefined>
+  now?: string
+  fetchImpl?: FetchLike
+}): Promise<InquiryRoundResult | null> {
+  const kind = classifyInquiryCoachCommand(input.message)
+  if (!kind) return null
+  const now = input.now || new Date().toISOString()
+  const spec = parseCoachInquirySpec(input.message)
+  let state = input.inquiry
+  let task = pickRunnableInquiryTask(state)
+  if (!task) {
+    const created = createInquiryTask(
+      state,
+      {
+        name: kind === "send" ? "定向发信" : "对话询单",
+        instruction: input.message,
+        targets: spec.targets,
+        quota: spec.quota || (kind === "send" ? Math.max(1, extractDirectedEmails(input.message).length) : 8),
+        limitHours: spec.limitHours,
+        start: true,
+      },
+      now,
+    )
+    if (created.error || !created.task) return null
+    state = created.state
+    task = created.task
+  } else {
+    const updated = updateInquiryTask(
+      state,
+      {
+        id: task.id,
+        instruction: [task.instruction, input.message].filter(Boolean).join("\n").slice(0, 2000),
+        targets: spec.targets.length ? spec.targets : task.targets.map((item) => item.label),
+        quota: spec.quota || task.quota,
+        limitHours: spec.limitHours ?? task.limitHours ?? 0,
+      },
+      now,
+    )
+    const started = startInquiryTask(updated.state, task.id, now)
+    if (started.error || !started.task) return null
+    state = started.state
+    task = started.task
+  }
+  return runInquiryRound({
+    inquiry: state,
+    task,
+    env: input.env,
+    now,
+    fetchImpl: input.fetchImpl,
+    skipSearch: kind === "send",
+  })
 }
 
 export function shouldRerunInquiry(message: string) {
@@ -173,6 +273,12 @@ export function buildSearchQueries(task: InquiryTask) {
   return unique(queries).slice(0, 6)
 }
 
+function isSendableEmail(value: string, source?: string) {
+  if (isPublicBusinessEmail(value)) return true
+  if (source !== "同事补充指令" && source !== "同事对话") return false
+  return /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,24}$/.test(value.trim())
+}
+
 export function isPublicBusinessEmail(value: string) {
   const email = value.trim().toLowerCase()
   const at = email.lastIndexOf("@")
@@ -197,6 +303,19 @@ export function extractPublicEmails(text: string) {
   for (const match of text.matchAll(EMAIL_RE)) {
     const email = match[0]?.trim().toLowerCase()
     if (email && isPublicBusinessEmail(email)) found.add(email)
+  }
+  return [...found]
+}
+
+export function extractDirectedEmails(text: string) {
+  const found = new Set<string>()
+  for (const match of text.matchAll(MAILTO_RE)) {
+    const email = match[1]?.trim().toLowerCase()
+    if (email && isSendableEmail(email, "同事对话")) found.add(email)
+  }
+  for (const match of text.matchAll(EMAIL_RE)) {
+    const email = match[0]?.trim().toLowerCase()
+    if (email && isSendableEmail(email, "同事对话")) found.add(email)
   }
   return [...found]
 }
@@ -235,7 +354,7 @@ export function unwrapSearchUrl(href: string) {
 
 export function harvestTaskSeeds(task: InquiryTask) {
   const blob = [task.instruction, ...task.targets.map((item) => item.label)].join("\n")
-  const emails = extractPublicEmails(blob)
+  const emails = extractDirectedEmails(blob)
   const urls = [...blob.matchAll(/https?:\/\/[^\s<>"'）)]+/g)]
     .map((match) => unwrapSearchUrl(match[0] || ""))
     .filter(Boolean)
@@ -331,7 +450,8 @@ export function composeOutreachMail(input: {
 }
 
 export function mailboxLabel(mailbox: OutreachMailbox) {
-  if (mailbox.kind === "none") return "未挂发出信箱"
+  if (mailbox.kind === "none") return "本站环境没读到发出信箱"
+  if (mailbox.kind === "hermes") return "WEHO 已配置的发出信箱"
   if (mailbox.kind === "agentmail") return "本站询单信箱"
   if (mailbox.kind === "sendgrid") return "本站发出信箱"
   return "本站发信接口"
@@ -343,6 +463,7 @@ export async function sendOutreachMail(
   fetchImpl: FetchLike = fetch,
 ) {
   if (mailbox.kind === "none") return { ok: false as const, error: "no-mailbox" }
+  if (mailbox.kind === "hermes") return sendViaHermes(mailbox, mail, fetchImpl)
   if (mailbox.kind === "agentmail") {
     const response = await timedFetch(
       fetchImpl,
@@ -414,6 +535,65 @@ export async function sendOutreachMail(
   return receipt ? { ok: true as const, receipt } : { ok: false as const, error: "no-receipt" }
 }
 
+async function sendViaHermes(
+  mailbox: Extract<OutreachMailbox, { kind: "hermes" }>,
+  mail: OutreachMail,
+  fetchImpl: FetchLike,
+) {
+  const root = mailbox.baseUrl.replace(/\/v1\/?$/, "")
+  const payload = {
+    to: `email:${mail.to}`,
+    subject: mail.subject,
+    message: mail.text,
+    text: mail.text,
+    platform: "email",
+  }
+  const urls = unique([`${mailbox.baseUrl}/send`, `${root}/v1/send`, `${root}/send`])
+  for (const url of urls) {
+    const response = await timedFetch(
+      fetchImpl,
+      url,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${mailbox.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      },
+      2500,
+    )
+    if (!response || response.status >= 300) continue
+    const receipt = await readReceipt(response)
+    if (receipt) return { ok: true as const, receipt }
+  }
+  if (fetchImpl !== fetch) return { ok: false as const, error: "send-failed" }
+  try {
+    const reply = await completeChatCompletions(
+      { apiKey: mailbox.apiKey, baseUrl: mailbox.baseUrl, model: mailbox.model },
+      [
+        {
+          role: "system",
+          content:
+            "你是询单发信执行器。WEHO Hermes 的发出信箱已经配置好，不要说没挂信箱。立刻用这只信箱把下面这封信发出去。成功只回一行：SENT <邮局回执或message-id>。失败只回一行：FAILED <原因>。不要问收件人。",
+        },
+        {
+          role: "user",
+          content: `收件人：${mail.to}\n主题：${mail.subject}\n正文：\n${mail.text}`,
+        },
+      ],
+      { hosts: "exact", timeoutMs: 16_000, lean: true },
+    )
+    const sent = reply?.match(/\bSENT\s+(\S+)/i)
+    if (sent?.[1] && !/^failed|none|unknown$/i.test(sent[1])) {
+      return { ok: true as const, receipt: sent[1].slice(0, 180) }
+    }
+  } catch {
+    /* gateway chat send failed */
+  }
+  return { ok: false as const, error: "send-failed" }
+}
+
 export async function runInquiryRound(input: {
   inquiry: InquiryState
   task: InquiryTask
@@ -422,6 +602,7 @@ export async function runInquiryRound(input: {
   now?: string
   siteUrl?: string
   budgetMs?: number
+  skipSearch?: boolean
 }): Promise<InquiryRoundResult> {
   const now = input.now || new Date().toISOString()
   const env = input.env || {}
@@ -445,7 +626,7 @@ export async function runInquiryRound(input: {
     source: string,
     place?: string,
   ) => {
-    if (fresh.length >= quota || known.has(email) || !isPublicBusinessEmail(email)) return
+    if (fresh.length >= quota || known.has(email) || !isSendableEmail(email, source)) return
     known.add(email)
     const mail = composeOutreachMail({ org, email, pain, siteUrl })
     let outreach: InquiryFinding["outreach"] = mailbox.kind === "none" ? "draft" : "queued"
@@ -477,7 +658,7 @@ export async function runInquiryRound(input: {
     await addFinding(inferOrgName("", `https://${email.split("@")[1] || "source"}`), email, "同事补充指令", email.split("@")[1])
   }
 
-  const queries = buildSearchQueries(input.task)
+  const queries = input.skipSearch ? [] : buildSearchQueries(input.task)
   const hits: SearchHit[] = seeds.urls.map((url) => ({ title: "", url, snippet: "" }))
   let searched = 0
 
@@ -494,7 +675,7 @@ export async function runInquiryRound(input: {
   }
 
   const pages: { hit: SearchHit; html: string }[] = []
-  const targets = hits.slice(0, 8)
+  const targets = input.skipSearch ? [] : hits.slice(0, 8)
   for (const group of chunk(targets, 3)) {
     if (Date.now() >= deadline || fresh.length >= quota) break
     const rows = await Promise.all(
@@ -585,22 +766,29 @@ function buildRoundReport(input: {
   mailbox: OutreachMailbox
 }) {
   const want = input.task.targets.map((item) => item.label).join("、") || input.task.instruction.slice(0, 40) || "同事写下的条件"
-  const emails = input.findings.filter((item) => item.contact).length
+  const contacts = input.findings.map((item) => item.contact?.trim()).filter((item): item is string => Boolean(item))
+  const emails = contacts.length
   const sent = input.findings.filter((item) => item.outreach === "sent").length
   const drafted = input.findings.filter((item) => item.outreach === "draft" || item.outreach === "queued").length
-  const lines = [
-    `本轮按「${want}」在网上找对方已公布的邮箱，查了 ${input.queries} 组搜索、打开 ${input.pages} 个公开页面。`,
-  ]
+  const lines = input.queries
+    ? [`本轮按「${want}」在网上找对方已公布的邮箱，查了 ${input.queries} 组搜索、打开 ${input.pages} 个公开页面。`]
+    : [`本轮按同事写下的邮箱起草推广信，没有再去网上搜。`]
   if (emails) {
-    lines.push(`找到 ${emails} 个公开邮箱，已按本站${OUTREACH_BRIEF.productName}和官网起草推广信 ${drafted + sent} 封。`)
+    lines.push(
+      `找到 ${emails} 个公开邮箱：${contacts.join("、")}。已按本站${OUTREACH_BRIEF.productName}和官网起草推广信 ${drafted + sent} 封。`,
+    )
   } else if (input.pages || input.hits) {
     lines.push("打开的页面上没有可收录的公开邮箱。没有编造厂商或邮箱。")
-  } else {
+  } else if (input.queries) {
     lines.push("搜索没有返回可打开的页面。没有编造厂商或邮箱。同事可再点开始，或把已知邮箱写在补充指令里。")
+  } else {
+    lines.push("同事这条指令里没有可发的公开邮箱。")
   }
   if (sent) lines.push(`已通过${mailboxLabel(input.mailbox)}发出 ${sent} 封，每封都留下了邮局回执。`)
   if (drafted && input.mailbox.kind === "none") {
-    lines.push("本站还没挂询单发出信箱，信已入队为草稿，没有写成已发送。")
+    lines.push("本站环境没读到发出信箱密钥，信已入队为草稿，没有写成已发送。")
+  } else if (drafted && input.mailbox.kind === "hermes" && !sent) {
+    lines.push("WEHO 发出信箱已配置，这一下没有邮局回执，信仍是草稿，没有写成已发送。")
   } else if (drafted && !sent) {
     lines.push("发出信箱这一下没有回执，信仍是草稿，没有写成已发送。")
   }
