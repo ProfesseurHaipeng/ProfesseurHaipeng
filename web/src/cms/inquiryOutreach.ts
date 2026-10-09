@@ -39,6 +39,7 @@ export type SearchHit = {
   title: string
   url: string
   snippet: string
+  channel?: string
 }
 
 export type OutreachMail = {
@@ -97,6 +98,10 @@ const BLOCKED_HOST = new Set([
   "glitchtip.com",
   "bugsnag.com",
   "rollbar.com",
+  "alibaba.com",
+  "1688.com",
+  "made-in-china.com",
+  "globalsources.com",
 ])
 
 const JUNK_RESULT_HOST = new Set([
@@ -699,15 +704,61 @@ export function pickRunnableInquiryTask(state: InquiryState) {
   )
 }
 
+export type InquiryChannel = { id: string; label: string; query: string }
+
+export function planSearchChannels(task: InquiryTask): InquiryChannel[] {
+  const focuses = unique(task.targets.map((item) => searchFocus(item.label)).filter(Boolean))
+  const topic = focuses[0] || "肥料 土壤改良"
+  const channels: InquiryChannel[] = [
+    { id: "factory", label: "生产厂家", query: `${topic} 有限公司 销售部 邮箱` },
+    { id: "dealer", label: "经销与采购企业", query: `${topic} 经销商 采购 联系邮箱` },
+    { id: "coop", label: "合作社与基地", query: `${topic} 合作社 基地 联系邮箱` },
+  ]
+  const second = focuses.find((item) => item !== topic)
+  if (second) channels.push({ id: "buyer", label: "相关企业", query: `${second} 企业 采购 邮箱` })
+  return channels.slice(0, 4)
+}
+
 export function buildSearchQueries(task: InquiryTask) {
-  const labels = task.targets.map((item) => searchFocus(item.label)).filter(Boolean)
-  const extra = stripStaffTestAddresses(task.instruction.replace(/\s+/g, " ").trim())
-  const queries = labels.map((label) => `${label} 销售 邮箱`)
-  if (extra && extra.length <= 40 && !/不要|WEHO|推广信|邮局|发出信箱/.test(extra) && !isBareMailCommand(extra)) {
-    queries.push(`${searchFocus(extra)} 销售 邮箱`)
-  }
-  if (!queries.length) queries.push("肥料 土壤改良 厂家 销售 邮箱")
-  return unique(queries).slice(0, 3)
+  return planSearchChannels(task).map((item) => item.query)
+}
+
+export type CustomerJudgment = {
+  fit: "high" | "mid" | "low"
+  need: string
+  plan: string
+  role: string
+}
+
+export function judgeCustomerNeed(text: string, targets: string[] = []): CustomerJudgment {
+  const blob = text.replace(/\s+/g, " ")
+  const pains: string[] = []
+  if (/板结|酸化|盐碱|土壤改良|土壤/.test(blob) || targets.some((item) => /土壤|板结/.test(item))) pains.push("土壤改良")
+  if (/化肥|肥料|肥效|成本/.test(blob) || targets.some((item) => /肥/.test(item))) pains.push("肥料基料")
+  if (/有机|茶叶|茶园|水稻|稻|种植/.test(blob) || targets.some((item) => /茶|稻|种植|有机/.test(item))) pains.push("种植端用量")
+  const interested = /采购|经销|招商|合作|供应|销售|联系|基地|合作社|厂家|工厂/.test(blob)
+  const fit: CustomerJudgment["fit"] = pains.length && interested ? "high" : pains.length || interested ? "mid" : "low"
+  const need = pains[0] || (targets[0] ? searchFocus(targets[0]) : "") || "土壤改良或肥料合作"
+  const role = /合作社/.test(blob) ? "合作社" : /经销|贸易|批发/.test(blob) ? "经销企业" : /基地|茶场|农场/.test(blob) ? "种植基地" : /厂|制造|生产/.test(blob) ? "生产厂家" : "企业"
+  const plan =
+    fit === "low"
+      ? ""
+      : need.includes("土壤")
+        ? "可落实：先按作物和面积寄小样，对照板结或酸碱情况。检测数字只随正式报告，不在信里编。"
+        : need.includes("肥料")
+          ? "可落实：先要现有配方和大致吨位，再寄样品。掺混比例等对方工艺确认，不预写检测结果。"
+          : "可落实：先确认作物、地区和吨位，再寄样品和项目说明。不编检测数字。"
+  return { fit, need, plan, role }
+}
+
+export function inferContactPerson(text: string, email: string) {
+  const plain = text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")
+  const at = plain.toLowerCase().indexOf(email.toLowerCase())
+  const slice = at >= 0 ? plain.slice(Math.max(0, at - 90), at + email.length + 40) : plain.slice(0, 500)
+  const named = slice.match(/(?:销售经理|采购经理|理事长|总经理)\s*[:：]?\s*([\u4e00-\u9fff]{2,4})/)
+  const person = named?.[1] || ""
+  if (!person || /公司|合作社|经理|我们|联系|销售|采购/.test(person)) return ""
+  return person
 }
 
 function isWellFormedEmail(value: string) {
@@ -896,25 +947,30 @@ export function composeOutreachMail(input: {
   org: string
   email: string
   pain?: string
+  plan?: string
+  person?: string
   siteUrl?: string
 }): OutreachMail {
   const site = (input.siteUrl || DEFAULT_SITE_URL).replace(/\/$/, "")
-  const who = input.org && input.org !== "公开来源" ? input.org : "贵司"
-  const pain = input.pain?.trim()
-  const need = pain ? `我们注意到贵司可能关注「${pain}」。` : "如你们在做土壤改良、肥料基料或生态农业，"
+  const who = input.person || (input.org && input.org !== "公开来源" ? input.org : "贵司")
+  const need = input.pain?.trim()
+  const plan =
+    input.plan?.trim() ||
+    "可落实的下一步是回信说明作物、地区和大致吨位，我们按这个寄样品和项目说明。检测数字只随正式报告，不在这封信里编。"
   const text = [
-    `尊敬的${who}同事：`,
+    `尊敬的${who}：`,
     "",
     `我们是${OUTREACH_BRIEF.projectName}。核心产品是${OUTREACH_BRIEF.productName}，${OUTREACH_BRIEF.pitch}`,
-    `${need}欢迎查看产品与项目介绍：${site}`,
-    "如需样品、检测报告或合作说明，直接回信告知作物、地区和大致吨位即可。",
+    need ? `从公开页面看，贵司和「${need}」有关。` : "如贵司在做肥料、土壤改良、合作社供货或种植基地采购，",
+    plan,
+    `产品与项目说明：${site}`,
     "",
     "此致",
     OUTREACH_BRIEF.projectName,
   ].join("\n")
   return {
     to: input.email,
-    subject: `${OUTREACH_BRIEF.productName}｜土壤改良与生态农业合作`,
+    subject: `${OUTREACH_BRIEF.productName}｜${(need || "土壤改良").slice(0, 12)}合作`,
     text,
   }
 }
@@ -1109,7 +1165,7 @@ export async function runInquiryRound(input: {
   }
   log(
     "think",
-    `${describeWorkbench(mailbox.kind === "none" && workbench.kind === "local" ? "none" : workbench.kind)} 本轮按「${pain || "已定条件"}」找厂家 / 合作社客户。先核对是不是客户页、邮箱是不是这个站的，再起草发出。`,
+    `${describeWorkbench(mailbox.kind === "none" && workbench.kind === "local" ? "none" : workbench.kind)} 本轮分渠道找生产厂家、经销采购企业和合作社。政府官网不联系。先判断需求和可落实做法，再真实起草、发出。`,
   )
   if (retired.changed) log("skip", `排除 ${retired.state.findings.filter((item) => item.outreach === "blocked").length} 个不像客户的旧对象，不再发给他们。`)
 
@@ -1118,6 +1174,8 @@ export async function runInquiryRound(input: {
     email: string,
     source: string,
     place?: string,
+    judged?: CustomerJudgment,
+    person?: string,
   ) => {
     if (!isSendableEmail(email, source)) return
     if (source.startsWith("http") && !emailMatchesSite(email, source)) {
@@ -1128,6 +1186,10 @@ export async function runInquiryRound(input: {
       log("skip", `跳过不像客户的来源 ${org} ${email}`, { url: source, contact: email })
       return
     }
+    if (judged?.fit === "low") {
+      log("skip", `${org} 看不出采购或生产意向，先不联系`, { url: source, contact: email })
+      return
+    }
     const prior =
       fresh.find((item) => item.contact?.trim().toLowerCase() === email) ||
       base.findings.find((item) => item.contact?.trim().toLowerCase() === email)
@@ -1135,11 +1197,20 @@ export async function runInquiryRound(input: {
     if (known.has(email) && !input.skipSearch) return
     if (fresh.length >= quota && !prior) return
     known.add(email)
-    const mail = composeOutreachMail({ org: prior?.org && prior.org !== "公开来源" ? prior.org : org, email, pain, siteUrl })
+    const need = judged?.need || pain
+    const mail = composeOutreachMail({
+      org: prior?.org && prior.org !== "公开来源" ? prior.org : org,
+      email,
+      pain: need,
+      plan: judged?.plan,
+      person,
+      siteUrl,
+    })
     let outreach: InquiryFinding["outreach"] = mailbox.kind === "none" ? "draft" : "queued"
     let receipt: string | undefined
-    log("found", `记下客户 ${org} ${email}`, { url: source, contact: email })
-    log("draft", `已按本站火山灰起草给 ${email}`, { contact: email })
+    log("found", `记下${judged?.role || "客户"} ${org}${person ? `（${person}）` : ""} ${email}`, { url: source, contact: email })
+    log("think", `${org}：需求「${need || "待核对"}」。${judged?.plan || "按公开页面起草，不编检测数字。"}`)
+    log("draft", `已按判断起草给 ${email}`, { contact: email })
     if ((mailbox.kind !== "none" || workbench.kind === "remote") && fresh.filter((item) => item.outreach === "sent").length < 3 && Date.now() < deadline) {
       log("send", `正在通过${workbench.kind === "remote" ? "询单工作台" : mailboxLabel(mailbox)}发给 ${email}`, { contact: email })
       const sent = await sendOutreachMail(mailbox, mail, fetchImpl, workbench).catch(() => ({ ok: false as const, error: "send-failed" }))
@@ -1157,7 +1228,7 @@ export async function runInquiryRound(input: {
       at: now,
       org: prior?.org && prior.org !== "公开来源" ? prior.org : org,
       place: prior?.place || place,
-      pain: prior?.pain || pain || undefined,
+      pain: prior?.pain || need || pain || undefined,
       source: prior?.source || source,
       contact: email,
       outreach,
@@ -1174,19 +1245,23 @@ export async function runInquiryRound(input: {
     await addFinding(inferOrgName("", `https://${email.split("@")[1] || "source"}`), email, seedSource, email.split("@")[1])
   }
 
-  const queries = input.skipSearch ? [] : buildSearchQueries(input.task)
+  const channels = input.skipSearch ? [] : planSearchChannels(input.task)
   const hits: SearchHit[] = seeds.urls.map((url) => ({ title: "", url, snippet: "" }))
   let searched = 0
+  const labels = input.task.targets.map((item) => item.label)
 
-  for (const query of queries) {
-    if (Date.now() >= deadline || hits.length >= 10 || fresh.length >= quota) break
-    log("search", `正在搜索：${query}`)
-    const batch = await searchPublicWeb(query, env, fetchImpl, Math.max(800, deadline - Date.now()), workbench)
-    searched += 1
-    for (const hit of batch) {
-      const labels = input.task.targets.map((item) => item.label)
+  if (channels.length && Date.now() < deadline) {
+    const batches = await Promise.all(
+      channels.map(async (channel) => {
+        log("search", `渠道「${channel.label}」：${channel.query}`)
+        const batch = await searchPublicWeb(channel.query, env, fetchImpl, Math.min(4000, Math.max(800, deadline - Date.now())), workbench)
+        return batch.map((hit) => ({ ...hit, channel: channel.label }))
+      }),
+    )
+    searched = channels.length
+    for (const hit of batches.flat()) {
       if (isGovernmentSource(hit.url, hit.title, hit.snippet) || !isCustomerProspect(hit.url, hit.title, hit.snippet, labels)) {
-        log("skip", `跳过不像客户的页面 ${hit.title || hostOf(hit.url)}`, { url: hit.url })
+        log("skip", `跳过不像 B 端客户的页面 ${hit.title || hostOf(hit.url)}`, { url: hit.url })
         continue
       }
       if (!hits.some((row) => row.url === hit.url)) hits.push(hit)
@@ -1194,7 +1269,6 @@ export async function runInquiryRound(input: {
   }
 
   const pages: { hit: SearchHit; html: string }[] = []
-  const labels = input.task.targets.map((item) => item.label)
   const targets = input.skipSearch
     ? []
     : hits
@@ -1205,7 +1279,7 @@ export async function runInquiryRound(input: {
     if (Date.now() >= deadline || fresh.length >= quota) break
     const rows = await Promise.all(
       group.map(async (hit) => {
-        log("open", `打开客户页 ${hit.title || hostOf(hit.url)}`, { url: hit.url })
+        log("open", `打开${hit.channel ? `「${hit.channel}」` : "客户"}页 ${hit.title || hostOf(hit.url)}`, { url: hit.url })
         return {
           hit,
           html: await fetchText(fetchImpl, hit.url, Math.min(3500, Math.max(600, deadline - Date.now()))),
@@ -1224,12 +1298,19 @@ export async function runInquiryRound(input: {
     }
     const emails = extractPublicEmails(`${page.html}\n${page.hit.title}`).filter((email) => emailMatchesSite(email, page.hit.url))
     if (!emails.length) {
-      log("skip", `页面上没有和本站同域的公开邮箱 ${hostOf(page.hit.url)}`, { url: page.hit.url })
+      log("skip", `页面上没有和本公司同域的公开邮箱 ${hostOf(page.hit.url)}`, { url: page.hit.url })
       continue
     }
+    const plain = `${decodeEntities(stripTags(title))} ${page.hit.snippet} ${stripTags(page.html).slice(0, 1800)}`
+    const judged = judgeCustomerNeed(plain, labels)
     const org = inferOrgName(decodeEntities(stripTags(title)), page.hit.url, page.hit.snippet)
+    if (judged.fit === "low") {
+      log("skip", `${org} 看不出采购或生产意向，先不联系`, { url: page.hit.url })
+      continue
+    }
     for (const email of emails.slice(0, 2)) {
-      await addFinding(org, email, page.hit.url, hostOf(page.hit.url).replace(/^www\./, "") || undefined)
+      const person = inferContactPerson(page.html, email)
+      await addFinding(org, email, page.hit.url, hostOf(page.hit.url).replace(/^www\./, "") || undefined, judged, person)
     }
   }
 
@@ -1319,13 +1400,13 @@ function buildRoundReport(input: {
   const lines = testOnly
     ? [`这是同事要求的发出测试，收件人是同事自己的邮箱，不是厂商。正式询单信发给网上找到的厂商公开邮箱，不会问同事要收件人。`]
     : input.queries
-      ? [`本轮按「${want}」找肥料厂 / 合作社 / 农产品客户，查了 ${input.queries} 组搜索、打开 ${input.pages} 个客户页${input.skipped ? `，跳过 ${input.skipped} 个政府或非客户站` : ""}。找到后直接发给对方。`]
+      ? [`本轮按「${want}」分渠道找生产厂家、经销采购企业和合作社，查了 ${input.queries} 组搜索、打开 ${input.pages} 个客户页${input.skipped ? `，跳过 ${input.skipped} 个政府或无意向页面` : ""}。政府官网不联系。只对看得出需求的对象写可落实的推广信。`]
       : [`本轮按已找到的厂商公开邮箱起草并尝试发出，没有再问同事要收件人。`]
   if (testOnly) {
     lines.push(`测试对象：${contacts.join("、")}。已按本站${OUTREACH_BRIEF.productName}和官网起草 ${drafted + sent} 封。`)
   } else if (emails) {
     lines.push(
-      `找到 ${emails} 个客户公开邮箱：${contacts.join("、")}。已按本站${OUTREACH_BRIEF.productName}和官网起草推广信 ${drafted + sent} 封。`,
+      `找到 ${emails} 个客户公开邮箱：${contacts.join("、")}。已按对方页面上的需求起草推广信 ${drafted + sent} 封，并写了可落实的下一步。`,
     )
   } else if (input.pages || input.hits) {
     lines.push("打开的页面上没有可收录的客户邮箱。政府官网和零售站已跳过。没有编造厂商或邮箱。")

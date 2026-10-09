@@ -11,6 +11,8 @@ import {
   extractPublicEmails,
   harvestTaskSeeds,
   buildSearchQueries,
+  judgeCustomerNeed,
+  inferContactPerson,
   isPublicBusinessEmail,
   isStaffTestEmail,
   parseSearchHtml,
@@ -74,6 +76,7 @@ describe("inquiry outreach runner", () => {
     expect(mail.text).toContain("皮纳图博火山灰")
     expect(mail.text).toContain("https://modeltest.store")
     expect(mail.text).toContain("土壤板结")
+    expect(mail.text).toContain("可落实")
     expect(mail.text).toContain("菲律宾皮纳图博火山灰农业综合产业项目")
   })
 
@@ -425,7 +428,18 @@ describe("inquiry outreach runner", () => {
       },
       now,
     )
-    expect(buildSearchQueries(focused.task!)).toEqual(["肥料 土壤改良 销售 邮箱"])
+    expect(buildSearchQueries(focused.task!)).toEqual([
+      "肥料 土壤改良 有限公司 销售部 邮箱",
+      "肥料 土壤改良 经销商 采购 联系邮箱",
+      "肥料 土壤改良 合作社 基地 联系邮箱",
+    ])
+    const judged = judgeCustomerNeed("绿田肥料有限公司 采购部 土壤板结 联系人：销售经理 王磊 sales@lvtian-agri.com", ["土壤板结"])
+    expect(judged.fit).toBe("high")
+    expect(judged.need).toBe("土壤改良")
+    expect(judged.plan).toContain("可落实")
+    expect(judgeCustomerNeed("某市人民政府门户", []).fit).toBe("low")
+    expect(inferContactPerson("联系人：销售经理 王磊 sales@lvtian-agri.com", "sales@lvtian-agri.com")).toBe("王磊")
+    expect(isPublicBusinessEmail("service@alibaba.com")).toBe(false)
   })
 
   it("answers 发给了谁 from a real digest and keeps a work journal", async () => {
