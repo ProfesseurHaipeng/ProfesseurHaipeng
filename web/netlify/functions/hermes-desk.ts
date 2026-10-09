@@ -53,7 +53,7 @@ import {
   type HermesDeskFilter,
   type HermesEvent,
 } from "../../src/cms/hermesDesk"
-import { runInquiryRound, type InquiryRoundResult } from "../../src/cms/inquiryOutreach"
+import { runInquiryRound, retireUnfitFindings, type InquiryRoundResult } from "../../src/cms/inquiryOutreach"
 import { sortLeads, type Lead } from "../../src/cms/leads"
 
 /**
@@ -181,8 +181,9 @@ function eventOf(kind: HermesEvent["kind"], text: string, caseId?: string): Herm
 async function loadInquiry() {
   const migrated = migrateInquiryTasks(await readInquiryState())
   const ticked = tickInquiryTasks(migrated.state)
-  if (migrated.changed || ticked.changed) await writeInquiryState(ticked.state)
-  return ticked.state
+  const retired = retireUnfitFindings(ticked.state)
+  if (migrated.changed || ticked.changed || retired.changed) await writeInquiryState(retired.state)
+  return retired.state
 }
 
 async function loadDesk() {

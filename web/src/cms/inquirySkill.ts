@@ -77,7 +77,7 @@ export function buildOutreachDigest(
   const sinceMs = since.getTime()
   const rows = inquiry.findings.filter((item) => item.contact && inRange(item.at, sinceMs))
   const tests = rows.filter((item) => item.source === "同事测试指令")
-  const factory = rows.filter((item) => item.source !== "同事测试指令")
+    const factory = rows.filter((item) => item.source !== "同事测试指令" && item.outreach !== "blocked")
   const sent = factory.filter((item) => item.outreach === "sent" && item.receipt)
   const drafted = factory.filter((item) => item.outreach === "draft" || item.outreach === "queued")
   const label = range === "week" ? "近 7 天" : "今天"
@@ -99,6 +99,22 @@ export function buildOutreachDigest(
     tests,
     text: lines.filter(Boolean).join("\n"),
   }
+}
+
+export function buildOutreachRoster(inquiry: InquiryState) {
+  const rows = inquiry.findings.filter((item) => item.contact && item.outreach !== "blocked" && item.source !== "同事测试指令")
+  const sent = rows.filter((item) => item.outreach === "sent" && item.receipt)
+  const drafted = rows.filter((item) => item.outreach === "draft" || item.outreach === "queued")
+  const lines = [
+    "发出名单（只记真实结果）：",
+    sent.length
+      ? `已发出 ${sent.length} 封，都有邮局回执：${sent.map((item) => `${item.org} <${item.contact}>`).join("、")}。`
+      : "还没有一封带着邮局回执的厂商信。",
+    drafted.length
+      ? `已起草未发出 ${drafted.length} 封：${drafted.map((item) => `${item.org} <${item.contact}>`).join("、")}。`
+      : "",
+  ]
+  return lines.filter(Boolean).join("\n")
 }
 
 export function formatWorkJournal(events: InquiryWorkEvent[], limit = 24) {
