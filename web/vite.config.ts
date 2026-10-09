@@ -257,7 +257,8 @@ function localGuide(): Plugin {
         if (req.method === "GET") {
           const migrated = inquiryMod.migrateInquiryTasks(inquiryMod.hydrateInquiryState(localDesk.inquiry))
           const ticked = inquiryMod.tickInquiryTasks(migrated.state)
-          localDesk.inquiry = ticked.state
+          const retired = outreachMod.retireUnfitFindings(ticked.state)
+          localDesk.inquiry = retired.state
           const url = new URL(req.url || "/", "http://local")
           const asset = url.searchParams.get("asset") || ""
           if (asset.startsWith("img-")) {

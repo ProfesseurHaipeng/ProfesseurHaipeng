@@ -7,6 +7,7 @@ import {
   isGovernmentSource,
   isInquiryStatusQuestion,
   composeOutreachMail,
+  emailMatchesSite,
   extractPublicEmails,
   harvestTaskSeeds,
   buildSearchQueries,
@@ -14,6 +15,7 @@ import {
   isStaffTestEmail,
   parseSearchHtml,
   resolveMailbox,
+  retireUnfitFindings,
   runInquiryCoachCommand,
   runInquiryRound,
   shouldRerunInquiry,
@@ -26,6 +28,7 @@ const now = "2026-09-05T12:00:00.000Z"
 const pageHtml = `<html><title>绿田农业合作社</title><body>
 <p>欢迎来到绿田农业。</p>
 <a href="mailto:sales@lvtian-agri.com">sales@lvtian-agri.com</a>
+<a href="mailto:custserv@oldnavy.com">custserv@oldnavy.com</a>
 </body></html>`
 
 const searchHtml = `<a class="result__a" href="https://www.lvtian-agri.com/contact">绿田农业</a>`
@@ -52,6 +55,7 @@ describe("inquiry outreach runner", () => {
     expect(isPublicBusinessEmail("sales@lvtian-agri.com")).toBe(true)
     expect(isPublicBusinessEmail("954970ecd1ec4429ba733caf5feafd54@glitchtip.7gra.us")).toBe(false)
     expect(isPublicBusinessEmail("bear131419@163.com")).toBe(false)
+    expect(isPublicBusinessEmail("custserv@oldnavy.com")).toBe(false)
     expect(isStaffTestEmail("bear131419@163.com")).toBe(true)
     expect(isStaffTestEmail("sales@lvtian-agri.com")).toBe(false)
   })
@@ -405,13 +409,23 @@ describe("inquiry outreach runner", () => {
     expect(isGovernmentSource("https://www.lvtian-agri.com/contact", "绿田农业合作社")).toBe(false)
     expect(isCustomerProspect("https://www.lvtian-agri.com/contact", "绿田农业合作社")).toBe(true)
     expect(isCustomerProspect("https://oldnavy.gap.com/shop/clearance", "Old Navy")).toBe(false)
+    expect(isCustomerProspect("https://fashion.example.cn/", "某某服装公司")).toBe(false)
     expect(isCustomerProspect("https://www.gov.cn/", "中华人民共和国中央人民政府")).toBe(false)
+    expect(emailMatchesSite("sales@lvtian-agri.com", "https://www.lvtian-agri.com/contact")).toBe(true)
+    expect(emailMatchesSite("custserv@oldnavy.com", "https://www.lvtian-agri.com/contact")).toBe(false)
     expect(unwrapSearchUrl("https://www.moa.gov.cn/contact")).toBe("")
     expect(classifyInquiryCoachCommand("发给了谁")).toBe("report")
     expect(classifyInquiryCoachCommand("给我一份日报")).toBe("report")
-    expect(buildSearchQueries(createInquiryTask(emptyInquiry(), { name: "一轮", targets: ["肥料 / 土壤改良厂家"] }, now).task!)).toEqual(
-      expect.arrayContaining([expect.stringContaining("-政府")]),
+    const focused = createInquiryTask(
+      emptyInquiry(),
+      {
+        name: "一轮",
+        targets: ["肥料 / 土壤改良厂家"],
+        instruction: "按选定的厂家类型写推广信。不要问同事该发给谁。发信走 WEHO 已配置的发出信箱。",
+      },
+      now,
     )
+    expect(buildSearchQueries(focused.task!)).toEqual(["肥料 土壤改良 销售 邮箱"])
   })
 
   it("answers 发给了谁 from a real digest and keeps a work journal", async () => {
@@ -448,5 +462,41 @@ describe("inquiry outreach runner", () => {
     expect(report?.report).toContain("操作日志")
     expect(report?.report).toContain("已发出")
     expect(report?.searched).toBe(0)
+  })
+
+  it("retires a retail service draft instead of sending it", async () => {
+    const created = createInquiryTask(emptyInquiry(), { name: "一轮", targets: ["肥料 / 土壤改良厂家"] }, now)
+    const inquiry = {
+      ...created.state,
+      findings: [
+        {
+          id: "f-retail",
+          at: now,
+          org: "Old Navy",
+          source: "https://oldnavy.gap.com/shop/clearance",
+          contact: "custserv@oldnavy.com",
+          outreach: "draft" as const,
+          draft: "皮纳图博火山灰",
+        },
+      ],
+    }
+    expect(retireUnfitFindings(inquiry).state.findings[0]?.outreach).toBe("blocked")
+    const status = await runInquiryCoachCommand({
+      message: "发邮件了吗？",
+      inquiry,
+      env: { SENDGRID_API_KEY: "sg-test", SENDGRID_FROM: "outreach@modeltest.store" },
+      now,
+      fetchImpl: mockFetch([
+        {
+          test: (url) => url.includes("api.sendgrid.com"),
+          status: 202,
+          body: "{}",
+          headers: { "x-message-id": "should-not-send" },
+        },
+      ]) as typeof fetch,
+    })
+    expect(status?.sent).toBe(0)
+    expect(status?.inquiry.findings.find((item) => item.contact === "custserv@oldnavy.com")?.outreach).toBe("blocked")
+    expect(status?.report).not.toContain("should-not-send")
   })
 })

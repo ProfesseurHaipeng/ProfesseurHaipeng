@@ -426,14 +426,22 @@ export function sanitizeFinding(raw: unknown, now = new Date().toISOString()): I
   }
 }
 
+function sameFinding(left: InquiryFinding, right: InquiryFinding) {
+  if (left.id === right.id) return true
+  const leftContact = left.contact?.trim().toLowerCase()
+  const rightContact = right.contact?.trim().toLowerCase()
+  if (leftContact && rightContact && leftContact === rightContact) return true
+  return left.org === right.org && (!leftContact || !rightContact)
+}
+
 export function applyInquiryFindings(current: InquiryFinding[], raw: unknown[], now = new Date().toISOString()) {
   let next = [...current]
   for (const item of raw) {
     const finding = sanitizeFinding(item, now)
     if (!finding) continue
-    const prev = next.find((row) => row.id === finding.id || row.org === finding.org)
+    const prev = next.find((row) => sameFinding(row, finding))
     if (prev?.caseId && !finding.caseId) finding.caseId = prev.caseId
-    next = [finding, ...next.filter((row) => row.id !== finding.id && row.org !== finding.org)]
+    next = [finding, ...next.filter((row) => !sameFinding(row, finding))]
   }
   return next
 }

@@ -19,7 +19,7 @@ import {
   type InquiryTask,
 } from "./inquiryDesk"
 import { extractDirectedEmails, inquiryWorkSummary, isStaffTestEmail, runInquiryCoachCommand } from "./inquiryOutreach"
-import { buildOutreachDigest, formatWorkJournal } from "./inquirySkill"
+import { buildOutreachDigest, buildOutreachRoster, formatWorkJournal } from "./inquirySkill"
 import type { Lead } from "./leads"
 
 export type HermesOwner = "hermes" | "human"
@@ -1768,11 +1768,12 @@ export function staffDeskLocalReply(input: {
   }
 
   if (/日报|周报|发给了谁|发出名单|做到哪一步|操作(思路|日志)|工作报告|发出报告/.test(q)) {
-    const range = /日报|今天/.test(q) && !/发给了谁|发出名单/.test(q) ? "day" : "week"
-    const digest = buildOutreachDigest(input.inquiry || emptyInquiry(), range)
     const journal = formatWorkJournal(input.inquiry?.journal || [], 10)
     const last = input.inquiry?.lastReport?.trim()
-    return [digest.text, last ? `上一轮工作：\n${last}` : "", `操作日志：\n${journal}`].filter(Boolean).join("\n\n")
+    const head = /发给了谁|发出名单/.test(q)
+      ? buildOutreachRoster(input.inquiry || emptyInquiry())
+      : buildOutreachDigest(input.inquiry || emptyInquiry(), /周报|近 ?7|本周/.test(q) ? "week" : "day").text
+    return [head, last ? `上一轮工作：\n${last}` : "", `操作日志：\n${journal}`].filter(Boolean).join("\n\n")
   }
 
   if (/询单|开始寻找|开始询单|再找一轮|再搜/.test(q)) {
